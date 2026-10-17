@@ -1,0 +1,8 @@
+.idea/
+.DS_Store
+
+# Claude Code: agent definitions are committed; local settings and worktrees are not.
+.claude/settings.local.json
+.claude/worktrees/
+
+test-results/

@@ -1,0 +1,225 @@
+"""Tests for the presentation-only grounding guard.
+
+As of 2026-05-21 this module holds NO topic-specific answer text. Grounding
+judgement lives in the agentic loop (retrieval + critics). The guard only
+makes citations visible. These tests lock in that the guard never rewrites,
+removes, or substitutes answer content — it only attaches `[^N]` markers.
+"""
+
+from types import SimpleNamespace
+
+from app.engine.grounding_guard import (
+    apply_grounding_guards,
+    decluster_citations,
+    enforce_link_integrity,
+    ensure_citation_coverage,
+)
+
+
+def _node(text: str):
+    return SimpleNamespace(text=text)
+
+
+def _lnode(url, text=""):
+    return {"id": "x", "text": text, "metadata": {"url": url}}
+
+
+def test_link_integrity_strips_fabricated_markdown_link():
+    nodes = [_lnode("https://byupathway.edu/real")]
+    out = enforce_link_integrity("See [the form](https://fake.example.com/x) now.", nodes)
+    assert "(https://fake.example.com/x)" not in out
+    assert "the form" in out  # label kept as plain text
+
+
+def test_link_integrity_keeps_in_context_markdown_link():
+    nodes = [_lnode("https://byupathway.edu/real")]
+    txt = "Open [the page](https://byupathway.edu/real)."
+    assert enforce_link_integrity(txt, nodes) == txt
+
+
+def test_link_integrity_keeps_url_found_in_node_text():
+    nodes = [_lnode("unknown", text="download at https://englishconnect.org/ec3 today")]
+    txt = "Visit [EC3](https://englishconnect.org/ec3)."
+    assert enforce_link_integrity(txt, nodes) == txt
+
+
+def test_link_integrity_strips_bare_fabricated_url_keeps_citation():
+    nodes = [_lnode("https://byupathway.edu/real")]
+    out = enforce_link_integrity("Info[^1] at https://made-up.example.com/page.", nodes)
+    assert "made-up.example.com" not in out
+    assert "[^1]" in out  # citation markers untouched
+
+
+def test_link_integrity_handles_nodewithscore_shape():
+    nws = SimpleNamespace(
+        node=SimpleNamespace(metadata={"url": "https://byupathway.edu/p"}, get_text=lambda: ""),
+    )
+    txt = "Go [here](https://byupathway.edu/p)."
+    assert enforce_link_integrity(txt, [nws]) == txt
+
+
+def test_apply_grounding_guards_runs_link_integrity():
+    nodes = [_lnode("https://byupathway.edu/real", text="real content here")]
+    out = apply_grounding_guards("X [bad](https://evil.example.com/y).", nodes)
+    assert "evil.example.com" not in out
+
+
+# --- ensure_citation_coverage ---------------------------------------------
+
+
+def test_citation_coverage_adds_marker_to_uncited_substantive_lines():
+    draft = (
+        "### Heading\nGrades are due Tuesday of Week 07 [^2].\n"
+        "Students should correct gathering assignments.\n- Do this promptly."
+    )
+    guarded = ensure_citation_coverage(draft, [_node("source")])
+
+    assert "### Heading" in guarded  # headings untouched
+    assert "Students should correct gathering assignments. [^1]" in guarded
+    assert "- Do this promptly. [^1]" in guarded
+
+
+def test_citation_coverage_leaves_wholly_uncited_answer_alone():
+    # A refusal or an ungrounded reply: stamping [^1] would fake a source.
+    draft = "That's not something the guides cover.\nTry the Online Instructor Support Line."
+    assert ensure_citation_coverage(draft, [_node("source")]) == draft
+
+
+def test_citation_coverage_skips_caveat_lines_in_a_cited_answer():
+    draft = "You are paid on the 8th and 23rd [^1].\nThe guides don't include the per-block schedule."
+    assert ensure_citation_coverage(draft, [_node("source")]) == draft
+
+
+def test_citation_coverage_skips_fenced_drafts():
+    draft = (
+        "Here is a welcome message based on the guide [^1].\n\n"
+        "```message\nHi [Student Name], welcome to [Course]!\nSee you in Week 01.\n```\n"
+        "Send it before the block starts."
+    )
+    guarded = ensure_citation_coverage(draft, [_node("source")])
+
+    assert "```message\nHi [Student Name], welcome to [Course]!\nSee you in Week 01.\n```" in guarded
+    assert "Send it before the block starts. [^1]" in guarded
+
+
+def test_citation_coverage_leaves_already_cited_lines_alone():
+    draft = "Block 3 starts March 2 [^2]."
+    assert ensure_citation_coverage(draft, [_node("source")]) == draft
+
+
+def test_citation_coverage_skips_link_lines():
+    draft = "**Link:** [Academic Exceptions](https://example.com)"
+    guarded = ensure_citation_coverage(draft, [_node("source")])
+    assert "[^1]" not in guarded
+
+
+def test_citation_coverage_appends_marker_inside_table_cell():
+    draft = "Credits by program [^1]:\n| Program | Credits |\n|---|---|\n| Applied Health | 60 |"
+    guarded = ensure_citation_coverage(draft, [_node("source")])
+    assert "| 60 [^1]|" in guarded  # marker lands in the last non-empty cell
+    assert "|---|---|" in guarded  # separator row untouched
+
+
+def test_citation_coverage_noop_without_sources():
+    draft = "Students should correct gathering assignments."
+    assert ensure_citation_coverage(draft, []) == draft
+
+
+# --- apply_grounding_guards: pure passthrough -----------------------------
+
+
+def test_apply_grounding_guards_does_not_remove_or_substitute_content():
+    """The de-hardcoded guard must NEVER replace answer PROSE. A draft about
+    refunds/progress keeps every sentence — the hallucination critic, not a
+    keyword guard, owns unsupported-claim removal. (Redundant citation
+    markers may be de-clustered — that's presentation, not content.)"""
+    draft = (
+        "If a student drops EnglishConnect, refund handling can vary [^1]. "
+        "They may also lose course progress [^1]."
+    )
+    guarded = apply_grounding_guards(
+        draft,
+        [_node("EnglishConnect drop policy and refund details.")],
+        user_question="Do students lose progress or get a refund?",
+    )
+    # Both sentences (the content) survive untouched.
+    assert "refund handling can vary" in guarded
+    assert "lose course progress" in guarded
+    # The two consecutive [^1] markers de-cluster to one.
+    assert guarded.count("[^1]") == 1
+
+
+def test_apply_grounding_guards_only_adds_citation_coverage():
+    draft = "Auto-drop is a policy [^1].\n\nStudents may be auto-dropped after the 8th day."
+    guarded = apply_grounding_guards(
+        draft,
+        [_node("Auto-Drop policy support article.")],
+        user_question="tell me about the auto drop exemption form",
+    )
+    # No substitution, no hardcoded caveat — just a visible marker.
+    assert guarded == "Auto-drop is a policy [^1].\n\nStudents may be auto-dropped after the 8th day. [^1]"
+    assert "couldn't find" not in guarded
+    assert "Who to Contact" not in guarded
+
+
+def test_apply_grounding_guards_does_not_inject_machinery_phrasing():
+    """Regression: the guard must never emit 'I don't have retrieved source
+    text' or similar internal-machinery narration."""
+    draft = "Auto-Drop removes students who never access their course [^1]."
+    guarded = apply_grounding_guards(
+        draft,
+        [_node("Auto-Drop policy article.")],
+        user_question="So where's the form?",
+        chat_history=[{"role": "user", "content": "auto drop exemption form"}],
+    )
+    assert "retrieved source text" not in guarded.lower()
+    assert "should not claim" not in guarded.lower()
+
+
+# --- decluster_citations -------------------------------------------------
+
+
+def test_decluster_collapses_repeated_citation_in_a_list():
+    """A list where every item cites the same source keeps the marker only
+    on the LAST item."""
+    draft = (
+        "- Apply and register for courses [^1]\n"
+        "- Complete the self-reliance lesson [^1]\n"
+        "- Maintain enrollment [^1]"
+    )
+    out = decluster_citations(draft)
+    assert out.count("[^1]") == 1
+    assert out.strip().endswith("[^1]")  # kept on the last item
+
+
+def test_decluster_keeps_marker_when_source_changes():
+    draft = "First fact [^1]\nSecond fact [^1]\nThird fact [^2]\nFourth fact [^2]"
+    out = decluster_citations(draft)
+    # run of [^1] -> one [^1]; run of [^2] -> one [^2]
+    assert out.count("[^1]") == 1
+    assert out.count("[^2]") == 1
+
+
+def test_decluster_allows_citation_to_reappear_after_a_different_one():
+    draft = "A fact [^1]\nB fact [^2]\nC fact [^1]"
+    out = decluster_citations(draft)
+    # [^1] ... [^2] ... [^1]: none are a consecutive same-run, all kept.
+    assert out.count("[^1]") == 2
+    assert out.count("[^2]") == 1
+
+
+def test_decluster_re_anchors_after_paragraph_break():
+    draft = "Fact one [^1].\n\nA later paragraph with the same source [^1]."
+    out = decluster_citations(draft)
+    # paragraph break re-anchors — both [^1] kept.
+    assert out.count("[^1]") == 2
+
+
+def test_decluster_leaves_adjacent_distinct_citations_intact():
+    draft = "Block 3 starts March 2 [^1][^2]."
+    assert decluster_citations(draft) == draft
+
+
+def test_decluster_strips_leading_space_cleanly():
+    out = decluster_citations("First sentence [^1].\nSecond sentence [^1].")
+    assert "First sentence." in out  # no double space, no dangling space

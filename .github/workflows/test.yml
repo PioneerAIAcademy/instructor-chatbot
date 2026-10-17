@@ -1,0 +1,47 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+# Backend only until Phase 8 adds the frontend job (CLAUDE.md §7).
+
+# Cancel older runs of the same branch — only the latest commit matters.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Same Poetry that wrote poetry.lock (lock-version 2.1); 1.8.x warns
+      # that it "might not be compatible".
+      - name: Install Poetry 2.4.1
+        run: pipx install poetry==2.4.1
+
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-py3.12-${{ hashFiles('backend/poetry.lock') }}
+          restore-keys: |
+            poetry-${{ runner.os }}-py3.12-
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-root
+
+      - name: Run tests
+        run: poetry run pytest tests/ -x -q
+
