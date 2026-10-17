@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Pre-push hook — fast checks before code leaves your machine.
+#
+# Activate once per clone:    git config core.hooksPath .githooks
+# Bypass for one push:        git push --no-verify
+#
+# Runs:
+#   1. backend pytest    (CI-parity, keyless)
+# Frontend tsc + lint join in Phase 8. Cold prod build lives in CI, not here.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Backend tests, run the way CI runs them: KEYLESS. CI
+# (.github/workflows/test.yml) runs `pytest tests/ -x -q` with ZERO secrets,
+# but locally backend/.env is loaded at import (app/langfuse.py calls
+# load_dotenv()), so a test that needs an API key passes here yet fails in CI
+# (upstream lesson #97 — e.g. a constructor that builds AsyncOpenAI).
+# Move .env aside for the run so the hook mimics CI exactly, then restore it.
+# The .env data is never lost: `mv` is an atomic rename into .env.prepush-bak,
+# a trap restores it on interrupt/error, and a self-heal at the next run
+# restores any leftover backup.
+printf '→ backend tests (CI-parity: keyless pytest tests/ -x -q)\n'
+BACKEND="$REPO_ROOT/backend"
+ENV_FILE="$BACKEND/.env"
+ENV_BAK="$BACKEND/.env.prepush-bak"
+# Self-heal: a prior interrupted run may have left .env renamed aside.
+if [ -f "$ENV_BAK" ] && [ ! -f "$ENV_FILE" ]; then mv "$ENV_BAK" "$ENV_FILE"; fi
+_restore_env() { if [ -f "$ENV_BAK" ]; then mv -f "$ENV_BAK" "$ENV_FILE"; fi; }
+trap _restore_env EXIT INT TERM
+[ -f "$ENV_FILE" ] && mv "$ENV_FILE" "$ENV_BAK"
+( cd "$BACKEND" && poetry run pytest tests/ -x -q )
+_restore_env
+trap - EXIT INT TERM
+
+# Frontend checks (tsc + lint) are added in Phase 8, when frontend/ exists.
+
+printf '✓ pre-push checks passed\n'

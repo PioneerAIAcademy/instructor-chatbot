@@ -1,0 +1,10 @@
+__pycache__
+storage
+.env
+.env.bak.local.*
+.env.prepush-bak
+backend.log
+output
+data/
+# Eval output (Phase 2 / 6)
+tests/eval/results/

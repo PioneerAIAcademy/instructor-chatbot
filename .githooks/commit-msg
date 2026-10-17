@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# commit-msg hook — HARD BLOCK on AI / co-author attribution in commit messages.
+#
+# Project rule (CLAUDE.md §0 rule 1): a commit message
+# must contain ONLY the description of the change — never a Co-Authored-By
+# trailer, a "Generated with ..." line, a 🤖 line, or any AI / co-authorship
+# attribution. Humans (and agents) forget. This hook does not.
+#
+# Activate once per clone:   bash scripts/setup-dev.sh   (sets core.hooksPath)
+# Emergency human bypass:    git commit --no-verify       (discouraged)
+
+set -euo pipefail
+MSG_FILE="$1"
+
+# Brightest orange, bold — only when stderr is a terminal (degrades in CI/pipes).
+if [ -t 2 ]; then ORANGE=$'\033[1;38;5;208m'; RESET=$'\033[0m'; else ORANGE=''; RESET=''; fi
+
+# Patterns that must never appear in a commit message (case-insensitive).
+# Targeted to the banned attributions so legitimate prose ("generated the
+# report", "AI feature") is not falsely blocked.
+PATTERN='co-?authored-by:|🤖|generated with[[:space:]]+(claude|copilot|cursor|chatgpt|gpt|codex|gemini|ai\b)|noreply@anthropic\.com|authored-by:[[:space:]]*(claude|copilot|cursor|gpt|gemini|ai\b)'
+
+if grep -iEq "$PATTERN" "$MSG_FILE"; then
+  offending="$(grep -iEn "$PATTERN" "$MSG_FILE" | head -5)"
+  {
+    echo ""
+    echo "${ORANGE}╔════════════════════════════════════════════════════════════════════╗${RESET}"
+    echo "${ORANGE}║  🟧  COMMIT BLOCKED — AI / CO-AUTHOR ATTRIBUTION IS NOT ALLOWED     ║${RESET}"
+    echo "${ORANGE}╚════════════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    echo "${ORANGE}A commit message must describe ONLY the change — no Co-Authored-By,${RESET}"
+    echo "${ORANGE}no \"Generated with ...\", no 🤖, no AI / co-authorship trailers.${RESET}"
+    echo "${ORANGE}See CLAUDE.md §0 rule 1. Humans forget; this hook never does.${RESET}"
+    echo ""
+    echo "Offending line(s):"
+    echo "${offending}"
+    echo ""
+    echo "Fix: delete the attribution line(s), then commit again."
+    echo ""
+  } >&2
+  exit 1
+fi
+
+exit 0
