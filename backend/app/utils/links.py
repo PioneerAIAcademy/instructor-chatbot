@@ -11,14 +11,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# A bare URL stops at whitespace, ')', brackets, angle brackets, and '"', so
-# "…A.aspx[^1]" ends before the citation marker.
-URL_RE = re.compile(r"https?://[^\s)\[\]<>\"]+")
+# A bare URL stops at whitespace, ')', brackets, angle brackets, '"', '*' and
+# backticks, so "…A.aspx[^1]" ends before the citation marker and
+# "**https://…**" / "`https://…`" don't drag their markdown into the URL.
+URL_RE = re.compile(r"https?://[^\s)\[\]<>\"*`]+")
 # [label](url) or [label](url "title").
 MD_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)\"]+)(\s+\"[^\"]*\")?\)")
 # <https://…> autolinks.
 AUTOLINK_RE = re.compile(r"<(https?://[^\s>]+)>")
-TRAILING_PUNCT = ".,;:!?'"
+# Sentence punctuation and emphasis markers that end a bare URL ("__url__", "~~url~~").
+TRAILING_PUNCT = ".,;:!?'_~"
 
 
 @dataclass(frozen=True)
@@ -31,17 +33,23 @@ class Link:
 
 
 def find_links(text: str) -> list[Link]:
-    """Every link in `text`, in order: markdown links, autolinks, then bare
-    URLs that aren't inside either. Trailing sentence punctuation is not part
-    of a bare URL."""
-    links: list[Link] = []
-    for m in MD_LINK_RE.finditer(text):
-        links.append(Link(m.start(), m.end(), m.group(2), "markdown", m.group(1)))
+    """Every link in `text`, in order, never overlapping: markdown links,
+    autolinks outside them, then bare URLs outside both. Trailing sentence
+    punctuation and emphasis markers are not part of a bare URL."""
+    links: list[Link] = [
+        Link(m.start(), m.end(), m.group(2), "markdown", m.group(1)) for m in MD_LINK_RE.finditer(text)
+    ]
+
+    def inside(pos: int) -> bool:
+        return any(link.start <= pos < link.end for link in links)
+
+    # A link nested inside another (an autolink in a markdown link's label, a
+    # bare URL inside either) belongs to the outer one, so spans never overlap.
     for m in AUTOLINK_RE.finditer(text):
-        links.append(Link(m.start(), m.end(), m.group(1), "autolink"))
-    covered = [(link.start, link.end) for link in links]
+        if not inside(m.start()):
+            links.append(Link(m.start(), m.end(), m.group(1), "autolink"))
     for m in URL_RE.finditer(text):
-        if any(s <= m.start() < e for s, e in covered):
+        if inside(m.start()):
             continue
         url = m.group(0).rstrip(TRAILING_PUNCT)
         if url:

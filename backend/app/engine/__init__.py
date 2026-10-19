@@ -66,7 +66,10 @@ def get_chat_engine(filters=None, params=None, timezone: str = "UTC") -> CustomC
         skip_condense=False,  # Enable question condensation with conversation history
         retriever=retriever,
         node_postprocessors=node_postprocessors,
-        verbose=True,
+        # Off on purpose (upstream had True): verbose prints the user's question
+        # and every retrieved chunk to stdout on every request, and instructors
+        # type student names and situations into questions (CLAUDE.md §9.2).
+        verbose=False,
         memory=memory  # Add memory buffer for conversation context
     )
     # Public handle on this request's guard: the orchestrator reads its drop

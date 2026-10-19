@@ -43,3 +43,26 @@ def test_split_fences_round_trips(text):
 def test_split_fences_marks_fence_lines_and_bodies():
     runs = split_fences("before\n```message\nHi\n```\nafter")
     assert runs == [(False, "before\n"), (True, "```message\nHi\n```\n"), (False, "after")]
+
+
+# --- Phase 4 review --------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [f"Go to **{SP}** now", f"Use `{SP}` here", f"See __{SP}__.", f"Old: ~~{SP}~~"],
+)
+def test_bare_url_excludes_emphasis_and_code_markers(text):
+    assert _kinds(text) == [("bare", SP)]
+
+
+def test_a_link_nested_inside_another_is_not_found_separately():
+    links = find_links("[<https://b.com/y>](https://a.com/x) tail")
+    assert [(link.kind, link.url) for link in links] == [("markdown", "https://a.com/x")]
+
+
+def test_links_never_overlap():
+    text = f"[<{SP}>]({SP}?2) and [{SP}?3]({SP}?4) and <{SP}?5> and {SP}?6"
+    links = find_links(text)
+    for a, b in zip(links, links[1:]):
+        assert a.end <= b.start

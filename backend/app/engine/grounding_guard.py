@@ -194,7 +194,7 @@ def _node_url_and_text(node: Any) -> tuple[str | None, str]:
 
 
 def _norm_url(u: str) -> str:
-    return u.rstrip("/.,);")
+    return u.rstrip("/.,);*_~`")
 
 
 def _allowed_urls(source_nodes: list[Any]) -> set[str]:

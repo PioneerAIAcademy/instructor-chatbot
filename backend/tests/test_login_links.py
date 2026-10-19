@@ -132,9 +132,19 @@ def _source(n, role="instructor"):
 
 def test_ask_parses_the_vercel_stream():
     ask = _ask_module()
-    lines = ['0:""', '0:"Hello "', '0:"there"', '8:[{"type": "sources", "data": {"nodes": []}, "trace_id": "t1"}]', "", "junk"]
-    text, annotations = ask.parse_stream(lines)
-    assert text == "Hello there" and annotations[0]["trace_id"] == "t1"
+    lines = ['0:""', '0:"Hello "', '0:"there"', "",
+             '8:[{"type": "user_language", "data": {"language": "en"}, "trace_id": "t1"}]',
+             '8:[{"type": "sources", "data": {"nodes": []}, "trace_id": "t1"}]']
+    text, annotations, problems = ask.parse_stream(lines)
+    assert text == "Hello there" and annotations[0]["trace_id"] == "t1" and problems == []
+
+
+def test_ask_reports_a_stream_that_breaks_the_contract():
+    ask = _ask_module()
+    _, _, problems = ask.parse_stream(['0:"Hi"', "junk", '8:[{"type": "calendar_card", "data": {}, "trace_id": null}]'])
+    assert any("unexpected line prefix" in p for p in problems)
+    assert any("undocumented annotation type" in p for p in problems)
+    assert any("missing sources" in p for p in problems)
 
 
 def test_ask_checks_catch_unlabeled_links_reading_claims_and_bad_citations():
@@ -204,3 +214,39 @@ def test_ask_check_skips_drafts_and_knows_every_label():
     assert ask.check(in_draft) == []
     korean = {"answer": f"[가이드]({SP}) (로그인 필요) [^1].", "sources": [_source(1)]}
     assert ask.check(korean) == []
+
+
+# --- Phase 4 review ---------------------------------------------------------------------
+
+
+def test_a_note_after_a_citation_counts():
+    text = f"See [Guide]({SP})[^1] (sign-in required)."
+    out = annotate_login_links(text)
+    assert out.text == text and out.links == 1 and out.added == 0
+    ask = _ask_module()
+    assert ask.check({"answer": text, "sources": [_source(1)]}) == []
+
+
+def test_a_parenthesized_bare_url_gets_its_label_outside_the_parentheses():
+    out = annotate_login_links(f"See ({SP}) ok")
+    assert out.text == f"See ({SP}) (sign-in required) ok"
+    assert annotate_login_links(out.text).added == 0  # still idempotent
+
+
+def test_bold_sign_in_url_is_labeled_after_the_bold_marker_text():
+    out = annotate_login_links(f"Go to **{SP}** now")
+    assert out.added == 1 and "**" in out.text
+
+
+def test_language_function_is_only_called_when_a_label_is_needed():
+    calls = []
+
+    def lang():
+        calls.append(1)
+        return "pt"
+
+    annotate_login_links("No sign-in links here: https://www.byupathway.edu/x", lang)
+    annotate_login_links(f"Labeled already: [x]({SP}) (sign-in required)", lang)
+    assert calls == []
+    assert "(requer login)" in annotate_login_links(f"[x]({SP}) and [y]({SP}?2)", lang).text
+    assert calls == [1]  # resolved once for both links

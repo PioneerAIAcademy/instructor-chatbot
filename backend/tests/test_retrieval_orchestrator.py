@@ -226,3 +226,17 @@ async def test_annotator_failure_ships_the_guarded_answer():
             "q", [], filters=None, params=None, timezone="UTC", event_handler=None
         )
     assert await _collect(result) == "Answer [^1]."
+
+
+def test_label_language_ignores_urls_markers_and_markdown():
+    from app.engine.retrieval_orchestrator import _label_language, _prose_for_detection
+
+    links = "\n".join(
+        f"{i}. [Step {i} guide](https://byupathwayworldwideprod.sharepoint.com/sites/InstructorResources/"
+        f"SitePages/Ensign-College-Instructor-Course-Updates-{i}.aspx) [^{i}]"
+        for i in range(1, 8)
+    )
+    answer = "Here are the steps to prepare your course for the new term:\n" + links
+    prose = _prose_for_detection(answer)
+    assert "sharepoint" not in prose and "[^" not in prose and "Step 3 guide" in prose
+    assert _label_language(answer, "es") == "en"

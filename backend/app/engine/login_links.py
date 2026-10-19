@@ -24,9 +24,11 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from functools import lru_cache
+from typing import Callable, Union
 from urllib.parse import urlparse
 
-from app.utils.links import find_links, split_fences
+from app.utils.links import Link, find_links, split_fences
 from app.utils.localization import LocalizationManager, MessageType
 
 DEFAULT_LOGIN_LINK_HOSTS = (
@@ -39,7 +41,14 @@ DEFAULT_LOGIN_LINK_HOSTS = (
 # A parenthesized note right after a link: "(…)" or full-width "（…）", within
 # this many characters of the link (§8.3's 40-character lookahead).
 LOOKAHEAD_CHARS = 40
-_NOTE_RE = re.compile(r"^[ \t]*(?:\*\*|__)?[ \t]*[(（]([^()（）\n]{1,60})[)）]")
+# Citation markers may sit between the link and its note: "[Guide](url)[^1] (sign-in required)".
+_NOTE_RE = re.compile(
+    r"^[ \t]*(?:\[\^\d+\][ \t]*)*(?:\*\*|__)?[ \t]*[(（]([^()（）\n]{1,60})[)）]"
+)
+
+# A language code, or a function that works one out. The annotator calls it
+# only when a link needs a label, so answers without one never pay for it.
+Language = Union[str, None, Callable[[], str]]
 
 # English wordings the model or a guide may use inside such a note.
 _EN_NOTE_WORDS = ("sign-in", "sign in", "signin", "log-in", "log in", "login")
@@ -70,6 +79,7 @@ def sign_in_label(lang: str | None) -> str:
     return LocalizationManager.get_message(MessageType.SIGN_IN_REQUIRED, lang or "en")
 
 
+@lru_cache(maxsize=1)
 def _note_words() -> tuple[str, ...]:
     """Every localized label's words, plus English variants, lowercased."""
     labels = LocalizationManager.FALLBACK_MESSAGES[MessageType.SIGN_IN_REQUIRED].values()
@@ -87,6 +97,20 @@ def has_sign_in_note(following: str) -> bool:
     return any(word in note for word in _note_words())
 
 
+def _label_point(segment: str, link: Link) -> int:
+    """Where a label for `link` goes: right after it, or after the closing
+    parenthesis when a bare URL is wrapped in parentheses ("(https://…)"), so
+    the label doesn't land inside them."""
+    if (
+        link.kind == "bare"
+        and link.start > 0
+        and segment[link.start - 1] == "("
+        and segment[link.end:link.end + 1] == ")"
+    ):
+        return link.end + 1
+    return link.end
+
+
 def unlabeled_login_links(text: str, hosts: list[str] | None = None) -> list[str]:
     """URLs of sign-in links outside fenced blocks that have no note. Used by
     the annotator and by scripts/ask.py's check, so both apply one rule."""
@@ -96,21 +120,27 @@ def unlabeled_login_links(text: str, hosts: list[str] | None = None) -> list[str
         if in_fence:
             continue
         for link in find_links(segment):
-            if needs_sign_in(link.url, hosts) and not has_sign_in_note(segment[link.end:]):
+            if needs_sign_in(link.url, hosts) and not has_sign_in_note(segment[_label_point(segment, link):]):
                 missing.append(link.url)
     return missing
 
 
-def annotate_login_links(text: str, lang: str | None = "en") -> AnnotationResult:
+def annotate_login_links(text: str, lang: Language = "en") -> AnnotationResult:
     """Append the localized sign-in note after every unlabeled sign-in link.
 
-    Idempotent: a second run finds the note and adds nothing. Fenced blocks
-    are copied through untouched.
+    `lang` is a language code, or a function returning one, called only if a
+    label is needed. Idempotent: a second run finds the note and adds nothing.
+    Fenced blocks are copied through untouched.
     """
     if not text or "http" not in text:
         return AnnotationResult(text, 0, 0)
-    label = sign_in_label(lang)
     hosts = login_link_hosts()
+    resolved: list[str] = []
+
+    def label() -> str:
+        if not resolved:
+            resolved.append(sign_in_label(lang() if callable(lang) else lang))
+        return resolved[0]
 
     out: list[str] = []
     links = added = 0
@@ -123,10 +153,11 @@ def annotate_login_links(text: str, lang: str | None = "en") -> AnnotationResult
             if not needs_sign_in(link.url, hosts):
                 continue
             links += 1
-            out.append(segment[cursor:link.end])
-            cursor = link.end
-            if not has_sign_in_note(segment[link.end:]):
-                out.append(f" {label}")
+            point = _label_point(segment, link)
+            out.append(segment[cursor:point])
+            cursor = point
+            if not has_sign_in_note(segment[point:]):
+                out.append(f" {label()}")
                 added += 1
         out.append(segment[cursor:])
     return AnnotationResult("".join(out), links, added)

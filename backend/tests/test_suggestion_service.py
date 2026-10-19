@@ -32,3 +32,19 @@ def test_suggestion_generator_receives_user_language(monkeypatch):
     assert questions == ["¿Pregunta siguiente?"]
     assert "detected language" in captured["language_instruction"]
     assert "'es'" in captured["language_instruction"]
+
+
+def test_openai_structured_output_program_can_be_built():
+    """Regression: Phase 0's dependency trim dropped llama-index-program-openai /
+    agent-openai, so astructured_predict raised "No module named
+    'llama_index.agent'" and suggested questions silently came back empty
+    (the other tests stub the LLM, so nothing noticed)."""
+    from llama_index.core.program.utils import get_program_for_llm
+    from llama_index.llms.openai import OpenAI
+
+    program = get_program_for_llm(
+        suggestion.NextQuestions,
+        suggestion.NEXT_QUESTIONS_SUGGESTION_PROMPT,
+        OpenAI(model="gpt-4o-mini", api_key="placeholder"),
+    )
+    assert program is not None

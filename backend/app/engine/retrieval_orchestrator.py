@@ -16,6 +16,7 @@ Degradation ladder:
 """
 
 import logging
+import re
 from typing import Any, Callable
 
 from langfuse.decorators import observe
@@ -27,6 +28,7 @@ from app.engine.audience_guard import AudienceGuardPostprocessor
 from app.engine.draft_normalizer import hoist_draft_citations
 from app.engine.grounding_guard import apply_grounding_guards, ensure_citation_coverage
 from app.engine.login_links import annotate_login_links
+from app.utils.links import find_links
 from app.utils.localization import LocalizationManager
 
 logger = logging.getLogger("uvicorn")
@@ -93,13 +95,32 @@ class _GuardedStreamingResponse:
             yield self._text[i : i + 40]
 
 
+_CITATION_RE = re.compile(r"\[\^\d+\]")
+_MARKDOWN_RE = re.compile(r"[#*_`>|~]+")
+
+
+def _prose_for_detection(answer: str) -> str:
+    """The answer's words only: URLs out (a markdown link keeps its label),
+    citation markers and markdown symbols out. Long URLs otherwise dominate
+    language detection."""
+    parts: list[str] = []
+    cursor = 0
+    for link in find_links(answer):
+        parts.append(answer[cursor:link.start])
+        parts.append(link.label)  # "" for bare URLs and autolinks
+        cursor = link.end
+    parts.append(answer[cursor:])
+    text = _CITATION_RE.sub(" ", "".join(parts))
+    return " ".join(_MARKDOWN_RE.sub(" ", text).split())
+
+
 def _label_language(answer: str, user_language: str | None) -> str:
     """The language for sign-in labels: the answer's own, so a label never
     clashes with the text around it. The request language can come from the
     settings menu (a short question isn't detected confidently), while the
     model answers in the question's language."""
     try:
-        detected, confident = LocalizationManager.detect_language_confident(answer)
+        detected, confident = LocalizationManager.detect_language_confident(_prose_for_detection(answer))
         if confident:
             return detected
     except Exception:  # pragma: no cover - defensive
@@ -222,7 +243,11 @@ class RetrievalOrchestrator:
             final_answer = draft
         # Separate from the guards: even an unguarded draft gets its sign-in labels.
         try:
-            annotated = annotate_login_links(final_answer, _label_language(final_answer, user_language))
+            # A function, so detection runs only if some link needs a label.
+            answer_so_far = final_answer
+            annotated = annotate_login_links(
+                final_answer, lambda: _label_language(answer_so_far, user_language)
+            )
             final_answer = annotated.text
             self.login_links, self.login_links_labeled = annotated.links, annotated.added
         except Exception as exc:

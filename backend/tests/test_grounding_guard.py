@@ -265,3 +265,15 @@ def test_link_integrity_handles_titled_and_autolinks():
     assert enforce_link_integrity(titled, nodes) == titled
     assert enforce_link_integrity('[form](https://fake.example.com/x "Form")', nodes) == "form"
     assert enforce_link_integrity(f"See <{_SP}>.", nodes) == f"See <{_SP}>."
+
+
+def test_link_integrity_keeps_bold_and_code_urls_found_in_the_guide():
+    nodes = [_lnode("https://p.example", text=f"See **{_SP}** for details.")]
+    assert enforce_link_integrity(f"Go to **{_SP}** now", nodes) == f"Go to **{_SP}** now"
+    assert enforce_link_integrity(f"Use `{_SP}` here", nodes) == f"Use `{_SP}` here"
+
+
+def test_link_integrity_copies_a_nested_link_once():
+    nodes = [_lnode("https://p.example", text="https://b.com/y and https://a.com/x")]
+    text = "[<https://b.com/y>](https://a.com/x) tail"
+    assert enforce_link_integrity(text, nodes) == text

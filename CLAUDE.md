@@ -11,9 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0 and 1 merged (PRs #1, #2). Phase 2 in PR #3 (CI green, not yet
-> merged). Phase 3 (prompt and sign-in links) done on branch `phase-3-prompt-signin`, stacked on
-> Phase 2, uncommitted. Next: Phase 4.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0–2 merged (PRs #1–#3). Phase 3 in PR #4 (CI green, not yet
+> merged). Phase 4 (chat API) done on branch `phase-4-chat-api`, stacked on Phase 3,
+> uncommitted. Next: Phase 5.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -727,6 +727,67 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (Phase 4 review fixes)** — A review of the uncommitted Phase 4 work listed 10
+  findings: 9 confirmed and fixed, 1 not an issue. `pytest tests/` gives 469 passed, keyless.
+  The live `api_check.py` passes 8/8 again, and `ask.py` on #9 and G3 is ok.
+  - **Shared link parser (`app/utils/links.py`):**
+    - Bare URLs stop at `*` and backticks, and trailing `_`/`~` is trimmed. Before,
+      `**https://…**` became the URL `…**`, which link integrity then **deleted** even though
+      it was in the guide.
+    - A link nested inside another (an autolink in a markdown label) is no longer found
+      twice. Before, link integrity copied text twice.
+  - **Annotator:**
+    - A note after a citation (`[Guide](url)[^1] (sign-in required)`) counts. Before, it got
+      a duplicate label.
+    - A bare URL in parentheses gets its label after the `)`.
+    - The label language is a function, called only when some link needs a label.
+    - The note vocabulary is cached.
+  - **Label language:** detected on the answer's prose only. URLs (link labels kept),
+    `[^N]`, and markdown symbols are stripped first, so an English answer full of long
+    SharePoint URLs no longer reads as another language.
+  - **One contract module:**
+    - `KEPT_ROUTES` and `client_headers()` live in `scripts/api_contract.py`.
+    - `ask.py` parses with `api_contract.parse_lines` and reports stream-contract problems.
+    - The OpenAPI examples in `models.py` are instructor questions now (they were
+      upstream's missionary "letters" examples).
+  - **Not an issue:** "the Phase 4 changes sit on `phase-3-prompt-signin`." They are on
+    `phase-4-chat-api`, which was branched from Phase 3's tip and so points at the same
+    commit until Phase 4 is committed.
+
+- **2026-10-19 (Phase 4 done, branch `phase-4-chat-api`, uncommitted)** — The chat API is
+  fixed and documented. `pytest tests/` gives 455 passed, keyless.
+  - **Built:**
+    - `backend/API.md`: headers, request body (`data.role` ignored), every error shape
+      (400/401/411/413/422/429/503/500), the stream format (`0:` text, `8:` annotations
+      `events`, `date_spans`, `user_language`, `sources`, `suggested_questions`, in that
+      order), and the blocked-input and failed-answer streams. Also thumbs, general feedback,
+      draft edit, config, and health.
+    - `scripts/api_contract.py`: that stream contract as code. `tests/test_api_contract.py`
+      checks it offline against the real `main.app` (only the orchestrator stubbed, 18 tests);
+      `scripts/api_check.py` checks it live.
+    - `/config` also splits `CONVERSATION_STARTERS` on a literal `\n`. The 4 instructor
+      starters are in `.env.example`.
+    - The dev `/` redirect is hidden from the schema, so `/api/docs` lists exactly the 7 kept
+      routes. The dead `Result` model is removed.
+  - **Live `scripts/api_check.py`: all 8 checks pass.** The stream matches API.md; source
+    `url` is the guide PDF (`missionaries.prod…/<slug>`); every `[^N]` maps; G4 sources with
+    `role=missionary` are identical (3 each); thumbs 200 on the trace; draft edit returns a
+    rewrite; feedback 200; routes exact; 4 starters.
+  - **Regression from Phase 0, found and fixed: suggested questions were broken since then.**
+    `astructured_predict` imports `llama_index.agent`, which only came in through the
+    `llama-index` meta-package I removed. The offline tests stub the LLM, so they never
+    noticed. Fix: `llama-index-program-openai` 0.1.7 and `llama-index-agent-openai` 0.2.6
+    (upstream's versions) added back. A regression test now builds the real OpenAI program.
+    All 23 `llama_index` modules the app references now import cleanly.
+  - **Privacy (§9.2), found in the server log during the live run:**
+    - The engine's upstream `verbose=True` printed every question and every retrieved chunk
+      to stdout. It's now `verbose=False`.
+    - Language detection logged the first 50 characters of each question. It now logs the
+      length. A test asserts a student name never reaches the log.
+    - A re-run's log contains none of the request texts.
+  - **Note:** the thumbs score and the feedback trace return 200, but they won't land in
+    Langfuse until the 401 credentials mismatch is fixed (Phase 5).
 
 - **2026-10-19 (Phase 3 review fixes)** — A review found 10 issues in the uncommitted Phase 3
   work. All 10 were reproduced and fixed. `pytest tests/` gives 435 passed, keyless.

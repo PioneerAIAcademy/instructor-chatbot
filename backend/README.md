@@ -9,10 +9,9 @@ It is a trimmed copy of the
 [`../CLAUDE.md`](../CLAUDE.md) holds the full plan, the repo rules, and the journal.
 [`../UPSTREAM.md`](../UPSTREAM.md) lists which files came from upstream and what changed.
 
-> **Status:** Phase 3 (instructor prompt and sign-in links) of the build plan in `CLAUDE.md` §7.
-> The chat path works end to end with the audience guards, the final instructor prompt, and
-> sign-in labels; retrieval is measured against the §10 questions. The answer eval arrives in
-> Phase 6.
+> **Status:** Phase 4 (chat API) of the build plan in `CLAUDE.md` §7. The API is fixed and
+> documented in [`API.md`](API.md), the contract the frontend builds against. The answer eval
+> arrives in Phase 6.
 
 ## How a question is answered
 
@@ -78,7 +77,8 @@ curl -N localhost:8000/api/v1/chat \
   -d '{"messages":[{"role":"user","content":"When do instructors in the US get paid?"}]}'
 ```
 
-The response is a stream of lines:
+[`API.md`](API.md) is the full contract: request body and headers, every annotation, error
+shapes, and the other routes. The response is a stream of lines:
 
 - `0:"..."` is answer text. A failed answer arrives as a short localized "service hiccup"
   message, with no `sources`.
@@ -122,6 +122,17 @@ and the `pre-push` hook moves `.env` aside first, so it matches CI.
 
 Tests that call OpenAI, Voyage, or Pinecone cost money. They run only when `RUN_LIVE_TESTS=1`
 is set.
+
+To check the whole API against a running server (the Phase 4 done-when: the stream contract,
+document URLs, citations, the ignored client role, thumbs, draft edit, feedback, routes,
+starters; live and billable):
+
+```bash
+poetry run python scripts/api_check.py                  # default http://localhost:8000
+```
+
+`scripts/api_contract.py` is the stream contract as code. `tests/test_api_contract.py` checks
+it offline against the real app; `api_check.py` checks it live.
 
 To ask one question through the running local API and check the answer (live and billable; a
 real chat request):
@@ -189,6 +200,9 @@ app/
   engine/vectordb.py            bounded, cached Pinecone client
   security/input_validator.py   input security screen
 tests/                          offline tests
+API.md                          the API contract (request, stream, errors, routes)
+scripts/api_check.py            Phase 4 live API check against a running server
+scripts/api_contract.py         the stream contract as code (shared by tests and api_check)
 scripts/ask.py                  one question through the local API, with answer checks (live)
 scripts/retrieve.py             raw + reranked retrieval for one question (live)
 scripts/eval_retrieval.py       retrieval eval over tests/eval/questions.yaml (live)
