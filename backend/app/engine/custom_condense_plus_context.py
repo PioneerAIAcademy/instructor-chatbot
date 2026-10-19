@@ -45,10 +45,16 @@ def _do_voyage_rerank(
     Extracted so the async path can wrap it in asyncio.to_thread() to avoid
     blocking the event loop (Pinecone's aquery is a sync stub — see #64).
     """
+    # A missing or bad key isn't transient: fail at once instead of sleeping
+    # through the retries (main.py refuses to boot without the key anyway).
+    try:
+        client = _voyage_client()
+    except Exception as exc:
+        return node_texts, {}, False, exc
     last_exc: Exception | None = None
     for attempt in range(retries):
         try:
-            reranking = _voyage_client().rerank(message, node_texts, model=model, top_k=top_k)
+            reranking = client.rerank(message, node_texts, model=model, top_k=top_k)
             filtered = [r.document for r in reranking.results if r.relevance_score >= RERANK_MIN_SCORE]
             scores = {
                 r.document: r.relevance_score

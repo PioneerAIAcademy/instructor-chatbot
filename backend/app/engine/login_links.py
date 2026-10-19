@@ -9,10 +9,12 @@ in the answer's language, once.
 
 The note is this module's job, not the model's: the prompt tells the model not
 to write one, so the label is always the localized one. A link already
-followed by a parenthesized sign-in note (in any supported language, e.g. from
-an old answer in chat history or a model that wrote one anyway) is counted but
-not labeled again. A sentence that merely mentions signing in ("then sign in to
-WhatsApp Web") is not a label.
+followed by a sign-in label (one of the localized labels, or a strict English
+form such as "(requires a BYU login)"; e.g. from an old answer in chat history,
+or a model that wrote one anyway) is counted but not labeled again. Only
+spaces, citation markers, and bold markers may sit between the link and the
+label. A parenthetical that merely mentions signing in ("(sign in to WhatsApp
+Web first)", "(Canvas login help)") is not a label.
 
 Links inside fenced blocks are left alone: a ```message / ```email draft is
 send-ready text for students, and a label would end up in it. Links and fences
@@ -38,21 +40,22 @@ DEFAULT_LOGIN_LINK_HOSTS = (
     "portal.byupathway.edu",
 )
 
-# A parenthesized note right after a link: "(…)" or full-width "（…）", within
-# this many characters of the link (§8.3's 40-character lookahead).
-LOOKAHEAD_CHARS = 40
-# Citation markers may sit between the link and its note: "[Guide](url)[^1] (sign-in required)".
+# A parenthesized note directly after a link: "(…)" or full-width "（…）".
+# Citation markers and bold may sit in between: "[Guide](url)[^1] (sign-in required)".
 _NOTE_RE = re.compile(
     r"^[ \t]*(?:\[\^\d+\][ \t]*)*(?:\*\*|__)?[ \t]*[(（]([^()（）\n]{1,60})[)）]"
+)
+# English labels the model or a guide may write instead of ours. Strict on
+# purpose: the whole note must be a label, not a sentence that mentions login.
+_EN_LABEL_RE = re.compile(
+    r"^(?:(?:sign[\s-]?in|log[\s-]?in|login)(?: is)? (?:required|needed)"
+    r"|requires? (?:a |an )?(?:[\w-]+ ){0,2}(?:sign[\s-]?in|log[\s-]?in|login))$",
+    re.IGNORECASE,
 )
 
 # A language code, or a function that works one out. The annotator calls it
 # only when a link needs a label, so answers without one never pay for it.
 Language = Union[str, None, Callable[[], str]]
-
-# English wordings the model or a guide may use inside such a note.
-_EN_NOTE_WORDS = ("sign-in", "sign in", "signin", "log-in", "log in", "login")
-
 
 @dataclass
 class AnnotationResult:
@@ -79,22 +82,25 @@ def sign_in_label(lang: str | None) -> str:
     return LocalizationManager.get_message(MessageType.SIGN_IN_REQUIRED, lang or "en")
 
 
+def _normalize_note(note: str) -> str:
+    return " ".join(note.strip().rstrip(".!").split()).lower()
+
+
 @lru_cache(maxsize=1)
-def _note_words() -> tuple[str, ...]:
-    """Every localized label's words, plus English variants, lowercased."""
+def _localized_labels() -> frozenset[str]:
+    """Every localized label's text, without its parentheses, normalized."""
     labels = LocalizationManager.FALLBACK_MESSAGES[MessageType.SIGN_IN_REQUIRED].values()
-    words = {label.strip("()（） ").lower() for label in labels}
-    return tuple(words) + _EN_NOTE_WORDS
+    return frozenset(_normalize_note(label.strip("()（）")) for label in labels)
 
 
 def has_sign_in_note(following: str) -> bool:
     """True when `following` (the text right after a link) opens with a
-    parenthesized sign-in note."""
-    m = _NOTE_RE.match(following[:LOOKAHEAD_CHARS + 20])
-    if not m or m.start(1) > LOOKAHEAD_CHARS:
+    parenthesized note that IS a sign-in label."""
+    m = _NOTE_RE.match(following)
+    if not m:
         return False
-    note = m.group(1).lower()
-    return any(word in note for word in _note_words())
+    note = _normalize_note(m.group(1))
+    return note in _localized_labels() or bool(_EN_LABEL_RE.match(note))
 
 
 def _label_point(segment: str, link: Link) -> int:

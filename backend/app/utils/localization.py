@@ -13,7 +13,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 try:
-    from langdetect import detect, LangDetectException
+    from langdetect import DetectorFactory, detect, LangDetectException
+    # langdetect is randomized; seed it so the same text always gets the same
+    # language (otherwise a label or reply language can flip between identical
+    # requests).
+    DetectorFactory.seed = 0
     LANGDETECT_AVAILABLE = True
 except ImportError:
     LANGDETECT_AVAILABLE = False

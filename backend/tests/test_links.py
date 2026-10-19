@@ -66,3 +66,31 @@ def test_links_never_overlap():
     links = find_links(text)
     for a, b in zip(links, links[1:]):
         assert a.end <= b.start
+
+
+# --- PR #4 review ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("text", [f"请打开 {SP}。", f"（见 {SP}）", f"{SP}，然后"])
+def test_bare_url_stops_at_cjk_punctuation(text):
+    assert _kinds(text) == [("bare", SP)]
+
+
+def test_a_one_line_code_span_is_not_a_fence():
+    runs = split_fences("```Week 07``` is the last week\nSee the link.\n")
+    assert runs == [(False, "```Week 07``` is the last week\nSee the link.\n")]
+
+
+def test_an_unclosed_fence_is_ordinary_text():
+    text = "Intro\n```message\nHi there\n\nNow see the link.\n"
+    assert split_fences(text) == [(False, text)]
+
+
+def test_fence_info_reads_the_tag():
+    from app.utils.links import fence_info
+
+    assert fence_info("```message\n") == "message"
+    assert fence_info("   ```Email") == "email"
+    assert fence_info("```") == ""
+    assert fence_info("```Week 07``` is the last week") is None
+    assert fence_info("    ```message") is None  # 4 spaces: indented code, not a fence

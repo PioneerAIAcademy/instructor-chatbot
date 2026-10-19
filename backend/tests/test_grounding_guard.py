@@ -277,3 +277,24 @@ def test_link_integrity_copies_a_nested_link_once():
     nodes = [_lnode("https://p.example", text="https://b.com/y and https://a.com/x")]
     text = "[<https://b.com/y>](https://a.com/x) tail"
     assert enforce_link_integrity(text, nodes) == text
+
+
+def test_link_integrity_keeps_cjk_text_after_an_allowed_url():
+    nodes = [_lnode("https://p.example", text=f"Open {_SP} first.")]
+    assert enforce_link_integrity(f"请打开 {_SP}。", nodes) == f"请打开 {_SP}。"
+
+
+def test_link_integrity_leaves_indentation_drafts_and_hard_breaks_alone():
+    nodes = [_lnode(_SP)]
+    text = "1. Open Canvas\n   - Go to People\nLine one  \nLine two\n```message\nHi,  there\n    indented\n```"
+    assert enforce_link_integrity(text, nodes) == text
+
+
+def test_link_integrity_tidies_only_the_seam_of_a_removed_url():
+    out = enforce_link_integrity("See https://fake.example.com/x now.\n   - nested", [_lnode(_SP)])
+    assert out == "See now.\n   - nested"
+
+
+def test_coverage_after_an_unclosed_fence_still_applies():
+    draft = "Intro [^1].\n```message\nHi\nA real claim here."
+    assert "A real claim here. [^1]" in ensure_citation_coverage(draft, [_node("source")])

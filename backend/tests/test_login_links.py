@@ -250,3 +250,31 @@ def test_language_function_is_only_called_when_a_label_is_needed():
     assert calls == []
     assert "(requer login)" in annotate_login_links(f"[x]({SP}) and [y]({SP}?2)", lang).text
     assert calls == [1]  # resolved once for both links
+
+
+# --- PR #4 review ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("note", ["(sign in to WhatsApp Web first)", "(Canvas login help)", "(you may need to log in)"])
+def test_a_parenthetical_that_mentions_login_is_not_a_label(note):
+    out = annotate_login_links(f"[WhatsApp community setup]({SP}) {note}")
+    assert out.added == 1
+    assert out.text.startswith(f"[WhatsApp community setup]({SP}) (sign-in required) {note}")
+
+
+@pytest.mark.parametrize(
+    "note", ["(sign-in required)", "(Sign in required.)", "(login needed)", "(requires BYU-Idaho login)", "(requires sign-in)"]
+)
+def test_real_english_labels_still_count(note):
+    assert annotate_login_links(f"[x]({SP}) {note}").added == 0
+
+
+def test_links_after_an_inline_code_span_are_still_labeled():
+    text = f"```Week 07``` is the last week.\nSee [the guide]({SP})."
+    out = annotate_login_links(text)
+    assert out.added == 1 and "(sign-in required)" in out.text
+
+
+def test_links_after_an_unclosed_fence_are_still_labeled():
+    text = f"Here's a draft:\n```message\nHi [Student Name]\n\nAlso see [the guide]({SP})."
+    assert annotate_login_links(text).added == 1

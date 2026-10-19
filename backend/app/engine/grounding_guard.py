@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.utils.links import find_links, is_fence_line
+from app.utils.links import find_links, split_fences
 
 _CITATION_RE = re.compile(r"\[\^\d+\]")
 
@@ -111,22 +111,23 @@ def ensure_citation_coverage(text: str, source_nodes: list[Any]) -> str:
         return text
 
     marker = "[^1]"
-    fixed_lines: list[str] = []
-    in_fence = False
-    for line in text.splitlines():
-        stripped = line.strip()
-        if is_fence_line(line):
-            in_fence = not in_fence
-            fixed_lines.append(line)
+    out: list[str] = []
+    # Fences come from app.utils.links, the same parser the sign-in annotator uses.
+    for in_fence, segment in split_fences(text):
+        if in_fence:
+            out.append(segment)
             continue
-        if in_fence or not _line_needs_citation(stripped):
-            fixed_lines.append(line)
-            continue
-        if stripped.startswith("|") and stripped.endswith("|"):
-            fixed_lines.append(_append_marker_to_table_row(line, marker))
-        else:
-            fixed_lines.append(line.rstrip() + f" {marker}")
-    return "\n".join(fixed_lines)
+        for line in segment.splitlines(keepends=True):
+            body = line.rstrip("\r\n")
+            ending = line[len(body):]
+            stripped = body.strip()
+            if not _line_needs_citation(stripped):
+                out.append(line)
+            elif stripped.startswith("|") and stripped.endswith("|"):
+                out.append(_append_marker_to_table_row(body, marker) + ending)
+            else:
+                out.append(body.rstrip() + f" {marker}" + ending)
+    return "".join(out)
 
 
 def _has_citation_boundary(between: str) -> bool:
@@ -230,8 +231,13 @@ def enforce_link_integrity(text: str, source_nodes: list[Any]) -> str:
         elif link.kind == "markdown":
             out.append(link.label)  # keep the words, drop the dead link
         # an unknown bare URL or autolink is dropped; trailing punctuation stays
+        elif out and out[-1].endswith(" ") and text[cursor:cursor + 1] == " ":
+            # The link sat between two spaces; drop one, so "see LINK now" reads
+            # "see now". Whitespace elsewhere (list indents, drafts, hard line
+            # breaks) is left exactly as written.
+            out[-1] = out[-1][:-1]
     out.append(text[cursor:])
-    return re.sub(r"[ \t]{2,}", " ", "".join(out))
+    return "".join(out)
 
 
 def apply_grounding_guards(

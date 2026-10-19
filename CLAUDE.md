@@ -519,8 +519,10 @@ references removed.
 - **Deterministic backstop (`login_links.py`):** after the grounding guards, find every markdown
   link or bare URL whose host matches `LOGIN_LINK_HOSTS` (suffix match, so `*.sharepoint.com` is
   covered). Append ` (sign-in required)` once, localized through the existing string tables
-  **in the answer's language**, unless a parenthesized sign-in note already follows the link
-  (within 40 characters). A sentence that merely mentions signing in is not a note. Count the
+  **in the answer's language**, unless a sign-in label already follows the link directly
+  (only spaces, `[^N]` markers, or bold in between). A label is one of the localized labels or
+  a strict English form ("requires a BYU login"). A parenthetical that merely mentions signing
+  in, such as "(sign in to WhatsApp Web first)", is not a label. Count the
   sign-in links into trace metadata `login_links` and the labels added into
   `login_links_labeled`. The prompt does the explaining, and tells the model **not** to write
   the note itself. This guarantees the label. *(Revised in the Phase 3 review, 2026-10-19.)*
@@ -727,6 +729,34 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (PR #4 review, fixed on the Phase 4 branch)** — A review of PR #4 (Phase 3)
+  listed 10 findings. 4 were already fixed by the Phase 4 review round in PR #5: bold and
+  code URLs, overlapping links, lazy label language, and the cached note words. The other 6
+  were reproduced and fixed **on `phase-4-chat-api`**, because #4 and #5 change the same
+  files. **Merge #4, then #5.** `pytest tests/` gives 492 passed. Live `api_check.py` 8/8, and
+  `ask.py` on #9 and G3 ok.
+  - **CJK punctuation joined URLs** (`…/x。`). Fix: bare URLs stop at any non-ASCII
+    character; the guides' URLs are ASCII.
+  - **Prose parentheticals counted as labels** ("(sign in to WhatsApp Web first)",
+    "(Canvas login help)"). Fix: the whole note must be a localized label or a strict English
+    form. §8.3 was revised. The 40-character lookahead constant was dead code (the regex is
+    anchored) and is gone.
+  - **Fences weren't CommonMark-style.** A one-line ```` ```x``` ```` span, or an unclosed
+    fence, swallowed the rest of the answer, so later links went unlabeled and uncited.
+    - Fix: `split_fences` follows CommonMark (an opening line with an optional tag, a
+      closing line alone, up to 3 spaces of indent). An unclosed fence is ordinary text.
+    - Citation coverage and `hoist_draft_citations` now use the same parser.
+    - `draft_edit._clean_model_output` was left alone: it only unwraps the rewrite model's
+      own output, not an answer.
+  - **Link integrity flattened whitespace.** It collapsed every 2+ spaces in the whole
+    answer, breaking list nesting, drafts, and hard breaks. Fix: it only tidies the doubled
+    space where it removed a link.
+  - **langdetect wasn't seeded**, so the same text could get different languages. Fix:
+    `DetectorFactory.seed = 0`.
+  - **A missing Voyage key slept through the retries** (about 10 s per rerank) before falling
+    back. Fix: client creation fails at once, and `retrieve.prepare()` checks the key like
+    `main.py` does.
 
 - **2026-10-19 (Phase 4 review fixes)** — A review of the uncommitted Phase 4 work listed 10
   findings: 9 confirmed and fixed, 1 not an issue. `pytest tests/` gives 469 passed, keyless.

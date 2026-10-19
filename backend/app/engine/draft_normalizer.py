@@ -234,20 +234,34 @@ def hoist_draft_citations(text: str) -> str:
     where they are. Only markers inside a draft fence move, de-duplicated, to
     a single line right after that fence. Idempotent; text without a draft
     fence is returned unchanged.
+
+    Fences come from app.utils.links.split_fences, the same parser the sign-in
+    annotator and citation coverage use, so all three agree on what is inside
+    a draft. (The other functions in this module are upstream's supervisor
+    path and aren't used by the classic path.)
     """
     if not text or "```" not in text:
         return text
 
-    def _hoist(m: "re.Match[str]") -> str:
-        lang = m.group(1).strip().lower()
-        if lang not in _DRAFT_FENCE_LANGS:
-            return m.group(0)
-        body_clean, nums = _extract_citations(m.group(2))
+    from app.utils.links import fence_info, split_fences
+
+    out: list[str] = []
+    for in_fence, segment in split_fences(text):
+        if not in_fence:
+            out.append(segment)
+            continue
+        lines = segment.splitlines(keepends=True)
+        if fence_info(lines[0]) not in _DRAFT_FENCE_LANGS:
+            out.append(segment)
+            continue
+        opening, body, closing = lines[0], "".join(lines[1:-1]), lines[-1]
+        body_clean, nums = _extract_citations(body)
         if not nums:
-            return m.group(0)
+            out.append(segment)
+            continue
         # "[Student Name] [^2], hi" -> "[Student Name], hi", not "[Student Name] , hi".
         body_clean = re.sub(r"[ \t]+([,.;:!?])", r"\1", body_clean)
-        rebuilt = f"```{lang}\n{body_clean.strip()}\n```"
-        return f"{rebuilt}\n\n{_build_citation_line(nums)}"
-
-    return _FENCED_BLOCK_RE.sub(_hoist, text)
+        ending = closing[len(closing.rstrip("\r\n")):]
+        rebuilt = opening + body_clean.strip("\n") + "\n" + closing.rstrip("\r\n")
+        out.append(f"{rebuilt}\n\n{_build_citation_line(nums)}{ending}")
+    return "".join(out)

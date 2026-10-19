@@ -161,3 +161,19 @@ def test_retrieve_script_handles_nothing_left_to_rank(voyage, monkeypatch, raw):
     assert result["dropped"] == len(raw)
     assert prepared["index"] == "instructor-assistant"
     assert voyage.calls == []
+
+
+def test_a_missing_voyage_key_fails_at_once_without_retry_sleeps(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(ccpc, "vo", None)
+    monkeypatch.setattr(ccpc.time, "sleep", lambda s: sleeps.append(s))
+
+    class _NoKey:
+        @staticmethod
+        def Client():
+            raise RuntimeError("No API key provided")
+
+    monkeypatch.setattr(ccpc, "voyageai", _NoKey)
+    out = rerank_nodes([_node("a"), _node("b")], "q")
+    assert out.attempted and not out.success and "No API key" in str(out.error)
+    assert sleeps == []  # no 2 x 5 s of retry backoff

@@ -164,3 +164,9 @@ def test_detection_logs_never_include_the_text(caplog):
         LocalizationManager.detect_language("Maria Fernandez reprovou na prova e a mãe dela me mandou um email")
     assert caplog.records, "expected detection log lines"
     assert not any("Maria" in r.getMessage() for r in caplog.records)
+
+
+def test_detection_is_deterministic():
+    text = "Revise el enlace https://byupathwayworldwideprod.sharepoint.com/sites/x para más"
+    results = {LocalizationManager.detect_language_confident(text) for _ in range(5)}
+    assert len(results) == 1
