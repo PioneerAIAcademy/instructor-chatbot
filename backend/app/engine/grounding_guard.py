@@ -240,6 +240,25 @@ def enforce_link_integrity(text: str, source_nodes: list[Any]) -> str:
     return "".join(out)
 
 
+# A citation the model wrote in a near-miss form: "[^1^]" (seen live in the
+# Phase 6 eval), "[^ 1]", "[^1 ]". The frontend and the eval only recognize
+# "[^1]", so a near miss would show as a stray token and count as uncited.
+_MALFORMED_CITATION_RE = re.compile(r"\[\^[ \t]*(\d+)[ \t]*\^?[ \t]*\]")
+
+
+# A marker with no number at all: the prompt's own placeholder "[^N]" copied
+# literally (seen live in the Phase 6 eval, #6). It points at nothing.
+_PLACEHOLDER_CITATION_RE = re.compile(r"[ \t]*\[\^[ \t]*[A-Za-z][ \t]*\]")
+
+
+def normalize_citation_markers(text: str) -> str:
+    """Rewrite near-miss citation markers to the canonical [^N], and drop
+    numberless placeholders such as a literal "[^N]", which the reader would
+    otherwise see as-is."""
+    text = _MALFORMED_CITATION_RE.sub(r"[^\1]", text or "")
+    return _PLACEHOLDER_CITATION_RE.sub("", text)
+
+
 def apply_grounding_guards(
     text: str,
     source_nodes: list[Any],
@@ -251,9 +270,11 @@ def apply_grounding_guards(
 
     `user_question` / `chat_history` are accepted but unused — grounding
     judgement now lives entirely in the agentic loop (retrieval + critics).
-    The deterministic steps are presentation-only: make citations visible,
+    The deterministic steps are presentation-only: repair near-miss citation
+    markers ("[^1^]" to "[^1]"), make citations visible,
     de-clutter runs of the same repeated citation, then strip any link/URL the
     answer surfaced that is NOT present in the retrieved sources (anti-fabrication).
     """
+    text = normalize_citation_markers(text)
     text = decluster_citations(ensure_citation_coverage(text, source_nodes))
     return enforce_link_integrity(text, source_nodes)

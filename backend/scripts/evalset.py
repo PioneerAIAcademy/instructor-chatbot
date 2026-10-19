@@ -39,6 +39,7 @@ class Question:
     must_not: tuple[str, ...] = ()
     data: dict = field(default_factory=dict)
     same_as: str | None = None
+    refuse: bool = False
     note: str = ""
 
     @property
@@ -111,6 +112,9 @@ def _question(item: Any, index: int) -> Question:
     if not isinstance(data, dict):
         raise EvalSetError(f"{where}: data must be a mapping")
     same_as = item.get("same_as")
+    refuse = item.get("refuse", False)
+    if not isinstance(refuse, bool):
+        raise EvalSetError(f"{where}: refuse must be true or false")
     return Question(
         id=qid,
         q=text.strip(),
@@ -121,6 +125,7 @@ def _question(item: Any, index: int) -> Question:
         must_not=_strings(item.get("must_not"), where, "must_not"),
         data=data,
         same_as=str(same_as) if same_as is not None else None,
+        refuse=refuse,
         note=str(item.get("note") or ""),
     )
 

@@ -11,8 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0–4 merged (PRs #1–#5). Phase 5 (observability) in PR #6, with
-> review fixes on `phase-5-observability`. Next: Phase 6.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0–5 merged (PRs #1–#6). Phase 6 (answer eval) done on
+> `phase-6-answer-eval`, uncommitted: answers 90% / 86% in two runs, guards 100% (§14). Next:
+> Phase 7.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -742,6 +743,84 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (Phase 6 done: prompt and guard fixes, two passing runs)** — With the owner's
+  go-ahead, two prompt rules were added. The eval then showed three more defects, all fixed.
+  `pytest tests/` gives 569 passed, keyless.
+  - **Prompt (lock test updated):**
+    - GROUNDING: when a context says what to do if the problem continues (who to report it
+      to, a form, who to escalate to), always include that step, last, with its link.
+    - EXTERNAL PAGES: "external page" now includes BYU-Pathway's own website, and the model
+      must name the owner in the sentence that uses one.
+    - CITATIONS: "N is the context's number … never the letter N itself."
+  - **Defects the runs exposed, fixed:**
+    - **A literal `[^N]` in an answer (#6).** The model copied the prompt's placeholder.
+      `normalize_citation_markers()` now also drops numberless markers.
+    - **A draft in a bare ``` fence (#17)**, so DraftComposer wouldn't mount.
+      `draft_normalizer.tag_untagged_drafts()` tags an untagged fence that holds a
+      placeholder such as `[Your Name]` as ```message (```email if it opens with
+      "Subject:"). Code blocks are left alone. It runs before `hoist_draft_citations`.
+    - **External sources labeled by host only.** `source_label` now says "external page
+      from BYU-Pathway (www.byupathway.edu)". `SITE_OWNERS` maps the indexer's linked hosts
+      by domain suffix; an unknown host keeps the old label.
+  - **Results with all fixes, `gpt-4o-mini`:**
+    - `20261019T122650Z-answers.json`: **19/21 = 90%**, guards 4/4. PASSED.
+    - `20261019T123309Z-answers.json`: **18/21 = 86%**, guards 4/4. PASSED.
+    - #11 (escalation) and #17 (draft) passed in both.
+  - **Known gaps left:**
+    - **#21 fails in all 6 runs.** The answer cites two byupathway.edu pages but never says
+      whose they are, even with the owner in the label and a prompt rule. gpt-4o-mini
+      treats BYU-Pathway's pages as its own voice. Candidates: the Q16 `gpt-4o` comparison,
+      or showing the owner in the frontend's sources sidebar (§8.3 already plans "External
+      page · <host>"), which doesn't depend on the model.
+    - **#13 fails in 4 of 6 runs.** The model doesn't cite the adds/drops guide; coverage
+      then stamps `[^1]` on uncited lines.
+    - **#6 fails now and then** (the "benefit of the doubt" principle is dropped).
+  - **Cost:** 6 full runs (about 150 chat requests) during Phase 6.
+
+- **2026-10-19 (Phase 6 started, branch `phase-6-answer-eval`, uncommitted)** — The answer
+  eval is built. The baseline with `gpt-4o-mini` is **at or below the 85% target**; guards are
+  100%. `pytest tests/` gives 554 passed, keyless.
+  - **Built:**
+    - `scripts/eval_answers.py`: every §10 question through the local `/api/v1/chat`, session
+      `eval-<run>`, with §7's 7 checks, plus `draft` (#17), `same_sources` (G4), and `stream`.
+      It waits out the 10/minute limit (429) instead of failing. It posts `eval_pass` (0/1)
+      on each trace (`--no-scores` to skip). `RUN_LLM_JUDGE=1` adds a groundedness judge
+      (`LLM_JUDGE_MODEL`, default `gpt-4o`) that reports only.
+    - `--rescore <file>` re-checks a saved results file against the current
+      `questions.yaml` with no requests.
+    - `questions.yaml`: `refuse: true` on G1 and G2 (they must refuse and cite nothing);
+      G1 `must_not: Abuja`; #21 must say "external" or name the owner. A phrase the question
+      itself contains doesn't count against `must_not` (G2 echoes "My Gatherings").
+    - `tests/test_eval_answers.py` (24 offline tests).
+  - **Bug found and fixed: near-miss citation markers.** In run 1, #6 came back with
+    `[^1^]`. That matches no source, so the answer counted as uncited, and the frontend
+    couldn't link it either. `normalize_citation_markers()` now runs first in
+    `apply_grounding_guards`.
+  - **Eval-set bugs fixed:** whole-word phrases missed plurals ("graders",
+    "accommodations"). `grader*`, `accommodation*`, `report*`, `ticket*`, `group*`, and
+    `communit*` are now prefixes.
+  - **Results (both with the fixed eval set, via `--rescore`):**
+    - Run 1, `20261019T114305Z-answers.json` (before the marker fix): 18/21 = **86%**,
+      guards 4/4.
+    - Run 2, `20261019T115311Z-answers.json`: 17/21 = **81%**, guards 4/4.
+    - Answers vary between runs at temperature 0. #12 and #13 passed in one run and not
+      the other.
+  - **Failing in both runs (real answer gaps):**
+    - **#11:** the answer leaves out the guide's escalation step: "report your concerns
+      to the BYU-Pathway Dean of Students using this form". The model had that paragraph
+      (it cited the sentence before it).
+    - **#21:** it uses two byupathway.edu pages but never says whose they are. The
+      EXTERNAL PAGES rule says to.
+  - **Seen once:**
+    - **#6** (run 2): the answer drops the guide's "benefit of the doubt / open mind"
+      principle.
+    - **#13** (run 2): the model never cited the adds/drops guide. Citation coverage then
+      stamped `[^1]` (the due-date guide) on the intro and summary lines.
+  - **Finding, not changed: citation coverage always stamps `[^1]`** on uncited lines, so a
+    line can point at a guide it didn't come from (upstream design). Changing it is a
+    behavior decision.
+  - **Next:** the owner chose the prompt change (entry above).
 
 - **2026-10-19 (PR #6 review fixes, on `phase-5-observability`)** — A review of PR #6 listed 10
   findings. All 10 were checked against the code (the redaction gaps by running them) and

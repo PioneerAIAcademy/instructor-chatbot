@@ -171,6 +171,24 @@ wasn't measured), and no errors. A question that errors is recorded and the run 
 each miss, it says why: pushed out of the raw top 5 by rerank, retrieved lower and not lifted,
 not retrieved, rerank failed, or an error.
 
+To run the answer eval, which sends all 25 questions through the running chat API and checks
+each answer (live and billable: a full chat request per question):
+
+```bash
+poetry run python scripts/eval_answers.py                  # all 25
+poetry run python scripts/eval_answers.py --ids 5 G4       # a few (G4 brings #5 along)
+poetry run python scripts/eval_answers.py --rescore tests/eval/results/<run>-answers.json  # free
+RUN_LLM_JUDGE=1 poetry run python scripts/eval_answers.py  # adds a groundedness judge
+```
+
+Each answer is checked for: the expected guide cited, every `[^N]` matching a source, only
+instructor sources, the required phrases, no forbidden phrases, a sign-in label on every
+sign-in link, refusals where expected, a ```message fence for the draft question, and (G4) the
+same sources whatever role the client sends. The run passes when at least 85% of the 21 answer
+questions and all 4 guards pass. Requests use the session `eval-<run>`, so their traces are
+tagged `eval` and get an `eval_pass` score. `--rescore` re-checks a saved run against the
+current `questions.yaml` without sending anything.
+
 Phrases in `questions.yaml` (`must_include`, `must_not`) match whole words, case-insensitively:
 `ACM` doesn't match "Macmillan" and `ID` doesn't match "guide". A trailing `*` makes a prefix
 (`missionar*`).
@@ -206,6 +224,7 @@ scripts/api_contract.py         the stream contract as code (shared by tests and
 scripts/ask.py                  one question through the local API, with answer checks (live)
 scripts/retrieve.py             raw + reranked retrieval for one question (live)
 scripts/eval_retrieval.py       retrieval eval over tests/eval/questions.yaml (live)
+scripts/eval_answers.py         answer eval through the chat API (live; --rescore is free)
 scripts/evalset.py              eval-set loader and scoring (shared with the Phase 6 answer eval)
 tests/eval/questions.yaml       the §10 eval set (DRAFT until real instructor questions arrive)
 scripts/                        security corpus and harness

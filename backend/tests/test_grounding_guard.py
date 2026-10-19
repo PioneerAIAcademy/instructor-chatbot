@@ -13,6 +13,7 @@ from app.engine.grounding_guard import (
     decluster_citations,
     enforce_link_integrity,
     ensure_citation_coverage,
+    normalize_citation_markers,
 )
 
 
@@ -298,3 +299,23 @@ def test_link_integrity_tidies_only_the_seam_of_a_removed_url():
 def test_coverage_after_an_unclosed_fence_still_applies():
     draft = "Intro [^1].\n```message\nHi\nA real claim here."
     assert "A real claim here. [^1]" in ensure_citation_coverage(draft, [_node("source")])
+
+
+def test_near_miss_citation_markers_are_repaired():
+    # "[^1^]" came back live in the Phase 6 eval (#6) and counted as uncited.
+    assert normalize_citation_markers("Check Turnitin[^1^]. Ask first [^ 2 ].") == "Check Turnitin[^1]. Ask first [^2]."
+    assert normalize_citation_markers("Already fine [^3].") == "Already fine [^3]."
+    assert normalize_citation_markers("A footnote ^1 or [1] is left alone.") == "A footnote ^1 or [1] is left alone."
+
+
+def test_repaired_markers_reach_the_final_answer():
+    answer = "1. Collect evidence first[^1^].\n2. Keep an open mind[^1^]."
+    out = apply_grounding_guards(answer, [_node("Collect evidence. Keep an open mind.")])
+    # (decluster then keeps one [^1] for the run, as for any repeated citation)
+    assert "[^1^]" not in out and out.endswith("open mind[^1].")
+
+
+def test_literal_placeholder_markers_are_dropped():
+    # "[^N]" copied from the prompt came back live in the Phase 6 eval (#6).
+    assert normalize_citation_markers("Use Turnitin[^N]. Ask first [^n].") == "Use Turnitin. Ask first."
+    assert normalize_citation_markers("Paid on the 8th [^1].") == "Paid on the 8th [^1]."

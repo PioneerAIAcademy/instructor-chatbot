@@ -226,6 +226,45 @@ def normalize_rtf_draft(text: str, draft_kind: str | None) -> str:
     return fenced
 
 
+# A fill-in placeholder in a drafted message: "[Your Name]", "[Student Name]",
+# "[start date]". Not a citation ("[^1]") and not a markdown link label.
+_PLACEHOLDER_RE = re.compile(r"\[[A-Za-z][A-Za-z0-9 .'/&-]{1,40}\](?!\()")
+
+
+def tag_untagged_drafts(text: str) -> str:
+    """Tag a fence with no language as ```message (```email when it opens with
+    "Subject:") when its body is a drafted message, i.e. it has a placeholder
+    such as [Your Name].
+
+    The prompt asks for ```message / ```email, but gpt-4o-mini sometimes
+    writes a bare ``` (seen live in the Phase 6 eval, #17). The frontend's
+    DraftComposer only mounts on those two tags, so the draft wouldn't open
+    in it. Tagged fences and code blocks (no placeholder) are left alone.
+    Idempotent.
+    """
+    if not text or "```" not in text:
+        return text
+
+    from app.utils.links import fence_info, split_fences
+
+    out: list[str] = []
+    for in_fence, segment in split_fences(text):
+        lines = segment.splitlines(keepends=True)
+        if not in_fence or fence_info(lines[0]) != "":
+            out.append(segment)
+            continue
+        body = "".join(lines[1:-1])
+        if not _PLACEHOLDER_RE.search(body):
+            out.append(segment)
+            continue
+        first = next((ln.strip() for ln in lines[1:-1] if ln.strip()), "")
+        tag = "email" if first.lower().startswith("subject:") else "message"
+        opening = lines[0]
+        ending = opening[len(opening.rstrip("\r\n")):]
+        out.append(opening.rstrip("\r\n").rstrip() + tag + ending + "".join(lines[1:]))
+    return "".join(out)
+
+
 def hoist_draft_citations(text: str) -> str:
     """Move `[^N]` markers out of every ```email / ```message block.
 

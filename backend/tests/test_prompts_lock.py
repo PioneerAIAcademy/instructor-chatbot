@@ -17,10 +17,13 @@ CONTEXT = " ".join(CONTEXT_PROMPT.split())
         # Grounding
         "Answer only from the numbered contexts.",
         "Never answer from general knowledge.",
+        # Escalation steps are never dropped (Phase 6 eval #11)
+        "always include that step, as the last step, with its link if the context gives one.",
         # Citation format
         "Put [^N] right after the sentence it supports.",
         "Never cite a context for a claim it doesn't make.",
         "Never put [^N] inside a drafted message.",
+        "never the letter N itself.",
         # Sign-in links: the model hasn't read them, and must say so
         "You have NOT read those pages.",
         "Don't write a sign-in note after the link yourself",
@@ -30,7 +33,7 @@ CONTEXT = " ".join(CONTEXT_PROMPT.split())
         "A link's title is not a description",
         "If the guide only lists the link",
         # External pages and institutions
-        "Say whose page it is.",
+        "Say whose page it is: in the sentence that uses one, name its owner",
         "follow the guide and mention the difference",
         "give both (labeled) or ask which institution the course belongs to",
         # FERPA
