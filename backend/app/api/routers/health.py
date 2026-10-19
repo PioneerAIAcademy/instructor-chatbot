@@ -45,8 +45,10 @@ async def readiness():
         checks["pinecone"] = "skipped"
     else:
         try:
-            index = get_vector_store().client
-            await asyncio.to_thread(index.describe_index_stats)
+            # All of it in a thread: on a store-cache miss with no host pinned,
+            # get_vector_store() makes a blocking control-plane lookup, which
+            # must not stall the event loop (and every chat stream with it).
+            await asyncio.to_thread(lambda: get_vector_store().client.describe_index_stats())
             checks["pinecone"] = "ok"
         except Exception as e:
             logger.error(f"Pinecone health check failed: {type(e).__name__}: {e}")

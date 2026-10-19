@@ -108,14 +108,19 @@ def _ensure_minimum_citations(text: str, source_nodes: list[Any]) -> str:
 class RetrievalOrchestrator:
     """Coordinates retrieval + synthesis + grounding guards for the RAG path.
 
-    One instance per request. After `run()` returns or raises,
-    `audience_leak_dropped` holds the number of nodes the post-retrieval
-    audience guard dropped. Non-zero is a security finding; chat.py tags
-    the trace with it, whether or not the answer succeeded.
+    One instance per request. `audience_leak_dropped` is the number of nodes
+    the post-retrieval audience guard has dropped so far. It reads the guard's
+    live counter, so it is right at any moment: after success, after failure,
+    and after a client disconnect cancels `run()` before its cleanup runs.
+    Non-zero is a security finding; chat.py tags the trace with it.
     """
 
     def __init__(self) -> None:
-        self.audience_leak_dropped = 0
+        self._guard: AudienceGuardPostprocessor | None = None
+
+    @property
+    def audience_leak_dropped(self) -> int:
+        return self._guard.dropped if self._guard is not None else 0
 
     @observe(name="retrieval-orchestrator")
     async def run(
@@ -160,6 +165,7 @@ class RetrievalOrchestrator:
             # retrieve at all (CLAUDE.md §0 rule 5).
             _mark_observation_error("chat engine has no audience guard")
             raise RuntimeError("chat engine has no audience guard; refusing to retrieve")
+        self._guard = guard
         if event_handler is not None:
             _scope_callbacks(engine, event_handler)
 
@@ -175,9 +181,8 @@ class RetrievalOrchestrator:
                 _mark_observation_error(f"synthesis failed: {exc}")
                 raise
         finally:
-            # Recorded whether or not synthesis succeeded: a leak is a
-            # security finding even when the answer then fails.
-            self.audience_leak_dropped = guard.dropped
+            # Marked whether or not synthesis succeeded: a leak is a security
+            # finding even when the answer then fails.
             if guard.dropped:
                 _mark_observation_error(f"audience_leak: {guard.dropped} node(s) dropped")
 

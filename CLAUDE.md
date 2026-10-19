@@ -11,8 +11,8 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-18): Phase 0 merged (PR #1). Phase 1 (audience lock) done on branch
-> `phase-1-audience-guard`, not yet merged. Next: Phase 2.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0 and 1 merged (PRs #1, #2). Phase 2 (retrieval eval) done on
+> branch `phase-2-retrieval-eval` (on `main`), uncommitted. Next: Phase 3.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -723,6 +723,72 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (Phase 2 review fixes)** — A review found 10 issues across the merged Phase 1
+  code and the uncommitted Phase 2 eval. All 10 were confirmed and fixed. `pytest tests/` gives
+  350 passed, keyless. The branch was fast-forwarded onto `main` after PR #2 merged.
+  - **The eval could pass with no rerank measured.** A failed Voyage rerank falls back to raw
+    order, but failures weren't part of `passed`.
+    - Fix: any rerank failure, or any errored question, now fails the run.
+    - Errors are recorded per question, so a timeout on question 18 no longer throws away the
+      17 paid results before it.
+  - **Miss attribution was too loose.** Any miss whose doc appeared anywhere in the raw top
+    35 was blamed on rerank.
+    - Fix: misses now split into `lost_in_rerank` (in the raw top 5 and pushed out),
+      `not_lifted` (raw rank 6–35), `not_retrieved`, `rerank_failed`, and `error`. Q15
+      decisions need this split.
+  - **Phrase matching was substring-based, so it misfired.** "ACM" matched "Macmillan", "ID"
+    matched "guide", "I read" matched "AI readiness".
+    - Fix: `evalset.contains_phrase` matches whole words, case-insensitively; a trailing `*`
+      makes a prefix.
+    - Bare "gathering" was dropped from `defaults.must_not` ("start by gathering the facts" is
+      fine). The specific terms took its place: `missionar*`, `gathering agenda*`,
+      `My Gatherings`, `ACM(s)`, and `I read/checked/opened/reviewed`.
+    - **Deviation from §7 Phase 6 check 5:** "Student Portal as an instructor action" needs
+      judgment, not a phrase, so it's left to the Phase 6 LLM judge.
+  - **Disconnect race in Phase 1 code.** On a client disconnect, the stream read
+    `audience_leak_dropped` before the cancelled `run()` reached its `finally`, so a leak was
+    lost.
+    - Fix: the orchestrator holds the guard, and the count is a live property.
+  - **Readiness could block the event loop.** It built the store on the loop, so a cold
+    control-plane lookup stalled every stream.
+    - Fix: the whole check runs in `asyncio.to_thread`.
+  - **Small fixes:**
+    - One audience rule, `audience_guard.is_instructor_metadata`, used by the guard and the
+      eval.
+    - `retrieve.py --expect` uses the eval's matching (case-insensitive slugs, URLs).
+    - Setup (`prepare()`) runs once per eval run. A fresh engine per question stays on
+      purpose, because it owns that question's guard counter.
+    - `document_rank` is a single pass.
+  - **Re-run, `20261019T072427Z-retrieval.json`:** the same 20/21 = 95%, PASSED, under the
+    stricter rules. 0 rerank failures, 0 errors. #4 is attributed `lost_in_rerank`.
+
+- **2026-10-19 (Phase 2 done, branch `phase-2-retrieval-eval`, uncommitted)** — The retrieval
+  eval runs the §10 questions through the production retriever plus rerank.
+  - **Built:**
+    - `tests/eval/questions.yaml`: the §10 set (21 + G1–G4) with `expect`/`expect_url`,
+      `must_include` groups, `defaults.must_not`, G4's `data.role` and `same_as`. Still DRAFT
+      (Q14). Every `expect` slug was checked against the indexer's
+      `data/state.json` (72 docs = 33 PDFs + 39 linked pages); all exist.
+    - `scripts/evalset.py`: loader and scoring, shared with Phase 6.
+    - `scripts/eval_retrieval.py`: the eval. Results in `tests/eval/results/` (gitignored).
+    - `pyyaml` listed explicitly. 329 tests pass offline.
+  - **Decision: hit@5 means the indexer's rule.** An expected document must appear in the top
+    5 *chunks*, matched by slug or normalized URL (instructor-indexer
+    `verify._hit_rank`/`_normal_url`). The eval also reports the document-level rank, and the
+    rank before rerank so a miss can be blamed on rerank or on retrieval.
+  - **Result, `20261019T070247Z-retrieval.json` (index `instructor-assistant`,
+    rerank-lite-1, top 17, ≥ 0.21): hit@5 20/21 = 95%, target 90%. PASSED.** 0 empty
+    contexts, 0 non-instructor nodes, 0 rerank failures. 18 of the 20 hits are at rank 1;
+    #13 is at 3 and #21 (linked page) at 2.
+  - **The one miss, #4** ("give just one student more time on an assignment in Canvas"):
+    - The guide ranked 1st before rerank and 7th after (3rd by document).
+    - 7 of its 9 retrieved chunks were kept, at Voyage scores 0.66–0.70. The top 5 were the
+      Accessibility guide (0.78, 0.70) and the Canvas "timed quiz" linked page (0.77,
+      0.73, 0.70). "More time" reads like an extra-time accommodation.
+    - **Not the 0.21 cutoff** (the 2 chunks that fell out lost to the top-17 limit, not the
+      threshold), and 7 of the guide's chunks still reach the model as context.
+      Per Q15 the threshold is unchanged; Phase 6 shows whether the answer suffers.
 
 - **2026-10-18 (Phase 1 review fixes, PR #2)** — A review of PR #2 found 9 issues. All 9 were
   checked against the code and fixed. `pytest tests/` gives 310 passed, keyless. The live

@@ -22,8 +22,10 @@ import sys
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-# The project is not installed as a package; put backend/ on the path.
+# The project is not installed as a package; put backend/ on the path, and
+# scripts/ for the shared evalset module.
 sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dotenv import load_dotenv  # noqa: E402
 
@@ -39,24 +41,41 @@ def _row(rank: int, score: float | None, metadata: dict) -> str:
     )
 
 
-def run_retrieval(question: str) -> dict:
+def prepare() -> str:
+    """One-time setup: the index guard and the LLM/embedding settings.
+
+    Returns the index name. Call once before run_retrieval(); the eval calls
+    it once for all its questions instead of once per question.
+    """
+    from app.engine.audience_guard import check_index_config
+    from app.settings import init_settings
+
+    index_name = check_index_config()
+    init_settings()
+    return index_name
+
+
+def run_retrieval(question: str, index_name: str | None = None) -> dict:
     """Return the retrieval for one question through the production path.
 
     Keys: index, raw and reranked (lists of (score, metadata) in rank order),
     dropped (audience-guard drops), rerank_attempted, rerank_ok, rerank_error,
     min_score. Reranking goes through the engine's own `rerank_nodes`, so the
-    rules can't drift from production. Reused by the Phase 2 retrieval eval.
+    rules can't drift from production. Pass `index_name` from prepare() to
+    skip the setup; without it, prepare() runs first. Reused by the eval.
     """
     from llama_index.core import QueryBundle
 
     from app.engine import get_chat_engine
-    from app.engine.audience_guard import check_index_config, instructor_filters
+    from app.engine.audience_guard import instructor_filters
     from app.engine.custom_condense_plus_context import RERANK_MIN_SCORE, rerank_nodes
-    from app.settings import init_settings
 
-    index_name = check_index_config()
-    init_settings()
+    if index_name is None:
+        index_name = prepare()
 
+    # A fresh engine per question, as production builds one per request: it
+    # owns this question's audience guard (and its drop count). The vector
+    # store under it is cached, so this is cheap.
     engine = get_chat_engine(filters=instructor_filters())
     raw_nodes = engine._retriever.retrieve(question)
     raw = [(n.score, dict(n.node.metadata)) for n in raw_nodes]
@@ -83,7 +102,7 @@ def run_retrieval(question: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("question")
-    parser.add_argument("--expect", help="slug that should rank in the top 5 after rerank")
+    parser.add_argument("--expect", help="slug or linked-page URL that should rank in the top 5 after rerank")
     args = parser.parse_args()
 
     result = run_retrieval(args.question)
@@ -117,9 +136,18 @@ def main() -> int:
         print(f"\nEMPTY CONTEXT: nothing left to answer from (rerank cutoff >= {result['min_score']}).")
 
     if args.expect:
-        slugs = [meta.get("slug") for _, meta in result["reranked"]]
-        rank = slugs.index(args.expect) + 1 if args.expect in slugs else None
-        print(f"\nexpect {args.expect}: " + (f"rank {rank} after rerank" if rank else "not in reranked results"))
+        # Same matching as the eval: slugs case-insensitively, URLs normalized.
+        from evalset import Question, hit_rank
+
+        target = args.expect.strip()
+        is_url = target.lower().startswith(("http://", "https://"))
+        expected = Question(
+            id="cli", q=args.question, kind="answer",
+            expect=() if is_url else (target.lower(),),
+            expect_url=(target,) if is_url else (),
+        )
+        rank = hit_rank(expected, [meta for _, meta in result["reranked"]])
+        print(f"\nexpect {target}: " + (f"rank {rank} after rerank" if rank else "not in reranked results"))
         failed = failed or rank is None or rank > 5
     return 1 if failed else 0
 

@@ -9,9 +9,9 @@ It is a trimmed copy of the
 [`../CLAUDE.md`](../CLAUDE.md) holds the full plan, the repo rules, and the journal.
 [`../UPSTREAM.md`](../UPSTREAM.md) lists which files came from upstream and what changed.
 
-> **Status:** Phase 1 (audience lock and index switch) of the build plan in `CLAUDE.md` §7.
-> The chat path works end to end with all three audience guards. The sign-in link labels and
-> the evals arrive in later phases.
+> **Status:** Phase 2 (retrieval eval) of the build plan in `CLAUDE.md` §7. The chat path works
+> end to end with all three audience guards, and retrieval is measured against the §10
+> questions. The sign-in link labels and the answer eval arrive in later phases.
 
 ## How a question is answered
 
@@ -127,6 +127,26 @@ poetry run python scripts/retrieve.py "..." --expect pay-dates-for-worldwide-onl
 
 With `--expect`, it exits 1 unless that slug ranks in the top 5 after rerank.
 
+To run the retrieval eval, which sends the 21 non-guard questions in `tests/eval/questions.yaml`
+through the production retriever and rerank (live and billable; no LLM answers):
+
+```bash
+poetry run python scripts/eval_retrieval.py            # all 21
+poetry run python scripts/eval_retrieval.py --ids 4 21 # a few
+```
+
+A question hits when an expected document is in the top 5 chunks after rerank, the same rule
+as the indexer's `verify`. The run passes at hit@5 ≥ 90% with no empty contexts, no
+non-instructor nodes, no failed reranks (a failed rerank falls back to raw order, so the rerank
+wasn't measured), and no errors. A question that errors is recorded and the run carries on. For
+each miss, it says why: pushed out of the raw top 5 by rerank, retrieved lower and not lifted,
+not retrieved, rerank failed, or an error.
+
+Phrases in `questions.yaml` (`must_include`, `must_not`) match whole words, case-insensitively:
+`ACM` doesn't match "Macmillan" and `ID` doesn't match "guide". A trailing `*` makes a prefix
+(`missionar*`).
+Results go to `tests/eval/results/<timestamp>-retrieval.json` (gitignored).
+
 To re-run the security attack corpus after any change to
 `app/security/input_validator.py`:
 
@@ -151,6 +171,9 @@ app/
   security/input_validator.py   input security screen
 tests/                          offline tests
 scripts/retrieve.py             raw + reranked retrieval for one question (live)
+scripts/eval_retrieval.py       retrieval eval over tests/eval/questions.yaml (live)
+scripts/evalset.py              eval-set loader and scoring (shared with the Phase 6 answer eval)
+tests/eval/questions.yaml       the §10 eval set (DRAFT until real instructor questions arrive)
 scripts/                        security corpus and harness
 ```
 

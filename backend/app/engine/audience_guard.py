@@ -140,6 +140,16 @@ def instructor_filters() -> MetadataFilters:
     )
 
 
+def is_instructor_metadata(metadata: dict, sources: Optional[set[str]] = None) -> bool:
+    """The audience rule, in one place: role == instructor and an allowed source.
+
+    Used by the post-retrieval guard and by the retrieval eval, so the eval
+    can't score a different rule than production enforces.
+    """
+    allowed = sources if sources is not None else set(retrieval_sources())
+    return metadata.get("role") == INSTRUCTOR_ROLE and metadata.get("source") in allowed
+
+
 def assert_instructor_nodes(nodes: List[NodeWithScore]) -> tuple[List[NodeWithScore], int]:
     """Keep only nodes with role == instructor and an allowed source.
 
@@ -151,15 +161,13 @@ def assert_instructor_nodes(nodes: List[NodeWithScore]) -> tuple[List[NodeWithSc
     dropped = 0
     for node_with_score in nodes:
         metadata = getattr(node_with_score.node, "metadata", None) or {}
-        role = metadata.get("role")
-        source = metadata.get("source")
-        if role == INSTRUCTOR_ROLE and source in sources:
+        if is_instructor_metadata(metadata, sources):
             kept.append(node_with_score)
             continue
         dropped += 1
         logger.error(
             "audience_leak: dropped node id=%s slug=%s role=%r source=%r",
-            node_with_score.node.node_id, metadata.get("slug"), role, source,
+            node_with_score.node.node_id, metadata.get("slug"), metadata.get("role"), metadata.get("source"),
         )
     return kept, dropped
 
