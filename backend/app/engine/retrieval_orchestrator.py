@@ -22,6 +22,7 @@ from llama_index.core.callbacks import CallbackManager
 from llama_index.core.settings import Settings
 
 from app.engine import get_chat_engine
+from app.engine.audience_guard import audience_guard_of
 from app.engine.draft_normalizer import hoist_draft_citations
 from app.engine.grounding_guard import apply_grounding_guards, ensure_citation_coverage
 
@@ -75,9 +76,12 @@ class _GuardedStreamingResponse:
     guarded answer back through the existing streaming path. Exposes the two
     attributes consumers depend on: async_response_gen() + source_nodes."""
 
-    def __init__(self, text: str, source_nodes: list[Any]):
+    def __init__(self, text: str, source_nodes: list[Any], audience_leak_dropped: int = 0):
         self._text = text
         self.source_nodes = source_nodes
+        # Nodes the post-retrieval audience guard dropped. Non-zero is a
+        # security finding; chat.py tags the trace with it.
+        self.audience_leak_dropped = audience_leak_dropped
 
     @property
     def text(self) -> str:
@@ -156,6 +160,18 @@ class RetrievalOrchestrator:
             raise
 
         source_nodes = getattr(engine_response, "source_nodes", []) or []
+        guard = audience_guard_of(engine)
+        audience_leak_dropped = guard.dropped if guard is not None else 0
+        if audience_leak_dropped:
+            try:
+                from langfuse.decorators import langfuse_context  # type: ignore
+
+                langfuse_context.update_current_observation(
+                    level="ERROR",
+                    status_message=f"audience_leak: {audience_leak_dropped} node(s) dropped",
+                )
+            except Exception:  # pragma: no cover - defensive
+                pass
         try:
             final_answer = apply_grounding_guards(
                 draft,
@@ -168,4 +184,4 @@ class RetrievalOrchestrator:
             logger.warning("[orch] grounding guards failed (%s) — returning unguarded draft", exc)
             final_answer = draft
         _stage("done")
-        return _GuardedStreamingResponse(final_answer, source_nodes)
+        return _GuardedStreamingResponse(final_answer, source_nodes, audience_leak_dropped)

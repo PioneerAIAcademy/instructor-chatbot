@@ -11,8 +11,13 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 
-from app.security.input_validator import InputValidator
+# Scripts run as `poetry run python scripts/<name>.py`; put backend/ on the
+# path so `app` imports (the project is not installed as a package).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.security.input_validator import InputValidator  # noqa: E402
 
 HERE = os.path.dirname(__file__)
 

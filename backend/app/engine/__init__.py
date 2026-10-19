@@ -1,6 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from app.engine.audience_guard import AudienceGuardPostprocessor
 from app.engine.index import get_index
 from app.engine.node_postprocessors import NodeCitationProcessor
 from app.engine.prompts import CONDENSE_PROMPT_TEMPLATE, CONTEXT_PROMPT, build_system_prompt
@@ -12,7 +13,9 @@ from app.engine.custom_condense_plus_context import CustomCondensePlusContextCha
 
 
 def get_chat_engine(filters=None, params=None, timezone: str = "UTC") -> CustomCondensePlusContextChatEngine:
-    node_postprocessors = [NodeCitationProcessor()]
+    # The audience guard runs first, so a wrong-audience node never reaches
+    # rerank, the context, or the sources annotation.
+    node_postprocessors = [AudienceGuardPostprocessor(), NodeCitationProcessor()]
 
     index = get_index(params)
     if index is None:

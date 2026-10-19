@@ -94,6 +94,13 @@ app.add_middleware(RequestSizeLimitMiddleware)
 init_settings()
 init_observability()
 
+# Boot guard (CLAUDE.md §7 Phase 1): refuse to start against any index that
+# isn't an allowed instructor index. Raises IndexConfigError, which stops the
+# process before it serves a request.
+from app.engine.audience_guard import check_index_config
+
+check_index_config()
+
 # Request IDs, 499 on client disconnect, crash logging.
 from app.middleware.monitoring_middleware import MonitoringMiddleware
 

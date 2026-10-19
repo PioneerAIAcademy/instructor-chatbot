@@ -25,7 +25,7 @@ from llama_index.core.vector_stores.utils import node_to_metadata_dict
 
 _PINECONE_ENV = {
     "PINECONE_API_KEY": "test-key",
-    "PINECONE_INDEX_NAME": "pathway",
+    "PINECONE_INDEX_NAME": "instructor-assistant",
     "PINECONE_ENVIRONMENT": "us-east-1",
 }
 
@@ -113,11 +113,16 @@ def test_changing_the_index_name_invalidates_the_cache(pinecone_env, fake_pineco
     vectordb = _reload_vectordb()
 
     first = vectordb.get_vector_store()
-    with patch.dict(os.environ, {"PINECONE_INDEX_NAME": "other"}, clear=False):
+    # The second name must be allow-listed: the index guard refuses any other.
+    staging = {
+        "PINECONE_INDEX_NAME": "instructor-assistant-staging",
+        "ALLOWED_INDEX_NAMES": "instructor-assistant,instructor-assistant-staging",
+    }
+    with patch.dict(os.environ, staging, clear=False):
         second = vectordb.get_vector_store()
 
     assert first is not second
-    assert second.index_name == "other"
+    assert second.index_name == "instructor-assistant-staging"
     assert cls.call_count == 2
 
 
@@ -363,7 +368,7 @@ def test_store_identity_matches_the_vendor_construction(pinecone_env, fake_pinec
     store = vectordb.get_vector_store()
 
     assert store.api_key == "test-key"
-    assert store.index_name == "pathway"
+    assert store.index_name == "instructor-assistant"
     assert store.environment == "us-east-1"
     assert store.text_key == "text"
     assert store.stores_text is True
@@ -384,11 +389,11 @@ def test_index_host_when_set_skips_the_control_plane_lookup(pinecone_env, fake_p
     serving outage.
     """
     _, fake_pc, _ = fake_pinecone
-    vectordb = _reload_vectordb(PINECONE_INDEX_HOST="pathway-abc123.svc.test.pinecone.io")
+    vectordb = _reload_vectordb(PINECONE_INDEX_HOST="instructor-assistant-abc123.svc.test.pinecone.io")
 
     vectordb.get_vector_store()
 
-    fake_pc.Index.assert_called_once_with(host="pathway-abc123.svc.test.pinecone.io")
+    fake_pc.Index.assert_called_once_with(host="instructor-assistant-abc123.svc.test.pinecone.io")
 
 
 def test_index_name_lookup_is_the_fallback_when_host_is_unset(pinecone_env, fake_pinecone):
@@ -399,7 +404,7 @@ def test_index_name_lookup_is_the_fallback_when_host_is_unset(pinecone_env, fake
     vectordb.get_vector_store()
 
     assert fake_pc.Index.call_args.kwargs.get("host") is None
-    assert fake_pc.Index.call_args.args == ("pathway",)
+    assert fake_pc.Index.call_args.args == ("instructor-assistant",)
 
 
 # ---------------------------------------------------------------------------

@@ -21,7 +21,7 @@ from app.api.routers.models import (
     ThumbsRequest,
 )
 from app.api.services.draft_edit import rewrite_selected_text_with_llm
-from app.engine.audience_guard import INSTRUCTOR_ROLE, instructor_filters
+from app.engine.audience_guard import AUDIENCE_LEAK_TAG, INSTRUCTOR_ROLE, instructor_filters
 from app.engine.draft_context import (
     build_dropped_draft_notice,
     build_edited_draft_context,
@@ -310,6 +310,12 @@ async def chat(
                 # context popped, so re-parent the span under the `chat` trace.
                 langfuse_parent_trace_id=trace_id,
             )
+            leaked = getattr(response, "audience_leak_dropped", 0) or 0
+            if leaked:
+                # Should never happen: the filter already excludes these. A
+                # finding, so it is tagged for a dashboard filter, not hidden.
+                success_tags.append(AUDIENCE_LEAK_TAG)
+                retrieval_metadata["audience_leak_dropped"] = leaked
             try:
                 retrieval_metadata.update(
                     {

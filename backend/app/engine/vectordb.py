@@ -320,6 +320,12 @@ def get_vector_store() -> PineconeVectorStore:
             "Please set PINECONE_API_KEY, PINECONE_INDEX_NAME, and PINECONE_ENVIRONMENT"
             " to your environment variables or config them in the .env file"
         )
+    # Instructor-chatbot: refuse any index (or host override) that isn't an
+    # allowed instructor index, before a client is built. Also checked at boot
+    # in main.py; repeated here so scripts that skip main.py are covered.
+    from app.engine.audience_guard import check_index_config
+
+    check_index_config(index_name, PINECONE_INDEX_HOST)
 
     if not PINECONE_STORE_CACHE_ENABLED:
         return _build_store(api_key, index_name, environment)

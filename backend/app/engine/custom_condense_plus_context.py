@@ -14,6 +14,13 @@ from llama_index.core.types import Thread
 import voyageai
 vo = voyageai.Client()  # This will automatically use the environment variable VOYAGE_API_KEY.
 
+# Rerank settings (CLAUDE.md §2 row 15). Module-level so scripts/retrieve.py
+# reranks exactly like production. Q15: leave the 0.21 cutoff alone until the
+# Phase 2/6 evals show misses caused by it.
+RERANK_MODEL = "rerank-lite-1"
+RERANK_TOP_K = 17
+RERANK_MIN_SCORE = 0.21
+
 
 def _do_voyage_rerank(
     message: str,
@@ -32,11 +39,11 @@ def _do_voyage_rerank(
     for attempt in range(retries):
         try:
             reranking = vo.rerank(message, node_texts, model=model, top_k=top_k)
-            filtered = [r.document for r in reranking.results if r.relevance_score >= 0.21]
+            filtered = [r.document for r in reranking.results if r.relevance_score >= RERANK_MIN_SCORE]
             scores = {
                 r.document: r.relevance_score
                 for r in reranking.results
-                if r.relevance_score >= 0.21
+                if r.relevance_score >= RERANK_MIN_SCORE
             }
             return filtered, scores, True, None
         except Exception as exc:
@@ -149,8 +156,8 @@ class CustomCondensePlusContextChatEngine(CondensePlusContextChatEngine):
 
     def _organize_nodes(self, nodes: List[NodeWithScore], message: str = "") -> List[NodeWithScore]:
         """Organize nodes by URL, sequence, and merge overlapping nodes."""
-        rerank_model = "rerank-lite-1"
-        rerank_k = 17
+        rerank_model = RERANK_MODEL
+        rerank_k = RERANK_TOP_K
 
         node_texts_ordered = [node.text for node in nodes]
         node_texts = list(set(node_texts_ordered))
@@ -223,8 +230,8 @@ class CustomCondensePlusContextChatEngine(CondensePlusContextChatEngine):
         """Async version: wraps the Voyage rerank in asyncio.to_thread() so the
         event loop stays free during the synchronous HTTP call to Voyage's API.
         Node grouping/merging is CPU-trivial and stays on the main thread."""
-        rerank_model = "rerank-lite-1"
-        rerank_k = 17
+        rerank_model = RERANK_MODEL
+        rerank_k = RERANK_TOP_K
 
         node_texts_ordered = [node.text for node in nodes]
         node_texts = list(set(node_texts_ordered))
