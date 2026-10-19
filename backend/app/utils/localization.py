@@ -13,7 +13,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 try:
-    from langdetect import detect, LangDetectException
+    from langdetect import DetectorFactory, detect, LangDetectException
+    # langdetect is randomized; seed it so the same text always gets the same
+    # language (otherwise a label or reply language can flip between identical
+    # requests).
+    DetectorFactory.seed = 0
     LANGDETECT_AVAILABLE = True
 except ImportError:
     LANGDETECT_AVAILABLE = False
@@ -345,17 +349,13 @@ class LocalizationManager:
             # English detection is always trusted — the bias guard only
             # ever pushes ambiguous results TOWARD English, never away.
             if normalized_lang == 'en':
-                logger.info(
-                    f"Detected language: en for text: {clean_text[:50]}..."
-                )
+                # Length, not text: questions may name students (CLAUDE.md §9.2).
+                logger.info(f"Detected language: en ({len(clean_text)} chars)")
                 return 'en'
 
             # --- Non-English detection on LONG text: trust it. ---
             if not is_short:
-                logger.info(
-                    f"Detected language: {normalized_lang} for text: "
-                    f"{clean_text[:50]}..."
-                )
+                logger.info(f"Detected language: {normalized_lang} ({len(clean_text)} chars)")
                 return normalized_lang
 
             # --- Non-English detection on SHORT text: needs evidence. ---

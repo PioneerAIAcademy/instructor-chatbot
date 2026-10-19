@@ -1432,6 +1432,23 @@ rediscluster = ["redis (>=4.2.0,!=4.5.2,!=4.5.3)"]
 valkey = ["valkey (>=6)"]
 
 [[package]]
+name = "llama-index-agent-openai"
+version = "0.2.6"
+description = "llama-index agent openai integration"
+optional = false
+python-versions = "<4.0,>=3.8.1"
+groups = ["main"]
+files = [
+    {file = "llama_index_agent_openai-0.2.6-py3-none-any.whl", hash = "sha256:fddf5a21b5cc584d4aab4517edcdd7ccdba7bf2b66ba6f1ae31d6b87800b4246"},
+    {file = "llama_index_agent_openai-0.2.6.tar.gz", hash = "sha256:32d95ab8ebd8fb8174e34427e6cfcddb56003da7029be9a1d3fe002540d13b9a"},
+]
+
+[package.dependencies]
+llama-index-core = ">=0.10.41,<0.11.0"
+llama-index-llms-openai = ">=0.1.5,<0.2.0"
+openai = ">=1.14.0"
+
+[[package]]
 name = "llama-index-core"
 version = "0.10.58"
 description = "Interface between LLMs and your data"
@@ -1496,6 +1513,23 @@ files = [
 
 [package.dependencies]
 llama-index-core = ">=0.10.57,<0.11.0"
+
+[[package]]
+name = "llama-index-program-openai"
+version = "0.1.7"
+description = "llama-index program openai integration"
+optional = false
+python-versions = "<4.0,>=3.8.1"
+groups = ["main"]
+files = [
+    {file = "llama_index_program_openai-0.1.7-py3-none-any.whl", hash = "sha256:33489b573c1050a3f583ff68fcbc4bcbd49f29e74f3e5baea08ab0d5f363403c"},
+    {file = "llama_index_program_openai-0.1.7.tar.gz", hash = "sha256:bf7eb61a073381714be5a049d93b40044dfe51bd4333bee539d1532b7407621f"},
+]
+
+[package.dependencies]
+llama-index-agent-openai = ">=0.1.1,<0.3.0"
+llama-index-core = ">=0.10.57,<0.11.0"
+llama-index-llms-openai = ">=0.1.1"
 
 [[package]]
 name = "llama-index-vector-stores-pinecone"
@@ -4401,4 +4435,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "696b9203bb018cc439b9bf61400d8565aa9d9e15e2b09f37ea9ad97c5861946c"
+content-hash = "c69d6d22a3dd9b4452b70781dfed2ba3b8d84d7818fb7c2ae71570640276527e"

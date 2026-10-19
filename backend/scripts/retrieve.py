@@ -47,10 +47,16 @@ def prepare() -> str:
     Returns the index name. Call once before run_retrieval(); the eval calls
     it once for all its questions instead of once per question.
     """
+    import os
+
     from app.engine.audience_guard import check_index_config
     from app.settings import init_settings
 
     index_name = check_index_config()
+    # Fail fast, like main.py: without the key every rerank would fall back to
+    # raw order and the eval would measure the wrong thing.
+    if not os.getenv("VOYAGE_API_KEY"):
+        raise RuntimeError("VOYAGE_API_KEY is not set; the reranker needs it")
     init_settings()
     return index_name
 

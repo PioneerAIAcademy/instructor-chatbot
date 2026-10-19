@@ -152,3 +152,21 @@ def test_short_ambiguous_is_not_confident():
 def test_empty_text_is_not_confident():
     lang, confident = LocalizationManager.detect_language_confident("")
     assert confident is False
+
+
+def test_detection_logs_never_include_the_text(caplog):
+    """Questions may name students (CLAUDE.md §9.2): log the language, not the text."""
+    import logging
+
+    secret = "Maria Fernandez failed the midterm and her mother emailed me"
+    with caplog.at_level(logging.DEBUG, logger="uvicorn"):
+        LocalizationManager.detect_language(secret)
+        LocalizationManager.detect_language("Maria Fernandez reprovou na prova e a mãe dela me mandou um email")
+    assert caplog.records, "expected detection log lines"
+    assert not any("Maria" in r.getMessage() for r in caplog.records)
+
+
+def test_detection_is_deterministic():
+    text = "Revise el enlace https://byupathwayworldwideprod.sharepoint.com/sites/x para más"
+    results = {LocalizationManager.detect_language_confident(text) for _ in range(5)}
+    assert len(results) == 1

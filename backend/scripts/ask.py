@@ -22,11 +22,9 @@ prints it.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
-import uuid
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -38,46 +36,33 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(BACKEND_DIR / ".env")
 
+import api_contract  # noqa: E402
 from evalset import contains_phrase  # noqa: E402
 
 READING_CLAIMS = ("I read", "I opened", "I checked", "I reviewed")
 
 
-def parse_stream(lines) -> tuple[str, list[dict]]:
-    """(answer_text, annotations) from Vercel AI data-stream lines."""
-    text: list[str] = []
-    annotations: list[dict] = []
-    for raw in lines:
-        if not raw or ":" not in raw:
-            continue
-        prefix, _, payload = raw.partition(":")
-        try:
-            data = json.loads(payload)
-        except json.JSONDecodeError:
-            continue
-        if prefix.strip() == "0" and isinstance(data, str):
-            text.append(data)
-        elif prefix.strip() == "8" and isinstance(data, list):
-            annotations.extend(d for d in data if isinstance(d, dict))
-    return "".join(text), annotations
+def parse_stream(lines) -> tuple[str, list[dict], list[str]]:
+    """(answer_text, annotations, contract_problems), using the contract's own
+    parser (scripts/api_contract.py), so a malformed stream is reported."""
+    text, annotations, problems = api_contract.parse_lines(lines)
+    return "".join(text), annotations, problems + api_contract.check_annotations(annotations)
 
 
 def ask(question: str, url: str, data: dict | None = None, session_id: str | None = None) -> dict:
-    headers = {
-        "Accept": "text/event-stream",
-        "X-Session-ID": session_id or f"ask-{uuid.uuid4()}",
-        "X-Timezone": "UTC",
-    }
-    api_key = next((k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()), "")
-    if api_key:
-        headers["X-API-Key"] = api_key
+    headers = {"Accept": "text/event-stream", **api_contract.client_headers("ask")}
+    if session_id:
+        headers["X-Session-ID"] = session_id
     body = {"messages": [{"role": "user", "content": question}], "data": data or None}
     with requests.post(f"{url.rstrip('/')}/api/v1/chat", json=body, headers=headers, stream=True, timeout=240) as resp:
         resp.raise_for_status()
-        answer, annotations = parse_stream(resp.iter_lines(decode_unicode=True))
+        answer, annotations, contract_problems = parse_stream(resp.iter_lines(decode_unicode=True))
     sources = next((a["data"]["nodes"] for a in annotations if a.get("type") == "sources"), [])
     trace_id = next((a.get("trace_id") for a in annotations if a.get("trace_id")), None)
-    return {"answer": answer, "sources": sources, "trace_id": trace_id, "annotations": annotations}
+    return {
+        "answer": answer, "sources": sources, "trace_id": trace_id,
+        "annotations": annotations, "contract_problems": contract_problems,
+    }
 
 
 def check(result: dict) -> list[str]:
@@ -87,7 +72,7 @@ def check(result: dict) -> list[str]:
     from app.engine.login_links import unlabeled_login_links
 
     answer, sources = result["answer"], result["sources"]
-    problems: list[str] = []
+    problems: list[str] = [f"stream: {p}" for p in result.get("contract_problems", [])]
     for link in unlabeled_login_links(answer):
         problems.append(f"sign-in link without the note: {link}")
     for phrase in READING_CLAIMS:

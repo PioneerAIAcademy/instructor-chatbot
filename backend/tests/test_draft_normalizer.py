@@ -268,3 +268,12 @@ def test_hoist_is_idempotent():
     text = "```message\nHello [^1]\n```"
     once = hoist_draft_citations(text)
     assert hoist_draft_citations(once) == once
+
+
+def test_hoist_uses_the_shared_fence_rules():
+    # An inline ```message``` span isn't a fence, so nothing in it is hoisted.
+    inline = "Use ```message``` blocks for drafts [^1]."
+    assert hoist_draft_citations(inline) == inline
+    # An unclosed fence isn't a fence either.
+    unclosed = "```message\nHi [^1]\nno closing line"
+    assert hoist_draft_citations(unclosed) == unclosed

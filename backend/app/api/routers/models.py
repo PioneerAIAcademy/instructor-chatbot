@@ -75,7 +75,7 @@ class ChatData(BaseModel):
                 "messages": [
                     {
                         "role": "user",
-                        "content": "What standards for letters exist?",
+                        "content": "When do Worldwide Online instructors in the US get paid?",
                     }
                 ]
             }
@@ -165,11 +165,6 @@ class SourceNodes(BaseModel):
         return [cls.from_source_node(node) for node in source_nodes]
 
 
-class Result(BaseModel):
-    result: Message
-    nodes: List[SourceNodes]
-
-
 class ChatConfig(BaseModel):
     starter_questions: Optional[List[str]] = Field(
         default=None,
@@ -181,8 +176,10 @@ class ChatConfig(BaseModel):
         json_schema_extra = {
             "example": {
                 "starterQuestions": [
-                    "What standards for letters exist?",
-                    "What are the requirements for a letter to be considered a letter?",
+                    "When do I get paid?",
+                    "How do I give one student more time on an assignment in Canvas?",
+                    "A parent emailed about a student's grade. What can I share?",
+                    "Write a welcome message for my students.",
                 ]
             }
         }
