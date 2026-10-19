@@ -400,7 +400,7 @@ def test_source_label_external_page_names_host():
         "source": "instructor-assistant-linked",
         "url": "https://www.byui.edu/genai/",
     }
-    assert source_label(meta) == "[Source: AI and Academic Honesty — external page (www.byui.edu)]"
+    assert source_label(meta) == "[Source: AI and Academic Honesty — external page from BYU-Idaho (www.byui.edu)]"
 
 
 def test_module_exposes_no_client_role_input():
@@ -481,3 +481,24 @@ def test_app_engine_imports_without_a_voyage_key():
         env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "")},
     )
     assert result.returncode == 0, result.stderr[-2000:]
+
+
+@pytest.mark.parametrize("host,owner", [
+    ("www.byupathway.edu", "BYU-Pathway"),
+    ("resourcecenter.byupathway.org", "BYU-Pathway"),
+    ("brightspotcdn.byui.edu", "BYU-Idaho"),
+    ("marriott.byu.edu", "BYU"),
+    ("community.canvaslms.com", "Canvas"),
+    ("faq.whatsapp.com", "WhatsApp"),
+    ("notbyui.edu", None),
+    ("example.org", None),
+])
+def test_site_owner_by_domain_suffix(host, owner):
+    from app.engine.custom_condense_plus_context import site_owner
+
+    assert site_owner(host) == owner
+
+
+def test_source_label_unknown_site_keeps_the_host_only():
+    meta = {"title": "T", "source": "instructor-assistant-linked", "url": "https://example.org/x"}
+    assert source_label(meta) == "[Source: T — external page (example.org)]"

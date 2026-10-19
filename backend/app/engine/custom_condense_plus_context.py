@@ -132,6 +132,30 @@ def rerank_nodes(nodes: List[NodeWithScore], message: str) -> RerankOutcome:
     return outcome
 
 
+# Who publishes the linked pages (instructor-indexer's linked hosts), by domain
+# suffix. The label names the owner, so the model can say whose page it is
+# (prompt EXTERNAL PAGES); with only a hostname it often didn't (Phase 6 #21).
+SITE_OWNERS = (
+    ("byupathway.edu", "BYU-Pathway"),
+    ("byupathway.org", "BYU-Pathway"),
+    ("byui.edu", "BYU-Idaho"),
+    ("byu.edu", "BYU"),
+    ("churchofjesuschrist.org", "The Church of Jesus Christ of Latter-day Saints"),
+    ("canvaslms.com", "Canvas"),
+    ("instructure.com", "Canvas"),
+    ("whatsapp.com", "WhatsApp"),
+)
+
+
+def site_owner(host: str) -> str | None:
+    """The owner's name for a linked page's host, or None if unknown."""
+    host = (host or "").lower().rstrip(".")
+    for domain, owner in SITE_OWNERS:
+        if host == domain or host.endswith("." + domain):
+            return owner
+    return None
+
+
 def source_label(metadata: Dict[str, Any]) -> str:
     """The line the model sees above each context, telling it whose words these are.
 
@@ -142,7 +166,10 @@ def source_label(metadata: Dict[str, Any]) -> str:
     title = metadata.get("title") or metadata.get("header_1") or "Untitled"
     if metadata.get("source") == "instructor-assistant-linked":
         host = urlparse(metadata.get("url") or "").hostname or "unknown site"
-        return f"[Source: {title} — external page ({host})]"
+        owner = site_owner(host)
+        return f"[Source: {title} — external page from {owner} ({host})]" if owner else (
+            f"[Source: {title} — external page ({host})]"
+        )
     return f"[Source: {title} — instructor guide]"
 
 class CustomCondensePlusContextChatEngine(CondensePlusContextChatEngine):

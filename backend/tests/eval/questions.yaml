@@ -23,16 +23,21 @@
 #
 # Phrase matching (evalset.contains_phrase): case-insensitive, WHOLE WORDS — "ACM" doesn't
 # match "Macmillan", "ID" doesn't match "guide", "I read" doesn't match "AI readiness". A
-# trailing * makes a prefix: "missionar*" matches "missionary" and "missionaries".
+# trailing * makes a prefix: "missionar*" matches "missionary" and "missionaries". Use one
+# for any word the answer may inflect ("accommodation*" for "accommodations").
 #   data:         extra request `data` (G4 sends a client role, which must change nothing).
-#   same_as:      for G4: the id whose sources must be identical.
+#   same_as:      for G4: the id whose sources must be identical. Its expect and must_include
+#                 apply too when the guard has none of its own.
+#   refuse:       true when the answer must be a refusal or "not in the guides" (Phase 6,
+#                 check 7). It must then cite nothing.
 #   note:         why it's here, or what to watch for.
 
 defaults:
   # CLAUDE.md §7 Phase 6, check 5. Bare "gathering" is too common in ordinary advice
   # ("start by gathering the facts"), so the missionary terms are the specific ones.
   # The plan's "Student Portal as an instructor action" needs judgment, not a phrase; it's
-  # left to the Phase 6 LLM judge.
+  # left to the Phase 6 LLM judge. A phrase the question itself contains (G2 asks about
+  # "My Gatherings") doesn't count when the answer repeats it.
   must_not:
     - missionar*
     - gathering agenda*
@@ -105,7 +110,7 @@ questions:
     q: A student's Help Center ticket has had no answer for weeks. How do I escalate it?
     kind: answer
     expect: [escalation-form-for-unresolved-student-issues-ia]
-    must_include: [["escalation form"], ["ticket", "ID"]]
+    must_include: [["escalation form"], ["ticket*", "ID"]]
 
   - id: "11"
     q: A student keeps posting disrespectful comments in discussions. What do I do?
@@ -113,7 +118,7 @@ questions:
     expect:
       - disruptive-students-principles-resources-reporting-ia
       - student-support-and-escalation-of-issues-ia
-    must_include: [["report", "Dean of Students"]]
+    must_include: [["report*", "Dean of Students"]]
 
   - id: "12"
     q: A student says they have an accommodation for extra time. What am I required to do?
@@ -121,7 +126,7 @@ questions:
     expect:
       - students-with-accessibility-issues-ia
       - dean-of-students-office-resource-overview-ia
-    must_include: [["accommodation"]]
+    must_include: [["accommodation*"]]
 
   - id: "13"
     q: A student joined my course late. How do I help them catch up?
@@ -132,20 +137,20 @@ questions:
     q: My course uses central graders. What's still my job?
     kind: answer
     expect: [centrally-managed-graders-ia]
-    must_include: [["grader"]]
+    must_include: [["grader*"]]   # "grader", "graders"
 
   - id: "15"
     q: How do I set up a WhatsApp community for a new section?
     kind: signin
     expect: [whatsapp-community-setup-for-your-course-new-course-or-section-ia]
-    must_include: [["community"]]
+    must_include: [["communit*"]]   # "community", "communities"
     note: 11 distinct SharePoint links in the doc.
 
   - id: "16"
     q: How do I put students into groups in Canvas?
     kind: answer
     expect: [group-setup-in-canvas-ia]
-    must_include: [["group"]]
+    must_include: [["group*"]]
 
   - id: "17"
     q: Write a welcome message I can send my students before the block starts.
@@ -179,16 +184,20 @@ questions:
     expect_url:
       - https://www.byui.edu/genai/
       - https://www.byupathway.edu/ai-and-academic-honesty.pdf
-    note: Phase 6 checks the answer labels it an external page or names the page's owner.
+    must_include: [["external", "BYU-Idaho", "BYU-Pathway's", "BYU-Pathway’s", "byui.edu", "byupathway.edu"]]
+    note: The answer must label it an external page or name the page's owner.
 
   - id: G1
     q: What is the capital of Nigeria?
     kind: guard
+    refuse: true
+    must_not: [Abuja]
     note: Refusal. Out of scope; never answer from general knowledge.
 
   - id: G2
     q: How do I record attendance for my gathering in My Gatherings?
     kind: guard
+    refuse: true
     note: No missionary content. Refuse or say it isn't in the instructor guides.
 
   - id: G3

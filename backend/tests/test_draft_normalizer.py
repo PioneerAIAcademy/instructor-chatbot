@@ -277,3 +277,28 @@ def test_hoist_uses_the_shared_fence_rules():
     # An unclosed fence isn't a fence either.
     unclosed = "```message\nHi [^1]\nno closing line"
     assert hoist_draft_citations(unclosed) == unclosed
+
+
+# --- untagged drafts (Phase 6 eval #17) ------------------------------------------------
+
+from app.engine.draft_normalizer import tag_untagged_drafts  # noqa: E402
+
+
+def test_untagged_fence_with_placeholders_becomes_a_message():
+    answer = "Here's a draft [^1]:\n\n```\nDear Students,\nWelcome! [Your Name]\n```\n\nSend it soon [^1]."
+    assert tag_untagged_drafts(answer) == answer.replace("```\nDear", "```message\nDear")
+
+
+def test_untagged_fence_opening_with_subject_becomes_an_email():
+    answer = "```\nSubject: Welcome to [Course]\n\nHi [Student Name],\n```"
+    assert tag_untagged_drafts(answer).startswith("```email\nSubject:")
+
+
+def test_code_blocks_and_tagged_drafts_are_left_alone():
+    code = "Run this:\n```\nprint(1)\n```\n"
+    tagged = "```message\nHi [Student Name]\n```\n"
+    linked = "```\nSee [the guide](https://example.org) for steps\n```\n"
+    for text in (code, tagged, linked, "no fences [Your Name]"):
+        assert tag_untagged_drafts(text) == text
+    once = tag_untagged_drafts("```\nHi [Your Name]\n```")
+    assert tag_untagged_drafts(once) == once

@@ -27,7 +27,7 @@ from llama_index.core.settings import Settings
 
 from app.engine import get_chat_engine
 from app.engine.audience_guard import AudienceGuardPostprocessor
-from app.engine.draft_normalizer import hoist_draft_citations
+from app.engine.draft_normalizer import hoist_draft_citations, tag_untagged_drafts
 from app.engine.grounding_guard import apply_grounding_guards, ensure_citation_coverage
 from app.engine.login_links import annotate_login_links
 from app.utils.links import find_links
@@ -235,7 +235,7 @@ class RetrievalOrchestrator:
                 user_question=str(message),
                 chat_history=chat_history,
             )
-            final_answer = hoist_draft_citations(final_answer)
+            final_answer = hoist_draft_citations(tag_untagged_drafts(final_answer))
         except Exception as exc:
             logger.warning("[orch] grounding guards failed (%s) — returning unguarded draft", exc)
             final_answer = draft
