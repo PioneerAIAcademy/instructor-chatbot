@@ -38,3 +38,25 @@ def test_embedding_model_and_dimensions_are_unchanged():
     assert em.dimensions == 3072
     assert em.embed_batch_size == 100
     assert em.reuse_client is True
+
+
+def test_init_settings_attaches_the_langfuse_bridge_to_the_llm(monkeypatch):
+    """Regression: `Settings.callback_manager is None` is never true (the
+    property builds a default), so the bridge was never attached and no
+    rag-llm generation was ever recorded."""
+    from llama_index.core.settings import Settings
+
+    from app.settings import init_settings
+    from app.utils.langfuse_llama_index import LangfuseLlamaIndexHandler
+
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("OPENAI_API_KEY", "placeholder")
+    monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-large")
+    monkeypatch.setenv("EMBEDDING_DIM", "3072")
+    init_settings()
+    init_settings()  # idempotent: still exactly one bridge
+
+    bridges = [h for h in Settings.callback_manager.handlers if isinstance(h, LangfuseLlamaIndexHandler)]
+    assert len(bridges) == 1
+    assert any(isinstance(h, LangfuseLlamaIndexHandler) for h in Settings.llm.callback_manager.handlers)

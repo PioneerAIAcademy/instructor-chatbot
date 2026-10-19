@@ -6,7 +6,6 @@ handed (edited-draft handling, language), and the failure stream.
 
 import json
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -146,19 +145,18 @@ def test_client_role_never_changes_the_filter(client, role):
 
 
 @pytest.mark.parametrize("answer_fails", [False, True])
-def test_audience_leak_tags_the_trace(client, monkeypatch, answer_fails):
+def test_audience_leak_tags_the_trace(client, fake_traces, answer_fails):
     client.orchestrator.leak = 1
     if answer_fails:
         client.orchestrator.result = SynthesisFailedError("every node below the cutoff")
-    fake_langfuse = MagicMock()
-    monkeypatch.setattr(chat_module, "langfuse", fake_langfuse)
 
     r = client.post("/api/v1/chat", json=_body([{"role": "user", "content": "When am I paid?"}]))
     assert r.status_code == 200
 
-    update = fake_langfuse.trace.return_value.update.call_args.kwargs
-    assert AUDIENCE_LEAK_TAG in update["tags"]
-    assert update["metadata"]["audience_leak_dropped"] == 1
+    (trace,) = fake_traces
+    assert AUDIENCE_LEAK_TAG in trace.all_tags
+    assert trace.finished["metadata"]["audience_leak_dropped"] == 1
+    assert trace.finished["level"] == "ERROR"
 
 
 def test_screened_out_draft_tells_the_model(client, monkeypatch):
@@ -215,15 +213,13 @@ def test_synthesis_failure_streams_hiccup_not_blank_answer(client):
     assert not any(a.get("type") == "sources" for a in _annotations(r.text))
 
 
-def test_reply_language_reaches_the_orchestrator_and_login_links_reach_the_trace(client, monkeypatch):
+def test_reply_language_reaches_the_orchestrator_and_login_links_reach_the_trace(client, monkeypatch, fake_traces):
     async def _clean(text):
         return False, None, {}
 
     monkeypatch.setattr(chat_module.InputValidator, "validate_input_security_async", _clean)
-    fake_langfuse = MagicMock()
-    monkeypatch.setattr(chat_module, "langfuse", fake_langfuse)
     r = client.post("/api/v1/chat", json=_body([{"role": "user", "content": "Quando eu recebo o pagamento do meu salário?"}]))
     assert r.status_code == 200
     assert client.calls["user_language"] == "pt"
-    metadata = fake_langfuse.trace.return_value.update.call_args.kwargs["metadata"]
+    metadata = fake_traces[0].finished["metadata"]
     assert metadata["login_links"] == 2 and metadata["login_links_labeled"] == 0

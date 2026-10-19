@@ -215,7 +215,7 @@ def test_thumbs_request_returns_the_normalized_value(client, monkeypatch):
     from app.api.routers import chat as chat_module
 
     scores = []
-    monkeypatch.setattr(chat_module.langfuse, "score", lambda **kw: scores.append(kw))
+    monkeypatch.setattr(chat_module.langfuse, "create_score", lambda **kw: scores.append(kw))
     r = client.post("/api/v1/chat/thumbs_request", json={"trace_id": "t1", "value": "bad", "comment": "wrong date"})
     assert r.status_code == 200 and r.json() == {"feedback": "Bad"}
     assert scores[0]["trace_id"] == "t1" and scores[0]["name"] == "user_feedback"
@@ -223,14 +223,13 @@ def test_thumbs_request_returns_the_normalized_value(client, monkeypatch):
     assert r.json() == {"feedback": "Good"} and scores[1]["comment"] == ""  # comment cleared off a thumbs-up
 
 
-def test_general_feedback_text_only(client, monkeypatch):
-    from app.api.routers import chat as chat_module
-
-    traces = []
-    monkeypatch.setattr(chat_module.langfuse, "trace", lambda **kw: traces.append(kw))
+def test_general_feedback_text_only(client, fake_traces):
     r = client.post("/api/v1/chat/feedback/general", data={"feedback": "Love it"})
     assert r.status_code == 200 and r.json()["status"] == "success"
-    assert traces[0]["name"] == "general_feedback" and "role:instructor" in traces[0]["tags"]
+    (trace,) = fake_traces
+    assert trace.name == "general_feedback" and trace.input == "Love it"
+    assert {"app:instructor-assistant", "role:instructor", "feedback"} <= set(trace.tags)
+    assert trace.finished is not None
 
 
 def test_draft_edit_returns_the_rewrite(client, monkeypatch):

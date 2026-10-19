@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import inspect
 import os
 import json
@@ -49,6 +50,20 @@ _STREAM_HICCUP_MESSAGES: dict[str, str] = {
 # (e.g., ``0:"H"\n``) above the typical ~80-byte threshold that triggers an
 # immediate TCP send.
 _STREAM_FLUSH_PADDING = "\n" * 64
+
+
+class _Once:
+    """Wrap an async callback so only its first call runs."""
+
+    def __init__(self, callback: Optional[Callable[[str], Awaitable[None]]]):
+        self._callback = callback
+        self._called = False
+
+    async def __call__(self, final_response: str) -> None:
+        if self._called or self._callback is None:
+            return
+        self._called = True
+        await self._callback(final_response)
 
 
 class VercelStreamResponse(StreamingResponse):
@@ -109,7 +124,13 @@ class VercelStreamResponse(StreamingResponse):
         user_language: str | None = None,
         on_stream_end: Optional[Callable[[str], Awaitable[None]]] = None,
         emit_initial_status: bool = True,
+        trace: Any = None,
     ):
+        # The stream calls on_stream_end in its `finally`. If the client leaves
+        # before the body is iterated at all, that `finally` never runs, so
+        # __call__ calls it too; _Once keeps it to one run either way (it
+        # finishes the request's trace, which is lost if it never ends).
+        self._stream_end = _Once(on_stream_end)
         content = VercelStreamResponse.content_generator(
             request,
             event_handler,
@@ -118,8 +139,9 @@ class VercelStreamResponse(StreamingResponse):
             trace_id,
             skip_suggestions,
             user_language,
-            on_stream_end,
+            self._stream_end,
             emit_initial_status,
+            trace,
         )
         # Use text/event-stream so reverse proxies (Render, Nginx, Cloudflare)
         # recognise this as a streaming connection and disable response buffering.
@@ -129,6 +151,12 @@ class VercelStreamResponse(StreamingResponse):
         self.headers["Cache-Control"] = "no-cache, no-transform"
         self.headers["X-Accel-Buffering"] = "no"
         self.headers["Connection"] = "keep-alive"
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            await self._stream_end("")  # no-op if the stream already reported
 
     @classmethod
     async def content_generator(
@@ -142,6 +170,7 @@ class VercelStreamResponse(StreamingResponse):
         user_language: str | None = None,
         on_stream_end: Optional[Callable[[str], Awaitable[None]]] = None,
         emit_initial_status: bool = True,
+        trace: Any = None,
     ):
         final_response = ""
         resolved_response: StreamingAgentChatResponse | None = None
@@ -221,21 +250,21 @@ class VercelStreamResponse(StreamingResponse):
                 conversation = chat_data.messages + [
                     Message(role="assistant", content=final_response, trace_id=trace_id)
                 ]
-                # Suggestion generation runs inside the SSE generator, after
-                # chat()'s @observe context has been popped — so without a
-                # parent hint @observe(name="suggestion-generation") would open
-                # its own root trace. Thread the chat trace_id so it nests under
-                # the single `chat` trace. langfuse_parent_trace_id is honored
-                # by the v2 decorator only when the contextvar stack is empty
-                # (our case here); None (Langfuse unconfigured) is a safe no-op.
-                suggestion_task = asyncio.create_task(
-                    NextQuestionSuggestion.suggest_next_questions(
-                        conversation,
-                        source_nodes=resolved_response.source_nodes if resolved_response else None,
-                        user_language=user_language,
-                        langfuse_parent_trace_id=trace_id,
+                # Suggestion generation runs in its own task, after the request
+                # handler returned, so attach it to the request's trace (a
+                # RequestTrace) explicitly; otherwise it would open its own.
+                # The task copies the current context, so propagate() here
+                # carries the trace's tags and session into it.
+                child_kwargs = trace.child_kwargs() if trace is not None else {}
+                with trace.propagate() if trace is not None else contextlib.nullcontext():
+                    suggestion_task = asyncio.create_task(
+                        NextQuestionSuggestion.suggest_next_questions(
+                            conversation,
+                            source_nodes=resolved_response.source_nodes if resolved_response else None,
+                            user_language=user_language,
+                            **child_kwargs,
+                        )
                     )
-                )
 
             # Dates in the answer text, highlighted by the frontend markdown renderer.
             date_spans = extract_date_spans(final_response, user_language)

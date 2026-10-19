@@ -4,26 +4,9 @@ import types
 
 
 def _install_test_stubs() -> None:
-    if "langfuse.decorators" not in sys.modules:
-        langfuse_module = types.ModuleType("langfuse")
-        decorators_module = types.ModuleType("langfuse.decorators")
-
-        class _LangfuseContext:
-            def update_current_observation(self, *args, **kwargs):
-                return None
-
-        def observe(*args, **kwargs):
-            def decorator(func):
-                return func
-
-            return decorator
-
-        decorators_module.langfuse_context = _LangfuseContext()
-        decorators_module.observe = observe
-        langfuse_module.decorators = decorators_module
-        sys.modules["langfuse"] = langfuse_module
-        sys.modules["langfuse.decorators"] = decorators_module
-
+    # The real langfuse (4.x) is installed and disables itself without keys,
+    # so it needs no stub. (A stub here used to replace the real module for
+    # every test that ran afterwards.)
     if "llama_index.core.llms" not in sys.modules:
         llama_index_module = types.ModuleType("llama_index")
         core_module = types.ModuleType("llama_index.core")
@@ -105,8 +88,8 @@ def _install_fake_llm(monkeypatch, fake_llm: _FakeLLM) -> None:
     """Route ``draft_edit`` through ``fake_llm`` and silence Langfuse."""
     monkeypatch.setattr(draft_edit, "Settings", _FakeSettings(fake_llm))
     monkeypatch.setattr(
-        draft_edit.langfuse_context,
-        "update_current_observation",
+        draft_edit.langfuse,
+        "update_current_span",
         lambda *args, **kwargs: None,
     )
 

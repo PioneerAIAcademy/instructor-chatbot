@@ -21,6 +21,15 @@ from app.api.routers.models import (
     ThumbsRequest,
 )
 from app.api.services.draft_edit import rewrite_selected_text_with_llm
+from app.api.tracing import (
+    RequestTrace,
+    answer_metadata,
+    base_metadata,
+    chat_tags,
+    identity_tags,
+    security_tag,
+)
+from app.redaction import redact
 from app.engine.audience_guard import AUDIENCE_LEAK_TAG, INSTRUCTOR_ROLE, instructor_filters
 from app.engine.draft_context import (
     build_dropped_draft_notice,
@@ -31,7 +40,6 @@ from app.api.routers.vercel_response import VercelStreamResponse
 from app.engine.retrieval_orchestrator import RetrievalOrchestrator
 from app.security import InputValidator
 from app.utils.localization import LocalizationManager
-from langfuse.decorators import langfuse_context, observe
 from app.http_client import get_http_client
 from app.langfuse import langfuse
 import os
@@ -110,13 +118,13 @@ def _log_exception_trace():
 
 @r.post("")
 @limiter.limit("10/minute")
-@observe()
 async def chat(
     request: Request,
     data: ChatData,
     api_key: str = Depends(verify_api_key),
 ):
     request_started_at = time.monotonic()
+    trace: RequestTrace | None = None
 
     try:
         last_message_content = data.get_last_message_content()
@@ -125,7 +133,6 @@ async def chat(
 
         session_id = request.headers.get("X-Session-ID", request.headers.get("X-Session-Id"))
         device_id = request.headers.get("X-Device-ID")
-        release = os.getenv("ENVIRONMENT", "development")
 
         # Security validation - primary defense with contextual responses
         is_suspicious, blocked_message, security_details = await InputValidator.validate_input_security_async(last_message_content)
@@ -134,12 +141,11 @@ async def chat(
         if blocked_message:
             user_language = _resolve_user_language(data, last_message_content)
 
-            blocked_tags = [
-                f"language:{user_language}",
-                f"role:{INSTRUCTOR_ROLE}",
-                "feature:chat",
-                f"security:risk_{security_details.get('risk_level', 'UNKNOWN').lower()}"
-            ]
+            blocked_tags = chat_tags(
+                language=user_language,
+                security=security_tag(True, {"risk_level": security_details.get("risk_level", "UNKNOWN")}),
+                session_id=session_id,
+            )
 
             logger.warning(
                 f"Security validation blocked suspicious input - "
@@ -147,14 +153,12 @@ async def chat(
                 f"Reason: {security_details.get('reason', 'unknown')}"
             )
 
-            langfuse_context.update_current_trace(
-                name="chat",
+            trace = RequestTrace(
+                "chat",
                 input=last_message_content,
-                output=blocked_message,
+                user_id=device_id,  # device fingerprint as the Langfuse user
                 session_id=session_id,
-                user_id=device_id,  # Use device fingerprint as user_id for tracking
                 tags=blocked_tags,
-                release=release,
                 metadata={
                     "security_validation": {
                         "blocked": True,
@@ -163,15 +167,14 @@ async def chat(
                         "details": security_details
                     },
                     "user_language": user_language,
-                    "role": INSTRUCTOR_ROLE,
-                }
+                    **base_metadata(),
+                },
             )
-            langfuse_context.update_current_observation(
+            trace.finish(
+                output=blocked_message,
                 level="WARNING",
-                status_message=f"Blocked: {security_details.get('reason', 'security_validation_failed')}"
+                status_message=f"Blocked: {security_details.get('reason', 'security_validation_failed')}",
             )
-            # Flush Langfuse trace before streaming response to ensure data is captured
-            langfuse.flush()
 
             return VercelStreamResponse(
                 request,
@@ -180,6 +183,7 @@ async def chat(
                 ),
                 _StaticResponse(blocked_message),
                 data,
+                trace_id=trace.trace_id,
                 skip_suggestions=True,
                 user_language=user_language,
                 emit_initial_status=False,
@@ -228,17 +232,11 @@ async def chat(
 
         user_timezone = request.headers.get("X-Timezone", "UTC")
 
-        success_tags = [
-            f"language:{user_language}",
-            f"role:{INSTRUCTOR_ROLE}",
-            "feature:chat",
-            "source:rag",
-            "workflow:classic",
-        ]
-        if is_suspicious:
-            success_tags.append(f"security:risk_{security_details.get('risk_level', 'LOW').lower()}")
-        else:
-            success_tags.append("security:clean")
+        success_tags = chat_tags(
+            language=user_language,
+            security=security_tag(is_suspicious, security_details),
+            session_id=session_id,
+        )
 
         security_metadata = {
             "input_validated": True,
@@ -251,27 +249,22 @@ async def chat(
         clean_metadata = {
             "security_validation": security_metadata,
             "user_language": user_language,
-            "role": INSTRUCTOR_ROLE,
+            **base_metadata(),
         }
+        answer_nodes: list[Any] = []
+        answer_completed = [False]  # set once the orchestrator returns an answer
 
-        trace_id = langfuse_context.get_current_trace_id()
-
-        langfuse_context.update_current_trace(
-            name="chat",
+        # The root of this request's trace. It stays open while the answer
+        # streams; the orchestrator and suggestions attach to it later.
+        trace = RequestTrace(
+            "chat",
             input=last_message_content,
+            user_id=device_id,  # device fingerprint as the Langfuse user
             session_id=session_id,
-            user_id=device_id,  # Use device fingerprint as user_id for tracking
             tags=success_tags,
-            release=release,
-            metadata=clean_metadata
+            metadata=clean_metadata,
         )
-
-        # Tokens/costs are captured by the Langfuse callback handler
-        langfuse_context.update_current_observation(
-            model=os.getenv("MODEL", "gpt-4o-mini"),
-            level="DEFAULT",
-            status_message="Chat started"
-        )
+        trace_id = trace.trace_id
 
         # The pipeline status indicator follows the language the user
         # PROMPTED in (pure text detection — not the app UI-language pref).
@@ -285,43 +278,55 @@ async def chat(
             # Update trace output after streaming finishes (or client disconnects).
             # Read here, not after run() returns: a leak must reach the trace
             # even when the answer then fails.
-            if orchestrator.audience_leak_dropped:
-                # Should never happen: the filter already excludes these. A
-                # finding, so it is tagged for a dashboard filter, not hidden.
-                if AUDIENCE_LEAK_TAG not in success_tags:
-                    success_tags.append(AUDIENCE_LEAK_TAG)
-                retrieval_metadata["audience_leak_dropped"] = orchestrator.audience_leak_dropped
-            retrieval_metadata["login_links"] = orchestrator.login_links
-            retrieval_metadata["login_links_labeled"] = orchestrator.login_links_labeled
+            late_tags: list[str] = []
             try:
+                if orchestrator.audience_leak_dropped:
+                    # Should never happen: the filter already excludes these. A
+                    # finding, so it is tagged for a dashboard filter, not hidden.
+                    late_tags.append(AUDIENCE_LEAK_TAG)
+                    retrieval_metadata["audience_leak_dropped"] = orchestrator.audience_leak_dropped
+                retrieval_metadata["login_links"] = orchestrator.login_links
+                retrieval_metadata["login_links_labeled"] = orchestrator.login_links_labeled
+                clean_metadata.update(
+                    answer_metadata(final_response, answer_nodes, completed=answer_completed[0])
+                )
                 if retrieval_metadata:
                     clean_metadata.update(retrieval_metadata)
                 clean_metadata["latency"] = {
                     "total_duration_ms": round((time.monotonic() - request_started_at) * 1000),
                 }
-                langfuse.trace(id=trace_id).update(
+            except Exception as metadata_error:
+                logger.error(f"Failed to build Langfuse trace metadata: {metadata_error}")
+            finally:
+                # Always close the trace: an un-ended root is never exported.
+                # WARNING when no answer came back (failure, timeout, disconnect);
+                # the orchestrator's own span carries the error itself.
+                trace.finish(
                     output=final_response,
                     metadata=clean_metadata,
-                    tags=success_tags,
+                    extra_tags=late_tags,
+                    level="ERROR" if late_tags else (None if answer_completed[0] else "WARNING"),
+                    status_message=None if answer_completed[0] else "answer not completed",
                 )
-                langfuse.flush()
-            except Exception as langfuse_error:
-                logger.error(f"Failed to update Langfuse trace output: {langfuse_error}")
 
         async def _get_response() -> Any:
             logger.info(f"Creating chat engine with filters: {filters}")
-            response = await orchestrator.run(
-                last_message_content,
-                messages,
-                filters=filters,
-                params=params,
-                timezone=user_timezone,
-                event_handler=event_handler,
-                user_language=user_language,
-                # This runs inside the SSE generator after chat()'s @observe
-                # context popped, so re-parent the span under the `chat` trace.
-                langfuse_parent_trace_id=trace_id,
-            )
+            # This runs inside the SSE generator, after the handler returned, so
+            # attach the orchestrator span (and the LLM calls under it) to the
+            # request's trace explicitly.
+            with trace.propagate():
+                response = await orchestrator.run(
+                    last_message_content,
+                    messages,
+                    filters=filters,
+                    params=params,
+                    timezone=user_timezone,
+                    event_handler=event_handler,
+                    user_language=user_language,
+                    **trace.child_kwargs(),
+                )
+            answer_nodes.extend(getattr(response, "source_nodes", None) or [])
+            answer_completed[0] = True
             try:
                 retrieval_metadata.update(
                     {
@@ -342,6 +347,7 @@ async def chat(
             _get_response(),
             data,
             trace_id=trace_id,
+            trace=trace,
             user_language=user_language,
             skip_suggestions=is_suspicious,
             on_stream_end=_on_stream_end,
@@ -352,10 +358,8 @@ async def chat(
 
         # Track exception in Langfuse with ERROR level
         try:
-            langfuse_context.update_current_observation(
-                level="ERROR",
-                status_message=f"Exception: {type(e).__name__} - {str(e)}"
-            )
+            if trace is not None:
+                trace.finish(output=None, level="ERROR", status_message=f"Exception: {type(e).__name__}")
         except Exception as langfuse_error:
             logger.error(f"Failed to update Langfuse with error: {langfuse_error}")
 
@@ -369,7 +373,6 @@ async def chat(
 
 @r.post("/draft/edit")
 @limiter.limit("20/minute")
-@observe()
 async def draft_edit(
     request: Request,
     edit_data: DraftEditRequest,
@@ -382,7 +385,6 @@ async def draft_edit(
     session_id = request.headers.get("X-Session-ID", request.headers.get("X-Session-Id"))
     device_id = request.headers.get("X-Device-ID")
     draft_type = edit_data.draft_type
-    release = os.getenv("ENVIRONMENT", "development")
     selected_text_length = len(edit_data.selected_text or "")
     full_content_length = len(edit_data.full_content or "")
     subject_length = len((edit_data.subject or "").strip())
@@ -419,42 +421,16 @@ async def draft_edit(
         if extra_metadata:
             metadata["draft_edit"].update(extra_metadata)
 
-        security_tag = (
-            f"security:risk_{security_risk_level.lower()}"
-            if security_is_suspicious
-            else "security:clean"
-        )
-
-        langfuse_context.update_current_trace(
-            name="draft_edit",
-            input=observed_input,
-            output=observed_output,
-            session_id=session_id,
-            user_id=device_id,
-            release=release,
-            tags=[
-                f"role:{INSTRUCTOR_ROLE}",
-                "feature:draft-edit",
-                f"draft_type:{draft_type}",
-                "source:draft-edit",
-                f"outcome:{outcome}",
-                security_tag,
-            ],
-            metadata=metadata,
-        )
-
-        langfuse_context.update_current_observation(
-            model=os.getenv("MODEL", "gpt-4o-mini"),
-            input=observed_input,
-            output=observed_output,
-            level=level,
-            status_message=status_message,
-        )
-
         try:
-            langfuse.flush()
-        except Exception as flush_error:
-            logger.warning("Failed to flush Langfuse draft edit trace: %s", flush_error)
+            trace.finish(
+                output=observed_output,
+                metadata=metadata,
+                extra_tags=[f"outcome:{outcome}"],
+                level=level,
+                status_message=status_message,
+            )
+        except Exception as trace_error:
+            logger.warning("Failed to record Langfuse draft edit trace: %s", trace_error)
 
     is_suspicious, blocked_message, security_details = await InputValidator.validate_input_security_async(
         instruction
@@ -464,6 +440,29 @@ async def draft_edit(
         security_details.get("risk_level", "UNKNOWN")
         if is_suspicious
         else "NONE"
+    )
+
+    # What the model will actually see: sanitized when the screen rated it LOW.
+    safe_instruction = instruction
+    if is_suspicious and security_details.get("risk_level") == "LOW":
+        safe_instruction = InputValidator.sanitize_input(instruction)
+
+    # The trace starts once the security result is known; the rewrite call
+    # nests under it, and the outcome tag is added when it finishes. Its input
+    # is what the model saw (the raw instruction only when it was blocked).
+    trace = RequestTrace(
+        "draft_edit",
+        input=instruction if blocked_message else safe_instruction,
+        user_id=device_id,
+        session_id=session_id,
+        tags=[
+            *identity_tags(),
+            "feature:draft-edit",
+            f"draft_type:{draft_type}",
+            "source:draft-edit",
+            security_tag(is_suspicious, {"risk_level": security_risk_level}),
+        ],
+        metadata={"draft_type": draft_type},
     )
 
     if blocked_message:
@@ -490,17 +489,20 @@ async def draft_edit(
             reason="security_validation_failed",
         )
 
-    safe_instruction = instruction
-    if is_suspicious and security_details.get("risk_level") == "LOW":
-        safe_instruction = InputValidator.sanitize_input(instruction)
-
-    edited_text, rejection_reason, rewrite_telemetry = await rewrite_selected_text_with_llm(
-        draft_type=edit_data.draft_type,
-        instruction=safe_instruction,
-        selected_text=edit_data.selected_text,
-        full_content=edit_data.full_content,
-        subject=edit_data.subject,
-    )
+    try:
+        with trace.propagate():
+            edited_text, rejection_reason, rewrite_telemetry = await rewrite_selected_text_with_llm(
+                draft_type=edit_data.draft_type,
+                instruction=safe_instruction,
+                selected_text=edit_data.selected_text,
+                full_content=edit_data.full_content,
+                subject=edit_data.subject,
+                **trace.child_kwargs(),
+            )
+    except Exception as exc:
+        # Close the trace (an un-ended root is never exported), then fail as before.
+        trace.finish(output=None, level="ERROR", status_message=f"Draft edit failed: {type(exc).__name__}")
+        raise
 
     if not edited_text:
         terminal_reason = str(rewrite_telemetry.get("terminal_reason", "model_rejected"))
@@ -605,33 +607,23 @@ async def thumbs_request(
     # Langfuse "score" updates are upserts by `id`. If we don't explicitly send a new `comment`,
     # the previous comment can remain attached to the score. When users switch from BAD -> GOOD
     # (or clear their rating), we should clear any previously submitted comment.
-    comment = thumbs_data.comment or ""
+    # Score comments are free text; redact them like trace inputs (§9.2).
+    comment = redact(thumbs_data.comment or "")
     if value_norm != "bad":
         comment = ""
     score_id = f'{trace_id}_feedback'
 
-    # Record the user feedback score
-    langfuse.score(
-        id=score_id,
+    # Record the user feedback score (an upsert on score_id).
+    langfuse.create_score(
+        score_id=score_id,
         trace_id=trace_id,
         name="user_feedback",
         data_type="CATEGORICAL",
         value=value,
         comment=comment,
     )
-
-    # If feedback is negative (thumbs down), update trace with DEBUG level
     if value_norm == "bad":
-        try:
-            # Fetch the trace and update its level to DEBUG for negative feedback
-            trace = langfuse.get_trace(trace_id)
-            if trace:
-                # Note: We can't update past observations directly via API
-                # The DEBUG level should be set at observation creation time
-                # This score will be visible in Langfuse UI for filtering
-                logger.info(f"Negative feedback received for trace {trace_id}")
-        except Exception as e:
-            logger.error(f"Failed to process negative feedback for trace {trace_id}: {e}")
+        logger.info(f"Negative feedback received for trace {trace_id}")
 
     return {"feedback": value}
 
@@ -754,16 +746,13 @@ async def general_feedback(
         screenshot_url = await _upload_screenshot_to_cloudinary(screenshot)
 
     # Log to Langfuse as a standalone trace for later filtering and review.
-    langfuse.trace(
-        name="general_feedback",
-        session_id=session_id,
-        user_id=device_id,
+    RequestTrace(
+        "general_feedback",
         input=feedback_text,
-        tags=["feedback", "general", f"role:{INSTRUCTOR_ROLE}"],
-        metadata={
-            "screenshot_url": screenshot_url,
-            "role": INSTRUCTOR_ROLE,
-        },
-    )
+        user_id=device_id,
+        session_id=session_id,
+        tags=[*identity_tags(), "feedback", "general"],
+        metadata={"screenshot_url": screenshot_url, "role": INSTRUCTOR_ROLE},
+    ).finish(output=None)
 
     return {"status": "success", "message": "Thank you for your feedback!"}

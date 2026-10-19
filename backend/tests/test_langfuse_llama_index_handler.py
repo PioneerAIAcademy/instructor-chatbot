@@ -31,7 +31,19 @@ def test_non_llm_events_ignored():
     # No exception, no entries added or removed.
 
 
-def test_llm_event_start_buffers_input():
+def _with_active_trace(generation):
+    """Patch the shared client: an active trace, and start_observation -> generation."""
+    from app.langfuse import langfuse
+
+    return (
+        patch.object(langfuse, "get_current_trace_id", return_value="a" * 32),
+        patch.object(langfuse, "start_observation", return_value=generation),
+    )
+
+
+def test_llm_event_start_opens_a_generation_under_the_active_trace():
+    from unittest.mock import MagicMock
+
     handler = LangfuseLlamaIndexHandler()
     payload = {
         EventPayload.MESSAGES: [
@@ -40,33 +52,45 @@ def test_llm_event_start_buffers_input():
         ],
         EventPayload.MODEL_NAME: "gpt-4o-mini",
     }
-    handler.on_event_start(CBEventType.LLM, payload=payload, event_id="evt1")
-    entry = handler._pending["evt1"]
-    assert entry["model"] == "gpt-4o-mini"
-    assert entry["input_messages"][1]["content"] == "Hello"
-    assert "start" in entry
+    generation = MagicMock()
+    trace_patch, start_patch = _with_active_trace(generation)
+    with trace_patch, start_patch as start:
+        handler.on_event_start(CBEventType.LLM, payload=payload, event_id="evt1")
+    kwargs = start.call_args.kwargs
+    assert kwargs["name"] == "rag-llm" and kwargs["as_type"] == "generation"
+    assert kwargs["model"] == "gpt-4o-mini"
+    assert kwargs["input"][1]["content"] == "Hello"
+    assert handler._pending["evt1"]["generation"] is generation
 
 
-def test_llm_event_end_without_active_trace_is_silent():
-    # No @observe-wrapped call site -> get_current_trace_id returns None.
+def test_llm_event_end_closes_the_generation_with_output_and_usage():
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    handler = LangfuseLlamaIndexHandler()
+    generation = MagicMock()
+    trace_patch, start_patch = _with_active_trace(generation)
+    with trace_patch, start_patch:
+        handler.on_event_start(CBEventType.LLM, payload={EventPayload.MESSAGES: []}, event_id="evt3")
+    usage = SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+    response = SimpleNamespace(raw=SimpleNamespace(usage=usage), __str__=lambda self: "assistant: hi")
+    handler.on_event_end(CBEventType.LLM, payload={EventPayload.RESPONSE: response}, event_id="evt3")
+    generation.update.assert_called_once()
+    assert generation.update.call_args.kwargs["usage_details"] == {"input": 10, "output": 5, "total": 15}
+    generation.end.assert_called_once()
+    assert "evt3" not in handler._pending
+
+
+def test_llm_event_without_active_trace_is_silent():
+    # No active trace (or tracing off): nothing is opened, nothing is pending.
     handler = LangfuseLlamaIndexHandler()
     handler.on_event_start(
         CBEventType.LLM,
         payload={EventPayload.MESSAGES: [{"role": "user", "content": "hi"}]},
         event_id="evt2",
     )
-    # Force trace_id None.
-    with patch(
-        "langfuse.decorators.langfuse_context.get_current_trace_id",
-        return_value=None,
-    ):
-        handler.on_event_end(
-            CBEventType.LLM,
-            payload={EventPayload.RESPONSE: "world"},
-            event_id="evt2",
-        )
-    # Pending was popped on entry to on_event_end.
     assert "evt2" not in handler._pending
+    handler.on_event_end(CBEventType.LLM, payload={EventPayload.RESPONSE: "world"}, event_id="evt2")
 
 
 def test_off_switch_skips_buffering():

@@ -12,12 +12,50 @@ import sentry_sdk
 # auto-enables when `fastapi` is importable, so no `integrations=[...]` is needed.
 _sentry_dsn = os.environ.get("SENTRY_DSN")
 if _sentry_dsn:
+    from app.redaction import mask_for_langfuse as _mask, redact as _redact
+
+    def _redact_breadcrumb(crumb):
+        """Log lines become breadcrumbs (Sentry's logging integration) and ride
+        along with later error events, so redact them as well."""
+        if isinstance(crumb.get("message"), str):
+            crumb["message"] = _redact(crumb["message"])
+        if isinstance(crumb.get("data"), dict):
+            crumb["data"] = _mask(data=crumb["data"])
+        return crumb
+
+    def _sentry_before_send(event, hint):
+        """Redact emails and long digit runs in what Sentry would store:
+        exception messages, the event message, log entries, and breadcrumbs
+        (CLAUDE.md §9.2)."""
+        for exc in (event.get("exception") or {}).get("values") or []:
+            if isinstance(exc.get("value"), str):
+                exc["value"] = _redact(exc["value"])
+        if isinstance(event.get("message"), str):
+            event["message"] = _redact(event["message"])
+        logentry = event.get("logentry") or {}
+        for key in ("message", "formatted"):
+            if isinstance(logentry.get(key), str):
+                logentry[key] = _redact(logentry[key])
+        crumbs = event.get("breadcrumbs")
+        values = crumbs.get("values") if isinstance(crumbs, dict) else crumbs
+        for crumb in values or []:
+            if isinstance(crumb, dict):
+                _redact_breadcrumb(crumb)
+        return event
+
     sentry_sdk.init(
         dsn=_sentry_dsn,
         environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
         # Do NOT capture PII (IPs, headers, request bodies) by default. Opt in
         # explicitly via SENTRY_SEND_PII=true only where privacy review allows it.
         send_default_pii=os.environ.get("SENTRY_SEND_PII", "false").lower() == "true",
+        # Never attach request bodies (Sentry attaches them even with PII off)
+        # or stack-frame locals (they hold the question text). §9.2.
+        max_request_body_size="never",
+        include_local_variables=False,
+        before_send=_sentry_before_send,
+        before_breadcrumb=lambda crumb, hint: _redact_breadcrumb(crumb),
+        release=os.environ.get("APP_VERSION") or None,
         traces_sample_rate=1.0 if os.environ.get("ENVIRONMENT") == "dev" else 0.1,
     )
 
@@ -175,8 +213,11 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown."""
     from app.http_client import close_http_client
+    from app.langfuse import langfuse
 
     await close_http_client()
+    # Spans are exported in the background; send what's still queued.
+    langfuse.flush()
     logger.info("Application shutdown complete")
 
 
