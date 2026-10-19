@@ -279,9 +279,18 @@ async def chat(
             language=LocalizationManager.detect_language(typed_message)
         )
         retrieval_metadata: dict[str, Any] = {}
+        orchestrator = RetrievalOrchestrator()
 
         async def _on_stream_end(final_response: str) -> None:
             # Update trace output after streaming finishes (or client disconnects).
+            # Read here, not after run() returns: a leak must reach the trace
+            # even when the answer then fails.
+            if orchestrator.audience_leak_dropped:
+                # Should never happen: the filter already excludes these. A
+                # finding, so it is tagged for a dashboard filter, not hidden.
+                if AUDIENCE_LEAK_TAG not in success_tags:
+                    success_tags.append(AUDIENCE_LEAK_TAG)
+                retrieval_metadata["audience_leak_dropped"] = orchestrator.audience_leak_dropped
             try:
                 if retrieval_metadata:
                     clean_metadata.update(retrieval_metadata)
@@ -299,7 +308,7 @@ async def chat(
 
         async def _get_response() -> Any:
             logger.info(f"Creating chat engine with filters: {filters}")
-            response = await RetrievalOrchestrator().run(
+            response = await orchestrator.run(
                 last_message_content,
                 messages,
                 filters=filters,
@@ -310,12 +319,6 @@ async def chat(
                 # context popped, so re-parent the span under the `chat` trace.
                 langfuse_parent_trace_id=trace_id,
             )
-            leaked = getattr(response, "audience_leak_dropped", 0) or 0
-            if leaked:
-                # Should never happen: the filter already excludes these. A
-                # finding, so it is tagged for a dashboard filter, not hidden.
-                success_tags.append(AUDIENCE_LEAK_TAG)
-                retrieval_metadata["audience_leak_dropped"] = leaked
             try:
                 retrieval_metadata.update(
                     {

@@ -287,6 +287,15 @@ def _build_store(
 ) -> PineconeVectorStore:
     from pinecone import Pinecone
 
+    # Instructor-chatbot: refuse any index (or host override) that isn't an
+    # allowed instructor index, before a client is built. Also checked at boot
+    # in main.py; here so scripts that skip main.py are covered. Every new
+    # store comes through here, and the cache key includes the index name, so
+    # a cache hit is always a store this check already passed.
+    from app.engine.audience_guard import check_index_config
+
+    check_index_config(index_name, PINECONE_INDEX_HOST)
+
     # source_tag matches what the vendor store passes when it builds the client
     # itself, so Pinecone-side user-agent/telemetry is unchanged.
     pc = Pinecone(api_key=api_key, source_tag="llamaindex")
@@ -320,13 +329,6 @@ def get_vector_store() -> PineconeVectorStore:
             "Please set PINECONE_API_KEY, PINECONE_INDEX_NAME, and PINECONE_ENVIRONMENT"
             " to your environment variables or config them in the .env file"
         )
-    # Instructor-chatbot: refuse any index (or host override) that isn't an
-    # allowed instructor index, before a client is built. Also checked at boot
-    # in main.py; repeated here so scripts that skip main.py are covered.
-    from app.engine.audience_guard import check_index_config
-
-    check_index_config(index_name, PINECONE_INDEX_HOST)
-
     if not PINECONE_STORE_CACHE_ENABLED:
         return _build_store(api_key, index_name, environment)
 

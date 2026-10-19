@@ -22,7 +22,7 @@ from llama_index.core.callbacks import CallbackManager
 from llama_index.core.settings import Settings
 
 from app.engine import get_chat_engine
-from app.engine.audience_guard import audience_guard_of
+from app.engine.audience_guard import AudienceGuardPostprocessor
 from app.engine.draft_normalizer import hoist_draft_citations
 from app.engine.grounding_guard import apply_grounding_guards, ensure_citation_coverage
 
@@ -76,12 +76,9 @@ class _GuardedStreamingResponse:
     guarded answer back through the existing streaming path. Exposes the two
     attributes consumers depend on: async_response_gen() + source_nodes."""
 
-    def __init__(self, text: str, source_nodes: list[Any], audience_leak_dropped: int = 0):
+    def __init__(self, text: str, source_nodes: list[Any]):
         self._text = text
         self.source_nodes = source_nodes
-        # Nodes the post-retrieval audience guard dropped. Non-zero is a
-        # security finding; chat.py tags the trace with it.
-        self.audience_leak_dropped = audience_leak_dropped
 
     @property
     def text(self) -> str:
@@ -93,13 +90,32 @@ class _GuardedStreamingResponse:
             yield self._text[i : i + 40]
 
 
+def _mark_observation_error(status_message: str) -> None:
+    """Mark the current Langfuse observation ERROR. Never raises."""
+    try:
+        from langfuse.decorators import langfuse_context  # type: ignore
+
+        langfuse_context.update_current_observation(level="ERROR", status_message=status_message)
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+
 def _ensure_minimum_citations(text: str, source_nodes: list[Any]) -> str:
     """Backward-compatible test hook for the citation coverage guard."""
     return ensure_citation_coverage(text, source_nodes)
 
 
 class RetrievalOrchestrator:
-    """Coordinates retrieval + synthesis + grounding guards for the RAG path."""
+    """Coordinates retrieval + synthesis + grounding guards for the RAG path.
+
+    One instance per request. After `run()` returns or raises,
+    `audience_leak_dropped` holds the number of nodes the post-retrieval
+    audience guard dropped. Non-zero is a security finding; chat.py tags
+    the trace with it, whether or not the answer succeeded.
+    """
+
+    def __init__(self) -> None:
+        self.audience_leak_dropped = 0
 
     @observe(name="retrieval-orchestrator")
     async def run(
@@ -138,40 +154,34 @@ class RetrievalOrchestrator:
 
         _stage("retrieving")
         engine = get_chat_engine(filters=filters, params=params, timezone=timezone)
+        guard = getattr(engine, "audience_guard", None)
+        if not isinstance(guard, AudienceGuardPostprocessor):
+            # Fail closed: an engine without its post-retrieval guard must not
+            # retrieve at all (CLAUDE.md §0 rule 5).
+            _mark_observation_error("chat engine has no audience guard")
+            raise RuntimeError("chat engine has no audience guard; refusing to retrieve")
         if event_handler is not None:
             _scope_callbacks(engine, event_handler)
-        engine_response = await engine.astream_chat(message, chat_history)
-        _stage("synthesizing")
 
         try:
-            draft = await _drain_stream(engine_response)
-            if not draft.strip():
-                raise SynthesisFailedError("answer stream produced no text")
-        except SynthesisFailedError as exc:
-            logger.error("[orch] synthesis failed: %s", exc)
+            engine_response = await engine.astream_chat(message, chat_history)
+            _stage("synthesizing")
             try:
-                from langfuse.decorators import langfuse_context  # type: ignore
-
-                langfuse_context.update_current_observation(
-                    level="ERROR", status_message=f"synthesis failed: {exc}"
-                )
-            except Exception:  # pragma: no cover - defensive
-                pass
-            raise
+                draft = await _drain_stream(engine_response)
+                if not draft.strip():
+                    raise SynthesisFailedError("answer stream produced no text")
+            except SynthesisFailedError as exc:
+                logger.error("[orch] synthesis failed: %s", exc)
+                _mark_observation_error(f"synthesis failed: {exc}")
+                raise
+        finally:
+            # Recorded whether or not synthesis succeeded: a leak is a
+            # security finding even when the answer then fails.
+            self.audience_leak_dropped = guard.dropped
+            if guard.dropped:
+                _mark_observation_error(f"audience_leak: {guard.dropped} node(s) dropped")
 
         source_nodes = getattr(engine_response, "source_nodes", []) or []
-        guard = audience_guard_of(engine)
-        audience_leak_dropped = guard.dropped if guard is not None else 0
-        if audience_leak_dropped:
-            try:
-                from langfuse.decorators import langfuse_context  # type: ignore
-
-                langfuse_context.update_current_observation(
-                    level="ERROR",
-                    status_message=f"audience_leak: {audience_leak_dropped} node(s) dropped",
-                )
-            except Exception:  # pragma: no cover - defensive
-                pass
         try:
             final_answer = apply_grounding_guards(
                 draft,
@@ -184,4 +194,4 @@ class RetrievalOrchestrator:
             logger.warning("[orch] grounding guards failed (%s) — returning unguarded draft", exc)
             final_answer = draft
         _stage("done")
-        return _GuardedStreamingResponse(final_answer, source_nodes, audience_leak_dropped)
+        return _GuardedStreamingResponse(final_answer, source_nodes)

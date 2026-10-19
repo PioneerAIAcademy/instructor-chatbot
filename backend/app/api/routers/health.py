@@ -1,9 +1,10 @@
+import asyncio
 import logging
 import os
 
 from fastapi import APIRouter
-from pinecone import Pinecone
 from app.engine.audience_guard import IndexConfigError, check_index_config
+from app.engine.vectordb import get_vector_store
 from app.langfuse import langfuse
 
 health_router = APIRouter()
@@ -35,17 +36,20 @@ async def readiness():
         guard = "error"
     checks["guard"] = guard
 
-    # Check Pinecone — describe_index makes a real network call to Pinecone.
+    # Check Pinecone on the DATA plane, through the same cached, bounded client
+    # requests use (PINECONE_INDEX_HOST when set). A control-plane
+    # describe_index could pass while every query to the host times out. The
+    # stats themselves are never returned (no vector counts from the API).
     # Skipped when the guard refused the index: never touch the wrong one.
     if guard != "ok":
         checks["pinecone"] = "skipped"
     else:
         try:
-            pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-            pc.describe_index(index_name)
+            index = get_vector_store().client
+            await asyncio.to_thread(index.describe_index_stats)
             checks["pinecone"] = "ok"
         except Exception as e:
-            logger.error(f"Pinecone health check failed: {e}")
+            logger.error(f"Pinecone health check failed: {type(e).__name__}: {e}")
             checks["pinecone"] = "error"
 
     # Check Langfuse — auth_check() returns True/False, does not raise on failure

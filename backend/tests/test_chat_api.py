@@ -46,8 +46,13 @@ def client(monkeypatch):
 
     class _Orchestrator:
         result: Any = _Answer("Pay days are the 8th and 23rd.")
+        leak: int = 0
+
+        def __init__(self):
+            self.audience_leak_dropped = 0
 
         async def run(self, message, chat_history, **kwargs):
+            self.audience_leak_dropped = self.leak
             calls["message"] = message
             calls["history"] = chat_history
             calls["filters"] = kwargs.get("filters")
@@ -132,10 +137,11 @@ def test_client_role_never_changes_the_filter(client, role):
     assert client.calls["filters"] == instructor_filters()
 
 
-def test_audience_leak_tags_the_trace(client, monkeypatch):
-    answer = _Answer("Pay days are the 8th and 23rd.")
-    answer.audience_leak_dropped = 1
-    client.orchestrator.result = answer
+@pytest.mark.parametrize("answer_fails", [False, True])
+def test_audience_leak_tags_the_trace(client, monkeypatch, answer_fails):
+    client.orchestrator.leak = 1
+    if answer_fails:
+        client.orchestrator.result = SynthesisFailedError("every node below the cutoff")
     fake_langfuse = MagicMock()
     monkeypatch.setattr(chat_module, "langfuse", fake_langfuse)
 

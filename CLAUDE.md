@@ -724,6 +724,47 @@ Why Q4 and Q5 land where they do:
 
 Newest first. Record status, decisions, and things that failed. No secrets.
 
+- **2026-10-18 (Phase 1 review fixes, PR #2)** — A review of PR #2 found 9 issues. All 9 were
+  checked against the code and fixed. `pytest tests/` gives 310 passed, keyless. The live
+  re-run matched the first one exactly (rank 1 for all 5, nothing dropped).
+  - **The script copied the rerank logic, and it drifted.** `retrieve.py` sent Voyage an
+    empty list, raised on a Voyage failure, and applied the cutoff with one text, in each
+    case unlike production.
+    - Fix: one `rerank_nodes()` in `custom_condense_plus_context.py`, used by both engine
+      paths and the script.
+    - It skips the rerank at ≤ 1 unique text, and keeps every text unranked when Voyage fails.
+    - Dedup now preserves order. Upstream's `set()` made the failure fallback order random.
+    - The script prints the real `RERANK_MIN_SCORE` and reports a skipped or failed rerank
+      the way production handles it.
+  - **Lost leaks:** a leak was lost when synthesis failed.
+    - Fix: the orchestrator records `audience_leak_dropped` on itself in a `finally`.
+      `chat.py` keeps the instance and tags the trace in `_on_stream_end`, which always runs.
+  - **Fragile guard lookup:** the guard was found by digging through the private
+    `_node_postprocessors`.
+    - Fix: `get_chat_engine()` sets a public `engine.audience_guard`.
+    - The orchestrator **fails closed**: an engine without its guard raises before
+      retrieving.
+    - The repeated Langfuse ERROR blocks became one `_mark_observation_error()`.
+  - **Only the exact name `pathway` was denied.**
+    - Fix: also `pathway-*`, `pathway_*`, and any name containing "missionar", even if
+      allow-listed.
+    - The allow-list and the separate account are still the real controls.
+  - **Index check on every request:** `check_index_config` ran on every
+    `get_vector_store()` call.
+    - Fix: it moved into `_build_store()`, so it runs on cache misses only. The cache key
+      includes the index name, so nothing is lost.
+  - **Readiness tested the wrong path:** it probed the control plane while requests use the
+    host.
+    - Fix: a data-plane `describe_index_stats` through the request client. Stats are never
+      returned.
+  - **Flaky test, cause not proven.** 1 failure in 5 full-suite runs, not reproduced in 4
+    more full runs or 6 targeted runs. I lost the trace, because I filtered the output
+    without `-rf`. The most likely cause is the security tests' Hugging Face request on
+    every validator call (the pytector finding).
+    - Fix: `conftest.py` sets `HF_HUB_OFFLINE`, which takes the suite off the network.
+      Suite time went from about 180 s to about 92 s.
+    - If it recurs, run with `-rf` and record the test name here.
+
 - **2026-10-18 (Phase 1 done, branch `phase-1-audience-guard`, uncommitted)** — Audience lock
   and index switch. `pytest tests/` gives 286 passed, keyless.
   - **Built:**

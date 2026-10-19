@@ -21,8 +21,8 @@ from app.engine.audience_guard import (
     AudienceGuardPostprocessor,
     IndexConfigError,
     assert_instructor_nodes,
-    audience_guard_of,
     check_index_config,
+    is_denied_index_name,
     instructor_filters,
 )
 from app.engine.custom_condense_plus_context import source_label
@@ -94,6 +94,22 @@ def test_missionary_index_is_refused_even_when_allow_listed(monkeypatch):
         check_index_config("instructor-assistant", "")
 
 
+@pytest.mark.parametrize(
+    "name", ["pathway-staging", "pathway_v2", "PATHWAY", "missionary-assistant", "pathway-missionaries"]
+)
+def test_missionary_index_variants_are_refused_even_when_allow_listed(monkeypatch, name):
+    monkeypatch.setenv("ALLOWED_INDEX_NAMES", f"instructor-assistant,{name}")
+    with pytest.raises(IndexConfigError):
+        check_index_config(name, "")
+
+
+@pytest.mark.parametrize("name", ["instructor-assistant", "instructor-assistant-staging", "pathwaysomething"])
+def test_deny_list_does_not_catch_unrelated_names(name):
+    # "pathwaysomething" isn't a copy named after the missionary index; the
+    # allow-list (not the deny-list) is what stops unknown names.
+    assert is_denied_index_name(name) is False
+
+
 def test_unlisted_index_is_refused():
     with pytest.raises(IndexConfigError, match="ALLOWED_INDEX_NAMES"):
         check_index_config("some-other-index", "")
@@ -143,10 +159,10 @@ def test_vector_store_refuses_bad_index_before_building(monkeypatch):
     monkeypatch.setenv("PINECONE_ENVIRONMENT", "us-east-1")
     monkeypatch.setenv("PINECONE_INDEX_NAME", "pathway")
     monkeypatch.setattr(vectordb, "_store_cache", None)
-    with patch.object(vectordb, "_build_store") as build:
+    with patch("pinecone.Pinecone") as client:
         with pytest.raises(IndexConfigError):
             vectordb.get_vector_store()
-    build.assert_not_called()
+    client.assert_not_called()  # refused before any client is built
 
 
 def test_vector_store_refuses_mismatched_host(monkeypatch):
@@ -156,10 +172,25 @@ def test_vector_store_refuses_mismatched_host(monkeypatch):
     monkeypatch.setenv("PINECONE_ENVIRONMENT", "us-east-1")
     monkeypatch.setattr(vectordb, "PINECONE_INDEX_HOST", "pathway-a1b2c3d.svc.x.pinecone.io")
     monkeypatch.setattr(vectordb, "_store_cache", None)
-    with patch.object(vectordb, "_build_store") as build:
+    with patch("pinecone.Pinecone") as client:
         with pytest.raises(IndexConfigError):
             vectordb.get_vector_store()
-    build.assert_not_called()
+    client.assert_not_called()
+
+
+def test_vector_store_checks_on_cache_miss_not_every_hit(monkeypatch):
+    from app.engine import vectordb
+
+    monkeypatch.setenv("PINECONE_API_KEY", "placeholder")
+    monkeypatch.setenv("PINECONE_ENVIRONMENT", "us-east-1")
+    monkeypatch.setattr(vectordb, "_store_cache", None)
+    monkeypatch.setattr(vectordb, "PINECONE_STORE_CACHE_ENABLED", True)
+    with patch("pinecone.Pinecone"), \
+         patch.object(vectordb, "PineconeVectorStore"), \
+         patch("app.engine.audience_guard.check_index_config", wraps=check_index_config) as check:
+        vectordb.get_vector_store()
+        vectordb.get_vector_store()
+    assert check.call_count == 1
 
 
 def _boot(index_name: str, host: str = "") -> subprocess.CompletedProcess:
@@ -253,34 +284,66 @@ def test_chat_engine_runs_the_guard_first(monkeypatch):
         engine = engine_module.get_chat_engine(filters=instructor_filters())
 
     assert isinstance(engine._node_postprocessors[0], AudienceGuardPostprocessor)
-    assert audience_guard_of(engine) is engine._node_postprocessors[0]
+    assert engine.audience_guard is engine._node_postprocessors[0]
     # The retriever was built with the pinned filter.
     assert index.as_retriever.call_args.kwargs["filters"] == instructor_filters()
 
 
-def test_orchestrator_reports_guard_drops():
-    from app.engine.retrieval_orchestrator import RetrievalOrchestrator
-
+def _guarded_engine(text: str, dropped: int):
     class _Stream:
         source_nodes: list = []
 
         async def async_response_gen(self):
-            yield "Answer [^1]."
+            if text:
+                yield text
 
     guard = AudienceGuardPostprocessor()
-    guard.dropped = 2
+    guard.dropped = dropped
     engine = MagicMock()
-    engine._node_postprocessors = [guard]
+    engine.audience_guard = guard
 
     async def _astream(*args, **kwargs):
         return _Stream()
 
     engine.astream_chat = _astream
+    return engine
+
+
+def _run(orchestrator):
+    return asyncio.run(orchestrator.run(
+        "q", [], filters=None, params=None, timezone="UTC", event_handler=None
+    ))
+
+
+def test_orchestrator_reports_guard_drops():
+    from app.engine.retrieval_orchestrator import RetrievalOrchestrator
+
+    orchestrator = RetrievalOrchestrator()
+    with patch("app.engine.retrieval_orchestrator.get_chat_engine",
+               return_value=_guarded_engine("Answer [^1].", 2)):
+        _run(orchestrator)
+    assert orchestrator.audience_leak_dropped == 2
+
+
+def test_orchestrator_reports_guard_drops_even_when_synthesis_fails():
+    from app.engine.retrieval_orchestrator import RetrievalOrchestrator, SynthesisFailedError
+
+    orchestrator = RetrievalOrchestrator()
+    with patch("app.engine.retrieval_orchestrator.get_chat_engine",
+               return_value=_guarded_engine("", 3)):
+        with pytest.raises(SynthesisFailedError):
+            _run(orchestrator)
+    assert orchestrator.audience_leak_dropped == 3
+
+
+def test_orchestrator_refuses_an_engine_without_its_guard():
+    from app.engine.retrieval_orchestrator import RetrievalOrchestrator
+
+    engine = _guarded_engine("Answer [^1].", 0)
+    engine.audience_guard = None
     with patch("app.engine.retrieval_orchestrator.get_chat_engine", return_value=engine):
-        result = asyncio.run(RetrievalOrchestrator().run(
-            "q", [], filters=None, params=None, timezone="UTC", event_handler=None
-        ))
-    assert result.audience_leak_dropped == 2
+        with pytest.raises(RuntimeError, match="no audience guard"):
+            _run(RetrievalOrchestrator())
 
 
 # --- health ----------------------------------------------------------------------
@@ -290,9 +353,23 @@ def test_readiness_reports_index_and_guard(monkeypatch):
     from app.api.routers import health
 
     monkeypatch.setattr(health.langfuse, "auth_check", lambda: True)
-    monkeypatch.setattr(health, "Pinecone", MagicMock())
+    store = MagicMock()
+    monkeypatch.setattr(health, "get_vector_store", lambda: store)
     body = asyncio.run(health.readiness())
     assert body == {"status": "ok", "index": "instructor-assistant", "guard": "ok"}
+    # Data plane, through the request client — not a control-plane describe_index.
+    store.client.describe_index_stats.assert_called_once()
+
+
+def test_readiness_reports_unreachable_data_plane(monkeypatch):
+    from app.api.routers import health
+
+    monkeypatch.setattr(health.langfuse, "auth_check", lambda: True)
+    store = MagicMock()
+    store.client.describe_index_stats.side_effect = TimeoutError("read timed out")
+    monkeypatch.setattr(health, "get_vector_store", lambda: store)
+    body = asyncio.run(health.readiness())
+    assert body["status"] == "degraded" and body["guard"] == "ok"
 
 
 def test_readiness_skips_pinecone_when_guard_refuses(monkeypatch):
@@ -300,12 +377,12 @@ def test_readiness_skips_pinecone_when_guard_refuses(monkeypatch):
 
     monkeypatch.setenv("PINECONE_INDEX_NAME", "pathway")
     monkeypatch.setattr(health.langfuse, "auth_check", lambda: True)
-    pinecone = MagicMock()
-    monkeypatch.setattr(health, "Pinecone", pinecone)
+    get_store = MagicMock()
+    monkeypatch.setattr(health, "get_vector_store", get_store)
     body = asyncio.run(health.readiness())
 
     assert body["guard"] == "error" and body["status"] == "degraded"
-    pinecone.assert_not_called()  # never touch a refused index
+    get_store.assert_not_called()  # never touch a refused index
 
 
 # --- source label ----------------------------------------------------------------

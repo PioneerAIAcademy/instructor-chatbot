@@ -3,10 +3,12 @@
     poetry run python scripts/retrieve.py "When do instructors get paid?"
     poetry run python scripts/retrieve.py "..." --expect pay-dates-for-worldwide-online-instructors-ia
 
-LIVE AND BILLABLE: one OpenAI query embedding, one Pinecone query, one Voyage
-rerank. Uses the same index guard, filter, retriever (top 35), audience
-postprocessor, and rerank settings (rerank-lite-1, top 17, >= 0.21) as
-/api/v1/chat. No LLM answer is generated. Read-only against Pinecone.
+LIVE AND BILLABLE: one OpenAI query embedding, one Pinecone query, and (with
+2+ unique texts) one Voyage rerank. Uses the same index guard, filter,
+retriever (top 35), audience postprocessor, and rerank function
+(`rerank_nodes`) as /api/v1/chat, so a skipped or failed rerank is reported
+the way production handles it. No LLM answer is generated. Read-only against
+Pinecone.
 
 Prints the index, then every raw and reranked node's slug, source, role, and
 score. With --expect, reports the expected slug's rank after rerank and exits
@@ -38,20 +40,18 @@ def _row(rank: int, score: float | None, metadata: dict) -> str:
 
 
 def run_retrieval(question: str) -> dict:
-    """Return {"index", "raw", "reranked", "dropped"} for one question.
+    """Return the retrieval for one question through the production path.
 
-    raw / reranked are lists of (score, metadata) in rank order. Reused by
-    the Phase 2 retrieval eval.
+    Keys: index, raw and reranked (lists of (score, metadata) in rank order),
+    dropped (audience-guard drops), rerank_attempted, rerank_ok, rerank_error,
+    min_score. Reranking goes through the engine's own `rerank_nodes`, so the
+    rules can't drift from production. Reused by the Phase 2 retrieval eval.
     """
     from llama_index.core import QueryBundle
 
     from app.engine import get_chat_engine
-    from app.engine.audience_guard import audience_guard_of, check_index_config, instructor_filters
-    from app.engine.custom_condense_plus_context import (
-        RERANK_MODEL,
-        RERANK_TOP_K,
-        _do_voyage_rerank,
-    )
+    from app.engine.audience_guard import check_index_config, instructor_filters
+    from app.engine.custom_condense_plus_context import RERANK_MIN_SCORE, rerank_nodes
     from app.settings import init_settings
 
     index_name = check_index_config()
@@ -64,22 +64,20 @@ def run_retrieval(question: str) -> dict:
     nodes = raw_nodes
     for postprocessor in engine._node_postprocessors:
         nodes = postprocessor.postprocess_nodes(nodes, query_bundle=QueryBundle(question))
-    guard = audience_guard_of(engine)
-    dropped = guard.dropped if guard is not None else 0
 
-    # Same call the engine makes (it reranks `NodeWithScore.text`): unique
-    # texts in, kept texts out in rank order.
-    by_text = {}
-    for n in nodes:
-        by_text.setdefault(n.text, n)
-    kept_texts, scores, ok, exc = _do_voyage_rerank(
-        question, list(by_text), RERANK_MODEL, RERANK_TOP_K
-    )
-    if not ok:
-        raise RuntimeError(f"Voyage rerank failed: {exc!r}")
-    reranked = [(scores.get(t), dict(by_text[t].node.metadata)) for t in kept_texts]
+    outcome = rerank_nodes(nodes, question)
+    reranked = [(n.node.metadata.get("rerank_relevance"), dict(n.node.metadata)) for n in outcome.nodes]
 
-    return {"index": index_name, "raw": raw, "reranked": reranked, "dropped": dropped}
+    return {
+        "index": index_name,
+        "raw": raw,
+        "reranked": reranked,
+        "dropped": engine.audience_guard.dropped,
+        "rerank_attempted": outcome.attempted,
+        "rerank_ok": outcome.success,
+        "rerank_error": repr(outcome.error) if outcome.error else None,
+        "min_score": RERANK_MIN_SCORE,
+    }
 
 
 def main() -> int:
@@ -98,7 +96,15 @@ def main() -> int:
     for i, (score, meta) in enumerate(result["raw"], 1):
         print(_row(i, score, meta))
 
-    print(f"\nRERANKED ({len(result['reranked'])} kept at >= 0.21)")
+    if not result["rerank_attempted"]:
+        print(f"\nRERANKED: skipped ({len(result['reranked'])} unique text(s); no rerank, no cutoff)")
+    elif not result["rerank_ok"]:
+        print(
+            f"\nRERANKED: Voyage failed ({result['rerank_error']}). Production answers from these "
+            f"{len(result['reranked'])} unranked node(s), as below."
+        )
+    else:
+        print(f"\nRERANKED ({len(result['reranked'])} kept at >= {result['min_score']})")
     print(header)
     for i, (score, meta) in enumerate(result["reranked"], 1):
         print(_row(i, score, meta))
@@ -108,7 +114,7 @@ def main() -> int:
         print(f"\nSECURITY: the audience guard dropped {result['dropped']} node(s). See the ERROR log.")
         failed = True
     if not result["reranked"]:
-        print("\nEMPTY CONTEXT: rerank kept nothing at >= 0.21.")
+        print(f"\nEMPTY CONTEXT: nothing left to answer from (rerank cutoff >= {result['min_score']}).")
 
     if args.expect:
         slugs = [meta.get("slug") for _, meta in result["reranked"]]

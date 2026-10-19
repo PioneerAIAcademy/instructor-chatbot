@@ -5,7 +5,8 @@ Three layers, all server-side. Nothing the client sends (upstream's
 
 1. `check_index_config()` — boot fails unless PINECONE_INDEX_NAME is on the
    ALLOWED_INDEX_NAMES list, and PINECONE_INDEX_HOST (when set) is that same
-   index's host. The missionary index is refused even if someone lists it.
+   index's host. The missionary index, and copies named after it, are refused
+   even if someone lists them.
 2. `instructor_filters()` — the Pinecone metadata filter on every query.
 3. `AudienceGuardPostprocessor` — after retrieval, drops any node whose role
    or source is wrong and logs `audience_leak`. It should never fire; when
@@ -16,7 +17,7 @@ CLAUDE.md §0 rule 5: never weaken any of these to make a test or eval pass.
 
 import logging
 import os
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from llama_index.core import QueryBundle
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
@@ -31,10 +32,23 @@ DEFAULT_RETRIEVAL_SOURCES = ("instructor-assistant", "instructor-assistant-linke
 
 DEFAULT_ALLOWED_INDEX_NAMES = ("instructor-assistant",)
 
-# The Missionary Assistant's index. Refused even when listed in
-# ALLOWED_INDEX_NAMES: the allow-list is for staging copies of the instructor
-# index, never for the other audience.
-DENIED_INDEX_NAMES = frozenset({"pathway"})
+# The Missionary Assistant's index, plus copies of it named after it
+# ("pathway-staging", "pathway_v2"), and any index named for missionaries.
+# Refused even when listed in ALLOWED_INDEX_NAMES: the allow-list is for
+# staging copies of the instructor index, never for the other audience. This
+# catches the known names; the allow-list and the separate Pinecone account
+# (CLAUDE.md §13 Q4) remain the real controls.
+_DENIED_INDEX_PREFIX = "pathway"
+_DENIED_INDEX_SUBSTRING = "missionar"
+
+
+def is_denied_index_name(name: str) -> bool:
+    lowered = name.strip().lower()
+    return (
+        lowered == _DENIED_INDEX_PREFIX
+        or lowered.startswith((f"{_DENIED_INDEX_PREFIX}-", f"{_DENIED_INDEX_PREFIX}_"))
+        or _DENIED_INDEX_SUBSTRING in lowered
+    )
 
 AUDIENCE_LEAK_TAG = "guard:audience_leak"
 
@@ -91,12 +105,12 @@ def check_index_config(
 
     if not name:
         raise IndexConfigError("PINECONE_INDEX_NAME is not set")
-    if name in DENIED_INDEX_NAMES:
+    if is_denied_index_name(name):
         raise IndexConfigError(
             f"PINECONE_INDEX_NAME={name!r} is the Missionary Assistant's index; refusing to start"
         )
     allowed = allowed_index_names()
-    denied_listed = DENIED_INDEX_NAMES.intersection(allowed)
+    denied_listed = [n for n in allowed if is_denied_index_name(n)]
     if denied_listed:
         raise IndexConfigError(
             f"ALLOWED_INDEX_NAMES lists {sorted(denied_listed)}, which is never allowed"
@@ -171,11 +185,3 @@ class AudienceGuardPostprocessor(BaseNodePostprocessor):
         kept, dropped = assert_instructor_nodes(nodes)
         self.dropped += dropped
         return kept
-
-
-def audience_guard_of(engine: Any) -> Optional[AudienceGuardPostprocessor]:
-    """The engine's AudienceGuardPostprocessor, if it has one."""
-    for postprocessor in getattr(engine, "_node_postprocessors", None) or []:
-        if isinstance(postprocessor, AudienceGuardPostprocessor):
-            return postprocessor
-    return None

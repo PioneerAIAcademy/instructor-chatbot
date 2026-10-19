@@ -15,7 +15,8 @@ from app.engine.custom_condense_plus_context import CustomCondensePlusContextCha
 def get_chat_engine(filters=None, params=None, timezone: str = "UTC") -> CustomCondensePlusContextChatEngine:
     # The audience guard runs first, so a wrong-audience node never reaches
     # rerank, the context, or the sources annotation.
-    node_postprocessors = [AudienceGuardPostprocessor(), NodeCitationProcessor()]
+    audience_guard = AudienceGuardPostprocessor()
+    node_postprocessors = [audience_guard, NodeCitationProcessor()]
 
     index = get_index(params)
     if index is None:
@@ -55,7 +56,7 @@ def get_chat_engine(filters=None, params=None, timezone: str = "UTC") -> CustomC
     # Re-measure with tiktoken (o200k_base) once Phase 3 finalizes the prompt.
     memory = ChatMemoryBuffer.from_defaults(token_limit=24000)
 
-    return CustomCondensePlusContextChatEngine.from_defaults(
+    engine = CustomCondensePlusContextChatEngine.from_defaults(
         system_prompt=build_system_prompt(current_datetime),
         context_prompt=CONTEXT_PROMPT,
         condense_prompt=CONDENSE_PROMPT_TEMPLATE,
@@ -65,3 +66,7 @@ def get_chat_engine(filters=None, params=None, timezone: str = "UTC") -> CustomC
         verbose=True,
         memory=memory  # Add memory buffer for conversation context
     )
+    # Public handle on this request's guard: the orchestrator reads its drop
+    # count, and refuses to run an engine that lacks one.
+    engine.audience_guard = audience_guard
+    return engine

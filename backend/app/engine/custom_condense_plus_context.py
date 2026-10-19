@@ -53,6 +53,7 @@ def _do_voyage_rerank(
     return node_texts, {}, False, last_exc
 
 
+from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 from app.engine.custom_node_with_score import CustomNodeWithScore
@@ -66,6 +67,53 @@ from llama_index.core.chat_engine.types import (
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RerankOutcome:
+    """What `rerank_nodes` did, for the engine and for scripts/evals."""
+
+    nodes: List[NodeWithScore]  # kept nodes, best first
+    scores: Dict[str, float] = field(default_factory=dict)  # Voyage score by node text
+    attempted: bool = False  # False when there was <= 1 unique text to rank
+    success: bool = True  # False when Voyage failed and the unranked nodes were kept
+    error: Optional[Exception] = None
+
+
+def _unique_texts(nodes: List[NodeWithScore]) -> List[str]:
+    # Order-preserving (upstream used set(), which made the fallback order random).
+    return list(dict.fromkeys(node.text for node in nodes))
+
+
+def needs_rerank(nodes: List[NodeWithScore]) -> bool:
+    return len(_unique_texts(nodes)) > 1
+
+
+def rerank_nodes(nodes: List[NodeWithScore], message: str) -> RerankOutcome:
+    """The production rerank rules, shared by the engine and scripts/retrieve.py.
+
+    - Two or more unique texts: Voyage `RERANK_MODEL`, top `RERANK_TOP_K`, keep
+      scores >= `RERANK_MIN_SCORE`, best first. If Voyage fails after its
+      retries, keep every unique text unranked (retrieval order).
+    - One unique text or none: no rerank call and no cutoff.
+
+    Each kept node gets `metadata["rerank_relevance"]` (its Voyage score, or
+    its retrieval score when it wasn't reranked).
+    """
+    texts_ordered = [node.text for node in nodes]
+    unique = _unique_texts(nodes)
+    outcome = RerankOutcome(nodes=[])
+    kept = unique
+    if len(unique) > 1:
+        outcome.attempted = True
+        kept, outcome.scores, outcome.success, outcome.error = _do_voyage_rerank(
+            message, unique, RERANK_MODEL, RERANK_TOP_K,
+        )
+    for text in kept:
+        node = nodes[texts_ordered.index(text)]
+        node.node.metadata["rerank_relevance"] = outcome.scores.get(text, node.score)
+        outcome.nodes.append(node)
+    return outcome
 
 
 def source_label(metadata: Dict[str, Any]) -> str:
@@ -82,6 +130,8 @@ def source_label(metadata: Dict[str, Any]) -> str:
     return f"[Source: {title} — instructor guide]"
 
 class CustomCondensePlusContextChatEngine(CondensePlusContextChatEngine):
+    # Set by get_chat_engine(): this engine's AudienceGuardPostprocessor.
+    audience_guard: Any = None
     
     def _retrieve_context(self, message: str) -> Tuple[str, List[NodeWithScore]]:
         """Build context for a message from retriever."""
@@ -154,128 +204,52 @@ class CustomCondensePlusContextChatEngine(CondensePlusContextChatEngine):
 
         return context_str, nodes_with_citation_node_id
 
+    def _rerank_event_start(self, message: str) -> Optional[str]:
+        callback_manager = getattr(self, "callback_manager", None) or getattr(self, "_callback_manager", None)
+        if callback_manager is None:
+            return None
+        return callback_manager.on_event_start(
+            CBEventType.RERANKING,
+            payload={
+                EventPayload.QUERY_STR: message,
+                EventPayload.TOP_K: RERANK_TOP_K,
+                EventPayload.MODEL_NAME: RERANK_MODEL,
+            },
+        )
+
+    def _rerank_event_end(self, event_id: Optional[str], outcome: "RerankOutcome") -> None:
+        callback_manager = getattr(self, "callback_manager", None) or getattr(self, "_callback_manager", None)
+        if callback_manager is None:
+            return
+        end_payload: dict[str, Any] = {"rerank_success": outcome.success}
+        if not outcome.success and outcome.error is not None:
+            end_payload[EventPayload.EXCEPTION] = repr(outcome.error)
+        callback_manager.on_event_end(
+            CBEventType.RERANKING,
+            payload=end_payload,
+            event_id=event_id or "",
+        )
+
     def _organize_nodes(self, nodes: List[NodeWithScore], message: str = "") -> List[NodeWithScore]:
-        """Organize nodes by URL, sequence, and merge overlapping nodes."""
-        rerank_model = RERANK_MODEL
-        rerank_k = RERANK_TOP_K
-
-        node_texts_ordered = [node.text for node in nodes]
-        node_texts = list(set(node_texts_ordered))
-        rerank_scores: dict[str, float] = {}
-
-        if len(node_texts) > 1:
-            callback_manager = getattr(self, "callback_manager", None) or getattr(self, "_callback_manager", None)
-            event_id = None
-            if callback_manager is not None:
-                event_id = callback_manager.on_event_start(
-                    CBEventType.RERANKING,
-                    payload={
-                        EventPayload.QUERY_STR: message,
-                        EventPayload.TOP_K: rerank_k,
-                        EventPayload.MODEL_NAME: rerank_model,
-                    },
-                )
-
-            node_texts, rerank_scores, success, last_exc = _do_voyage_rerank(
-                message, node_texts, rerank_model, rerank_k,
-            )
-
-            if callback_manager is not None:
-                end_payload: dict[str, Any] = {"rerank_success": success}
-                if not success and last_exc is not None:
-                    end_payload[EventPayload.EXCEPTION] = repr(last_exc)
-                callback_manager.on_event_end(
-                    CBEventType.RERANKING,
-                    payload=end_payload,
-                    event_id=event_id or "",
-                )
-
-        nodes_ranked = []
-        if len(node_texts) == 0:
-            node_texts = ['qwer asdf']
-        else:
-            # CHANGED - get filtered and reranked nodes; stash Voyage relevance score on metadata
-            for node_text in node_texts:
-                node = nodes[node_texts_ordered.index(node_text)]
-                node.node.metadata["rerank_relevance"] = rerank_scores.get(node_text, node.score)
-                nodes_ranked.append(node)
-            # for node_text in node_texts:
-            #     node_text_nodes.append((node_text, nodes[node_texts_ordered.index(node_text)]))
-
-        # Defensive backfill: ensure every node has rerank_relevance regardless of path taken
-        # (covers no-rerank fallback, len <= 1, and exception paths where rerank_scores may not exist)
-        for node in nodes_ranked:
-            node.node.metadata.setdefault("rerank_relevance", node.score)
-
-        # Step 5: Group nodes by page (URL)
-        pages = defaultdict(list)
-        for node_with_score in nodes_ranked:
-            node = node_with_score.node
-            url = node.metadata.get('url', 'unknown_url')
-            pages[url].append(node_with_score)
-                
-        # Step 6: Order nodes on each page by sequence number
-        for url, page_nodes in pages.items():
-            pages[url] = sorted(page_nodes, key=lambda x: x.node.metadata.get('sequence', 0))
-
-        # Step 7: Merge overlapping nodes with the same headers
-        organized_nodes = []
-        for url, page_nodes in pages.items():
-            merged_nodes = self._merge_nodes_with_headers(page_nodes)
-            organized_nodes.extend(merged_nodes)
-        
-        return organized_nodes
+        """Rerank, then group by URL, order by sequence, and merge per page."""
+        event_id = self._rerank_event_start(message) if needs_rerank(nodes) else None
+        outcome = rerank_nodes(nodes, message)
+        if outcome.attempted:
+            self._rerank_event_end(event_id, outcome)
+        return self._group_and_merge(outcome.nodes)
 
     async def _aorganize_nodes(self, nodes: List[NodeWithScore], message: str = "") -> List[NodeWithScore]:
-        """Async version: wraps the Voyage rerank in asyncio.to_thread() so the
-        event loop stays free during the synchronous HTTP call to Voyage's API.
-        Node grouping/merging is CPU-trivial and stays on the main thread."""
-        rerank_model = RERANK_MODEL
-        rerank_k = RERANK_TOP_K
+        """Async version: runs the (synchronous) Voyage call in a thread so the
+        event loop stays free. Same rerank rules as the sync path."""
+        event_id = self._rerank_event_start(message) if needs_rerank(nodes) else None
+        outcome = await asyncio.to_thread(rerank_nodes, nodes, message)
+        if outcome.attempted:
+            self._rerank_event_end(event_id, outcome)
+        return self._group_and_merge(outcome.nodes)
 
-        node_texts_ordered = [node.text for node in nodes]
-        node_texts = list(set(node_texts_ordered))
-        rerank_scores: dict[str, float] = {}
-
-        if len(node_texts) > 1:
-            callback_manager = getattr(self, "callback_manager", None) or getattr(self, "_callback_manager", None)
-            event_id = None
-            if callback_manager is not None:
-                event_id = callback_manager.on_event_start(
-                    CBEventType.RERANKING,
-                    payload={
-                        EventPayload.QUERY_STR: message,
-                        EventPayload.TOP_K: rerank_k,
-                        EventPayload.MODEL_NAME: rerank_model,
-                    },
-                )
-
-            node_texts, rerank_scores, success, last_exc = await asyncio.to_thread(
-                _do_voyage_rerank, message, node_texts, rerank_model, rerank_k,
-            )
-
-            if callback_manager is not None:
-                end_payload: dict[str, Any] = {"rerank_success": success}
-                if not success and last_exc is not None:
-                    end_payload[EventPayload.EXCEPTION] = repr(last_exc)
-                callback_manager.on_event_end(
-                    CBEventType.RERANKING,
-                    payload=end_payload,
-                    event_id=event_id or "",
-                )
-
-        nodes_ranked = []
-        if len(node_texts) == 0:
-            node_texts = ['qwer asdf']
-        else:
-            for node_text in node_texts:
-                node = nodes[node_texts_ordered.index(node_text)]
-                node.node.metadata["rerank_relevance"] = rerank_scores.get(node_text, node.score)
-                nodes_ranked.append(node)
-
-        for node in nodes_ranked:
-            node.node.metadata.setdefault("rerank_relevance", node.score)
-
+    def _group_and_merge(self, nodes_ranked: List[NodeWithScore]) -> List[NodeWithScore]:
+        """Group nodes by page (URL), order each page by sequence, and merge
+        each page's nodes into one."""
         pages = defaultdict(list)
         for node_with_score in nodes_ranked:
             node = node_with_score.node

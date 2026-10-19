@@ -92,7 +92,7 @@ the full contract to `API.md`.
 | POST | `/api/v1/chat/feedback/general` | API key | 5/min | General feedback, with an optional screenshot (Cloudinary) |
 | GET | `/api/v1/chat/config` | none | — | Starter questions, from `CONVERSATION_STARTERS` |
 | GET | `/api/health` | none | — | Liveness |
-| GET | `/api/health/ready` | none | — | Readiness: checks the index guard, Pinecone, and Langfuse. Returns `status`, `index`, `guard`. |
+| GET | `/api/health/ready` | none | — | Readiness: checks the index guard, Pinecone (a data-plane call through the same client chat uses), and Langfuse. Returns `status`, `index`, `guard`. |
 
 Rate limits are per client IP. Requests send the API key in an `X-API-Key` header, checked
 against `API_KEYS` (comma-separated). The key is skipped only when `ENVIRONMENT=dev` **and**
@@ -159,8 +159,9 @@ scripts/                        security corpus and harness
 The server refuses to start (`IndexConfigError`) unless:
 
 - `PINECONE_INDEX_NAME` is in `ALLOWED_INDEX_NAMES` (default `instructor-assistant`);
-- it isn't `pathway`, the Missionary Assistant's index. That name is refused even if someone
-  adds it to the allow-list;
+- it isn't `pathway`, the Missionary Assistant's index, or a copy named after it
+  (`pathway-…`, `pathway_…`, or anything containing "missionar"). These are refused even if
+  someone adds them to the allow-list;
 - `PINECONE_INDEX_HOST`, when set, is that same index's Pinecone host.
 
 The vector store repeats the check, so scripts that skip `main.py` are covered too.
