@@ -12,19 +12,25 @@ def init_settings():
     # at construction time — if it's None then, the LLM caches None and every
     # later call raises 'NoneType' object has no attribute 'start_trace' /
     # 'event_starts_to_ignore' from inside llama-index's tracing decorator.
-    if Settings.callback_manager is None:
-        handlers = []
-        try:
-            from app.utils.langfuse_llama_index import LangfuseLlamaIndexHandler
-            handlers.append(LangfuseLlamaIndexHandler())
+    #
+    # Check the private attribute: the `Settings.callback_manager` property
+    # returns a fresh default manager when none is set, so `is None` was never
+    # true and the Langfuse bridge was never attached (upstream has the same
+    # bug, so its rag-llm generations never appeared).
+    if getattr(Settings, "_callback_manager", None) is None:
+        Settings.callback_manager = CallbackManager(handlers=[])
+    try:
+        from app.utils.langfuse_llama_index import LangfuseLlamaIndexHandler
+
+        if not any(isinstance(h, LangfuseLlamaIndexHandler) for h in Settings.callback_manager.handlers):
+            Settings.callback_manager.add_handler(LangfuseLlamaIndexHandler())
             logger.info("Langfuse llama-index callback handler attached")
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.warning(
-                "Langfuse llama-index handler init failed (%s); RAG LLM "
-                "calls will not appear in Langfuse traces",
-                exc,
-            )
-        Settings.callback_manager = CallbackManager(handlers=handlers)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "Langfuse llama-index handler init failed (%s); RAG LLM "
+            "calls will not appear in Langfuse traces",
+            exc,
+        )
 
     # Only OpenAI is wired: the index was embedded with text-embedding-3-large,
     # so the query embedder must match it. Other upstream providers were dropped.

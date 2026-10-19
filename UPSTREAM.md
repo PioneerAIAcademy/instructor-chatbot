@@ -34,20 +34,20 @@ them in this shape.
 | `.gitignore` | `.gitignore` | Adapt | Rewritten. `.claude/agents/` stays tracked. |
 | `backend/.gitignore` | `backend/.gitignore` | Keep\* | Tuition/calendar data lines dropped; `tests/eval/results/` added. |
 | `backend/Dockerfile` | `backend/Dockerfile` | Keep\* | Stale comments (web loader, spacy) removed. |
-| `backend/pyproject.toml` | `backend/pyproject.toml` | Adapt | `llama-index` meta-package replaced by the four parts the chat path imports (same locked versions). Dropped: spacy, llama-cloud, arize-phoenix, pandas/pyarrow/boto3/apscheduler, docx2txt, jupyterlab, unused security pins. `pyyaml` listed explicitly for the eval set (it was already locked at 6.0.3 as a transitive dependency). `llama-index-program-openai` 0.1.7 and `llama-index-agent-openai` 0.2.6 restored in Phase 4 (upstream's versions): suggested questions' `astructured_predict` needs them, and the Phase 0 trim had silently broken it. |
+| `backend/pyproject.toml` | `backend/pyproject.toml` | Adapt | `llama-index` meta-package replaced by the four parts the chat path imports (same locked versions). Dropped: spacy, llama-cloud, arize-phoenix, pandas/pyarrow/boto3/apscheduler, docx2txt, jupyterlab, unused security pins. `pyyaml` listed explicitly for the eval set (it was already locked at 6.0.3 as a transitive dependency). `langfuse` is 4.16.0 (Phase 5; upstream's 2.60.10 uses the ingestion API Langfuse Cloud shuts down on 2026-11-16). `llama-index-program-openai` 0.1.7 and `llama-index-agent-openai` 0.2.6 restored in Phase 4 (upstream's versions): suggested questions' `astructured_predict` needs them, and the Phase 0 trim had silently broken it. |
 | `backend/poetry.lock` | `backend/poetry.lock` | Adapt | Re-locked with `poetry lock` (Poetry 2.4.1, which keeps existing versions); 270 → 125 packages. Every remaining package kept its upstream-locked version. |
 | `backend/main.py` | `backend/main.py` | Adapt | Boot runs `check_index_config()` and refuses a wrong index or host, and refuses a missing `VOYAGE_API_KEY`. Only chat, config, health routers. No calendar/tuition/dictation/upload routers, file server, block-date or tuition schedulers, or S3 monitoring scheduler. The dev root redirect goes to `/api/docs` (upstream pointed at `/docs`, a 404) and is hidden from the API schema. |
 | `backend/app/__init__.py` | `backend/app/__init__.py` | Keep | — |
 | `backend/app/auth.py` | `backend/app/auth.py` | Keep | — |
-| `backend/app/langfuse.py` | `backend/app/langfuse.py` | Keep | — |
+| `backend/app/langfuse.py` | `backend/app/langfuse.py` | Adapt | langfuse 4.x client with `mask` (input, output, metadata), `environment`, and `release`. `real_id()` maps disabled-tracing (all-zero) IDs to None. |
 | `backend/app/observability.py` | `backend/app/observability.py` | Keep | — |
 | `backend/app/http_client.py` | `backend/app/http_client.py` | Keep | — |
 | `backend/app/memory_trim.py` | `backend/app/memory_trim.py` | Keep | — |
-| `backend/app/settings.py` | `backend/app/settings.py` | Keep\* | OpenAI provider only (llmhub and the other providers dropped). |
+| `backend/app/settings.py` | `backend/app/settings.py` | Keep\* | OpenAI provider only (llmhub and the other providers dropped). The LlamaIndex Langfuse bridge is actually attached: upstream checked `Settings.callback_manager is None`, which is never true (the property builds a default), so it never was. |
 | `backend/app/security/__init__.py` | `backend/app/security/__init__.py` | Keep | — |
 | `backend/app/security/input_validator.py` | `backend/app/security/input_validator.py` | Keep | Unchanged on purpose. Instructor terms are added later, together with a security-corpus re-run (CLAUDE.md §4 Adapt). |
 | `backend/app/middleware/monitoring_middleware.py` | `backend/app/middleware/monitoring_middleware.py` | Keep\* | S3 metrics-collector calls (`app.monitoring`, not ported) removed. Request IDs, 499 on disconnect, and crash logging unchanged. |
-| `backend/app/utils/langfuse_llama_index.py` | `backend/app/utils/langfuse_llama_index.py` | Keep | — |
+| `backend/app/utils/langfuse_llama_index.py` | `backend/app/utils/langfuse_llama_index.py` | Adapt | langfuse 4.x: the `rag-llm` generation starts at LLM start (a child of the active span) and ends at LLM end, on the shared masked client. |
 | `backend/app/utils/localization.py` | `backend/app/utils/localization.py` | Keep\* | Agenda-not-found and missionary site-index strings, and the geo country map, removed. `SIGN_IN_REQUIRED` label added for all 20 supported languages (en + 19 LLM translations, pending native review). Language detection logs the language and the text's length, not its first 50 characters (questions may name students; §9.2). langdetect is seeded (`DetectorFactory.seed = 0`), so detection is deterministic. |
 | `backend/app/utils/date_spans.py` | `backend/app/utils/date_spans.py` | Keep | Feeds the frontend's date highlighting in any answer, so it isn't calendar-only. |
 | `backend/app/api/__init__.py` | `backend/app/api/__init__.py` | Keep | — |
@@ -80,10 +80,10 @@ them in this shape.
 | `backend/tests/test_security_validation.py` | `backend/tests/test_security_validation.py` | Keep | — |
 | `backend/tests/test_security_integration.py` | `backend/tests/test_security_integration.py` | Keep | — |
 | `backend/tests/test_monitoring_middleware.py` | `backend/tests/test_monitoring_middleware.py` | Keep\* | No metrics-collector stub. |
-| `backend/tests/test_langfuse_llama_index_handler.py` | `backend/tests/test_langfuse_llama_index_handler.py` | Keep | — |
+| `backend/tests/test_langfuse_llama_index_handler.py` | `backend/tests/test_langfuse_llama_index_handler.py` | Adapt | Rewritten for the v4 start/end generation lifecycle. |
 | `backend/tests/test_draft_context.py` | `backend/tests/test_draft_context.py` | Keep | — |
 | `backend/tests/test_draft_normalizer.py` | `backend/tests/test_draft_normalizer.py` | Keep\* | `hoist_draft_citations` cases added. |
-| `backend/tests/test_draft_edit_telemetry.py` | `backend/tests/test_draft_edit_telemetry.py` | Keep | — |
+| `backend/tests/test_draft_edit_telemetry.py` | `backend/tests/test_draft_edit_telemetry.py` | Keep\* | Its fake `langfuse` module is removed (with v4 it replaced the real SDK for every later test). It patches `update_current_generation`. |
 | `backend/tests/test_suggestion_service.py` | `backend/tests/test_suggestion_service.py` | Keep\* | Fixture conversation about pay dates instead of tuition. |
 | `backend/tests/test_message_variations_i18n.py` | `backend/tests/test_message_variations_i18n.py` | Keep\* | Removed pools dropped from the parametrization. |
 | `backend/tests/test_settings_embed_bounds.py` | `backend/tests/test_settings_embed_bounds.py` | Keep | — |

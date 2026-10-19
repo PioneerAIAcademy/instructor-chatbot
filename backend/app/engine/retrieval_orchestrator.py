@@ -19,7 +19,9 @@ import logging
 import re
 from typing import Any, Callable
 
-from langfuse.decorators import observe
+from langfuse import observe
+
+from app.langfuse import langfuse
 from llama_index.core.callbacks import CallbackManager
 from llama_index.core.settings import Settings
 
@@ -131,9 +133,7 @@ def _label_language(answer: str, user_language: str | None) -> str:
 def _mark_observation_error(status_message: str) -> None:
     """Mark the current Langfuse observation ERROR. Never raises."""
     try:
-        from langfuse.decorators import langfuse_context  # type: ignore
-
-        langfuse_context.update_current_observation(level="ERROR", status_message=status_message)
+        langfuse.update_current_span(level="ERROR", status_message=status_message)
     except Exception:  # pragma: no cover - defensive
         pass
 
@@ -184,9 +184,7 @@ class RetrievalOrchestrator:
         # output with a readable input. The output is a streaming response
         # whose text is produced lazily downstream; we mark it as such.
         try:
-            from langfuse.decorators import langfuse_context  # type: ignore
-
-            langfuse_context.update_current_observation(
+            langfuse.update_current_span(
                 input=str(message),
                 output="<streaming response; final text logged downstream>",
             )

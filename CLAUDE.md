@@ -11,9 +11,8 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0–2 merged (PRs #1–#3). Phase 3 in PR #4 (CI green, not yet
-> merged). Phase 4 (chat API) done on branch `phase-4-chat-api`, stacked on Phase 3,
-> uncommitted. Next: Phase 5.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0–4 merged (PRs #1–#5). Phase 5 (observability) done on
+> `phase-5-observability` (on `main`), uncommitted. Next: Phase 6.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -213,7 +212,7 @@ assuming them.
 | --- | --- |
 | Index | `PINECONE_INDEX_NAME=instructor-assistant`. Boot fails unless the name is in `ALLOWED_INDEX_NAMES`. If `PINECONE_INDEX_HOST` is set, it must be that index's host, or boot fails. The check parses the index name out of the host (`<name>-<project-id>.svc…pinecone.io`); a plain prefix match would accept `instructor-assistant-staging-…` for `instructor-assistant`. This closes the override in `vectordb.py:298-302`. |
 | Embedding | `EMBEDDING_MODEL=text-embedding-3-large`, `EMBEDDING_DIM=3072`. |
-| Reader pins | Upstream lock: `llama-index-core 0.10.58`, `llama-index-vector-stores-pinecone 0.1.9`, `pinecone-client 5.0.1`, `langfuse 2.60.10` (`backend/poetry.lock`). The indexer writes with `vector-stores-pinecone 0.1.3` and `pinecone-client <4`. The `_node_content` format is the same, so **reading works across these versions**. Phase 1's smoke test proves it on the live index. |
+| Reader pins | Upstream lock: `llama-index-core 0.10.58`, `llama-index-vector-stores-pinecone 0.1.9`, `pinecone-client 5.0.1` (`backend/poetry.lock`). **Langfuse is `4.16.0`, not upstream's `2.60.10`** (Phase 5): 2.x's ingestion API is shut down on Langfuse Cloud on 2026-11-16, and new organizations can't read its data. The indexer writes with `vector-stores-pinecone 0.1.3` and `pinecone-client <4`. The `_node_content` format is the same, so **reading works across these versions**. Phase 1's smoke test proves it on the live index. |
 | Filter | `role == "instructor"` AND `source in ["instructor-assistant", "instructor-assistant-linked"]`. Nothing from the client takes part. |
 
 How each upstream reader behaves when the classifier fields are missing:
@@ -557,9 +556,14 @@ OpenAI, Voyage, Langfuse, and possibly Sentry.
 - UI notice under the input: "Don't include student names, IDs, or grades." (`chrome-strings.ts`,
   translated).
 - Redact before tracing: emails and digit runs of 7 or more (student IDs) in the Langfuse trace
-  input and output and in logs. **UNVERIFIED** whether langfuse 2.60.10's client offers a `mask`
-  hook. If it doesn't, redact in `chat.py` before `update_current_trace`.
-- `SENTRY_SEND_PII=false` (upstream default). Never attach request bodies to Sentry events.
+  input and output and in logs. **Resolved (2026-10-19):** langfuse 2.60.10 has a `mask` hook
+  (on the client and on `langfuse_context.configure`). `app/redaction.py` is wired into both, so
+  every trace, span, and `rag-llm` generation is masked. **The hook covers only `input` and
+  `output`, not `metadata`.** Never put user text in trace metadata (a test enforces it). Thumbs
+  comments are redacted explicitly. Logs carry no question text (Phase 4).
+- `SENTRY_SEND_PII=false` (upstream default). Never attach request bodies to Sentry events:
+  `max_request_body_size="never"`, `include_local_variables=False` (stack locals hold the
+  question), and a `before_send` that redacts exception and log messages.
 - Langfuse data retention for this project: Q17.
 
 ---
@@ -729,6 +733,115 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (`.env` fixed)** — With the owner's go-ahead, the two Langfuse values in
+  `backend/.env` were swapped back in place (lines 39–40, no values printed). Now
+  `LANGFUSE_PUBLIC_KEY` is `pk-lf-…` and `LANGFUSE_SECRET_KEY` is `sk-lf-…`, and
+  `auth_check()` is ok straight from the file. The in-memory wrapper is no longer needed.
+
+- **2026-10-19 (Phase 5 done: Langfuse SDK 4.16.0, live check 7/7)** — Owner chose to upgrade
+  the SDK. `pytest tests/` gives 514 passed, keyless.
+  - **The SDK:** `langfuse` 2.60.10 → **4.16.0**, the OpenTelemetry-based SDK. 5.0.x was 3–5
+    days old, a new major, and was skipped. No other package moved.
+  - **The tracing model:**
+    - `app/api/tracing.RequestTrace` creates the root `chat` observation in the handler and
+      holds it open across the stream.
+    - The orchestrator and suggestions attach via `child_kwargs()` (`langfuse_trace_id` /
+      `langfuse_parent_observation_id`) inside `propagate()` (`propagate_attributes`: tags,
+      user, session, trace name). `finish()` sets the output and metadata and closes the root.
+    - Late tags (`guard:audience_leak`, `outcome:*`) ride on an event under the root, because
+      tags only propagate to observations created inside the context.
+    - Scores use `create_score`, with `score_id` as the upsert key. Draft edit and general
+      feedback also use `RequestTrace`.
+    - There's no per-request `flush()` any more: v4 exports in the background, and
+      `main.py` flushes on shutdown.
+    - Disabled-tracing IDs (all zeros) are reported as `trace_id: null`.
+    - `Langfuse(environment=ENVIRONMENT, release=APP_VERSION)`.
+  - **Masking:** v4's `mask` covers input, output, **and metadata**. That closes the 2.x gap.
+  - **Bug found, also upstream: the LlamaIndex bridge was never attached.**
+    `init_settings` checked `Settings.callback_manager is None`, but that property builds a
+    default manager, so the check was never true and no `rag-llm` generation was ever
+    recorded. pathway-chatbot has the same code on the same llama-index.
+    - Fix: check `Settings._callback_manager`, and add the bridge if it's missing. A
+      regression test checks it's on the LLM's manager.
+    - The bridge now opens the generation at LLM start and ends it at LLM end.
+  - **Tests can't export to Langfuse:** `conftest.py` blanks the Langfuse keys and sets
+    `LANGFUSE_TRACING_ENABLED=false`. Before this, local runs loaded `.env` and tried to export
+    test spans; only the swapped keys (401) kept test data out of the project. The
+    draft-edit test's fake `langfuse` module was removed: with v4 it replaced the real SDK for
+    every later test.
+  - **Reading back (new org):**
+    - Use `GET /api/public/v2/observations?traceId=…&fields=core,basic,time,io,metadata,model,usage`,
+      `GET /api/public/v2/metrics` (view `observations`, dimensions `tags`/`traceName`), and
+      `GET /api/public/v3/scores?traceId=…&fields=core,details`.
+    - The legacy `/api/public/traces` and `/api/public/scores` (v1/v2) return **410** for
+      organizations created on or after 2026-09-16.
+  - **Live `scripts/trace_check.py`: 7/7 PASS.**
+    - Name and §9.1 tags: on all 5 observations.
+    - §9.1 metadata on the root.
+    - Nesting: `retrieval-orchestrator` under `chat`, and `rag-llm` (gpt-4o-mini) under it;
+      `suggestion-generation` and its `rag-llm` under `chat`.
+    - A thumbs-down lands, with its comment redacted.
+    - Eval tags.
+    - The email and student ID masked in the root input and the rag-llm prompt.
+    - No secrets in the traces or the server log.
+    - Run with the keys swapped in memory (scratchpad wrapper), because `.env` still has them
+      swapped.
+  - **For the owner to report to pathway-chatbot:**
+    1. langfuse 2.60.10 stops sending traces on 2026-11-16.
+    2. The bridge was never attached, so there have never been `rag-llm` generations.
+
+- **2026-10-19 (Phase 5 live check BLOCKED: the Langfuse SDK is too old for this org)** —
+  - **`.env`:** still has the two Langfuse keys swapped. The live run used an in-memory swap
+    (scratchpad wrapper), and the file is unchanged.
+  - **What worked:** with the keys right, `auth_check` and `/api/health/ready` are ok
+    (`status: ok`), and the SDK's ingestion POST returns 201 for every event.
+  - **What failed:** nothing can be read back.
+    - The SDK's `fetch_trace` (`GET /api/public/traces/{id}`) returns **410
+      `LEGACY_API_UNAVAILABLE_FOR_NEW_ORGANIZATION`**, and the legacy list endpoint is
+      rate-limited at 5/min.
+    - `GET /api/public/v2/observations` returns 200 but **0 observations** for our chat trace,
+      and 0 for a probe trace sent directly with the SDK. Nothing at all in the last 2 hours.
+  - **Langfuse's ingestion response says:** "On Langfuse Cloud, this is the deprecated Langfuse
+    v3 ingestion API and it is shut down on **November 16, 2026**, except for score events …
+    To write traces and observations, always prefer upgrading to the current Python and JS
+    SDKs … The only path to live data is OpenTelemetry ingestion combined with GET
+    /api/public/v2/observations …"
+  - **Consequences:**
+    - langfuse 2.60.10 (the §5 upstream pin) can't produce readable traces for this new
+      organization, and after Nov 16 it can't send traces at all.
+    - **The same applies to pathway-chatbot** (same SDK pin): its Langfuse tracing stops on
+      Nov 16, except scores. Report this upstream.
+  - **Decision needed (owner):** upgrade to the current OpenTelemetry-based Langfuse Python
+    SDK. That reworks the `@observe` / `langfuse_context` calls, scores, the feedback trace,
+    and the LlamaIndex bridge, and the masking has to be re-checked on the new SDK. The
+    Phase 5 code on `phase-5-observability` (tags and metadata module, redaction, Sentry) still
+    applies, but its Langfuse calls are 2.x-style.
+
+- **2026-10-19 (Phase 5, code done; live check pending)** — Tracing and privacy per §9.
+  `pytest tests/` gives 511 passed, keyless.
+  - **Root cause of the Langfuse 401:** the two keys are **swapped** in `backend/.env`.
+    `LANGFUSE_PUBLIC_KEY` holds the `sk-lf-…` value and `LANGFUSE_SECRET_KEY` the `pk-lf-…` one.
+    The host (`https://cloud.langfuse.com`) is right. With the values swapped back, in memory
+    only, `auth_check()` passed. Found without printing either key (prefix and shape checks
+    only). The owner fixes `.env`.
+  - **Built:**
+    - `app/api/tracing.py` holds the §9.1 tags and metadata in one place:
+      - tags: `app:instructor-assistant`, `role:instructor`, `index:<name>`, `feature:chat`,
+        `workflow:classic`, `language:`, `security:`, plus `eval` and `eval_run:<id>` for
+        `eval-` sessions;
+      - metadata: `role`, `index_name`, `app_version`, `sources_core`, `sources_linked`,
+        `cited_slugs`, `rerank_empty`, `login_links(_labeled)`.
+    - The blocked, draft-edit, and feedback traces carry the app and role tags. The upstream
+      `source:rag` tag was dropped (not in §9.1).
+    - `app/redaction.py` masks emails and runs of 7+ digits (URLs, dates, and short numbers
+      are untouched). It's wired into the Langfuse client and the `@observe` context.
+    - The LlamaIndex bridge uses the shared masked client. It used to build a new `Langfuse()`
+      on every LLM call, with no mask and its own background thread.
+    - Sentry: no request bodies, no stack locals, `before_send` redaction, and
+      `release=APP_VERSION`.
+    - `scripts/trace_check.py` is the live Phase 5 check (7 checks, including masking and a
+      secret scan of the fetched traces and the server log).
 
 - **2026-10-19 (PR #4 review, fixed on the Phase 4 branch)** — A review of PR #4 (Phase 3)
   listed 10 findings. 4 were already fixed by the Phase 4 review round in PR #5: bold and

@@ -12,12 +12,32 @@ import sentry_sdk
 # auto-enables when `fastapi` is importable, so no `integrations=[...]` is needed.
 _sentry_dsn = os.environ.get("SENTRY_DSN")
 if _sentry_dsn:
+    from app.redaction import redact as _redact
+
+    def _sentry_before_send(event, hint):
+        """Redact emails and long digit runs in what Sentry would store
+        (exception messages, log messages) — CLAUDE.md §9.2."""
+        for exc in (event.get("exception") or {}).get("values") or []:
+            if isinstance(exc.get("value"), str):
+                exc["value"] = _redact(exc["value"])
+        logentry = event.get("logentry") or {}
+        for key in ("message", "formatted"):
+            if isinstance(logentry.get(key), str):
+                logentry[key] = _redact(logentry[key])
+        return event
+
     sentry_sdk.init(
         dsn=_sentry_dsn,
         environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
         # Do NOT capture PII (IPs, headers, request bodies) by default. Opt in
         # explicitly via SENTRY_SEND_PII=true only where privacy review allows it.
         send_default_pii=os.environ.get("SENTRY_SEND_PII", "false").lower() == "true",
+        # Never attach request bodies (Sentry attaches them even with PII off)
+        # or stack-frame locals (they hold the question text). §9.2.
+        max_request_body_size="never",
+        include_local_variables=False,
+        before_send=_sentry_before_send,
+        release=os.environ.get("APP_VERSION") or None,
         traces_sample_rate=1.0 if os.environ.get("ENVIRONMENT") == "dev" else 0.1,
     )
 
@@ -175,8 +195,11 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown."""
     from app.http_client import close_http_client
+    from app.langfuse import langfuse
 
     await close_http_client()
+    # Spans are exported in the background; send what's still queued.
+    langfuse.flush()
     logger.info("Application shutdown complete")
 
 

@@ -5,7 +5,9 @@ import re
 from enum import Enum
 from typing import Any, Optional, Tuple
 
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
+
+from app.langfuse import langfuse
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.settings import Settings
 
@@ -262,7 +264,7 @@ async def rewrite_selected_text_with_llm(
                 telemetry["terminal_reason"] = "ok"
                 telemetry["validation_error"] = ""
                 telemetry["output_length"] = len(rewritten)
-                langfuse_context.update_current_observation(
+                langfuse.update_current_generation(
                     model=os.environ.get("MODEL", "gpt-4o-mini"),
                     input=safe_instruction,
                     output=rewritten,

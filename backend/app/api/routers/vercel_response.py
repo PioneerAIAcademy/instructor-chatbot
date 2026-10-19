@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import inspect
 import os
 import json
@@ -109,6 +110,7 @@ class VercelStreamResponse(StreamingResponse):
         user_language: str | None = None,
         on_stream_end: Optional[Callable[[str], Awaitable[None]]] = None,
         emit_initial_status: bool = True,
+        trace: Any = None,
     ):
         content = VercelStreamResponse.content_generator(
             request,
@@ -120,6 +122,7 @@ class VercelStreamResponse(StreamingResponse):
             user_language,
             on_stream_end,
             emit_initial_status,
+            trace,
         )
         # Use text/event-stream so reverse proxies (Render, Nginx, Cloudflare)
         # recognise this as a streaming connection and disable response buffering.
@@ -142,6 +145,7 @@ class VercelStreamResponse(StreamingResponse):
         user_language: str | None = None,
         on_stream_end: Optional[Callable[[str], Awaitable[None]]] = None,
         emit_initial_status: bool = True,
+        trace: Any = None,
     ):
         final_response = ""
         resolved_response: StreamingAgentChatResponse | None = None
@@ -221,21 +225,21 @@ class VercelStreamResponse(StreamingResponse):
                 conversation = chat_data.messages + [
                     Message(role="assistant", content=final_response, trace_id=trace_id)
                 ]
-                # Suggestion generation runs inside the SSE generator, after
-                # chat()'s @observe context has been popped — so without a
-                # parent hint @observe(name="suggestion-generation") would open
-                # its own root trace. Thread the chat trace_id so it nests under
-                # the single `chat` trace. langfuse_parent_trace_id is honored
-                # by the v2 decorator only when the contextvar stack is empty
-                # (our case here); None (Langfuse unconfigured) is a safe no-op.
-                suggestion_task = asyncio.create_task(
-                    NextQuestionSuggestion.suggest_next_questions(
-                        conversation,
-                        source_nodes=resolved_response.source_nodes if resolved_response else None,
-                        user_language=user_language,
-                        langfuse_parent_trace_id=trace_id,
+                # Suggestion generation runs in its own task, after the request
+                # handler returned, so attach it to the request's trace (a
+                # RequestTrace) explicitly; otherwise it would open its own.
+                # The task copies the current context, so propagate() here
+                # carries the trace's tags and session into it.
+                child_kwargs = trace.child_kwargs() if trace is not None else {}
+                with trace.propagate() if trace is not None else contextlib.nullcontext():
+                    suggestion_task = asyncio.create_task(
+                        NextQuestionSuggestion.suggest_next_questions(
+                            conversation,
+                            source_nodes=resolved_response.source_nodes if resolved_response else None,
+                            user_language=user_language,
+                            **child_kwargs,
+                        )
                     )
-                )
 
             # Dates in the answer text, highlighted by the frontend markdown renderer.
             date_spans = extract_date_spans(final_response, user_language)

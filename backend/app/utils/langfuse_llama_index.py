@@ -1,7 +1,9 @@
 """LlamaIndex -> Langfuse callback bridge.
 
 Hooks llama-index `CBEventType.LLM` events and emits Langfuse generations
-under the current `@observe`-wrapped trace. Drops in via
+(`rag-llm`) under the currently active observation (langfuse 4.x: the
+generation starts when the LLM call starts, as a child of the active span,
+and ends when it ends). Drops in via
 `Settings.callback_manager` (which MUST be initialized BEFORE
 `Settings.llm` per lesson #62 — the OpenAI llama-index constructor
 captures `Settings.callback_manager` at instantiation time and caches
@@ -83,12 +85,13 @@ def _extract_usage(response: Any) -> Optional[Dict[str, Any]]:
                 v = raw_usage.get(key)
             return v
 
-        return {
+        usage = {
             "input": _read("prompt_tokens"),
             "output": _read("completion_tokens"),
             "total": _read("total_tokens"),
-            "unit": "TOKENS",
         }
+        # langfuse 4.x usage_details: token counts only, as ints.
+        return {k: int(v) for k, v in usage.items() if isinstance(v, (int, float))} or None
     except Exception:
         return None
 
@@ -156,12 +159,21 @@ class LangfuseLlamaIndexHandler(BaseCallbackHandler):
         if event_type != CBEventType.LLM or not _enabled():
             return event_id
         try:
+            from app.langfuse import langfuse, real_id
+
+            if not real_id(langfuse.get_current_trace_id()):
+                return event_id  # no active trace (or tracing off): nothing to attach to
             p = payload or {}
+            messages = p.get(EventPayload.MESSAGES) or p.get(EventPayload.PROMPT)
             self._pending[event_id] = {
                 "start": time.time(),
-                "input_messages": p.get(EventPayload.MESSAGES)
-                or p.get(EventPayload.PROMPT),
-                "model": _extract_model_name(p),
+                "generation": langfuse.start_observation(
+                    name="rag-llm",
+                    as_type="generation",
+                    model=_extract_model_name(p),
+                    input=_stringify_messages(messages),
+                    metadata={"source": "llama-index", "event_id": event_id},
+                ),
             }
         except Exception as exc:
             logger.debug("[langfuse_li] start failed: %s", exc)
@@ -180,45 +192,12 @@ class LangfuseLlamaIndexHandler(BaseCallbackHandler):
         if pending is None:
             return
         try:
-            from langfuse import Langfuse  # type: ignore
-            from langfuse.decorators import langfuse_context  # type: ignore
-        except ImportError:
-            return
-
-        try:
-            trace_id = langfuse_context.get_current_trace_id()
-            if not trace_id:
-                # No active @observe — drop silently.
-                return
-
             p = payload or {}
             response = p.get(EventPayload.RESPONSE) or p.get(EventPayload.COMPLETION)
-            output_text: Optional[str]
-            if response is None:
-                output_text = None
-            else:
-                # llama-index ChatResponse stringifies to "assistant: ..."
-                output_text = str(response)
-
-            usage = _extract_usage(response)
-            input_repr = _stringify_messages(pending.get("input_messages"))
-
-            client = Langfuse()  # picks up env vars (LANGFUSE_HOST/KEYS)
-            client.generation(
-                trace_id=trace_id,
-                parent_observation_id=langfuse_context.get_current_observation_id(),
-                name="rag-llm",
-                model=pending.get("model"),
-                start_time=pending.get("start"),
-                end_time=time.time(),
-                input=input_repr,
-                output=output_text,
-                usage=usage,
-                metadata={
-                    "source": "llama-index",
-                    "event_id": event_id,
-                    "event_type": str(event_type),
-                },
-            )
+            # llama-index ChatResponse stringifies to "assistant: ..."
+            output_text: Optional[str] = None if response is None else str(response)
+            generation = pending["generation"]
+            generation.update(output=output_text, usage_details=_extract_usage(response))
+            generation.end()
         except Exception as exc:
             logger.debug("[langfuse_li] end failed: %s", exc)

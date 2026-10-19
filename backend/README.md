@@ -211,6 +211,39 @@ tests/eval/questions.yaml       the §10 eval set (DRAFT until real instructor q
 scripts/                        security corpus and harness
 ```
 
+## Tracing and privacy
+
+Every request is traced in Langfuse (keys in `.env`, a separate project for this app). A
+`chat` trace carries these tags:
+- `app:instructor-assistant`, `role:instructor`, `index:<name>`;
+- `feature:chat`, `workflow:classic`;
+- `language:<xx>`, `security:<clean|risk_*>`;
+- `eval` and `eval_run:<id>` when `X-Session-ID` starts with `eval-`.
+
+Its metadata records which sources the answer used and cited, the sign-in link counts, and
+`app_version` (`APP_VERSION`). LLM calls appear under it as `rag-llm` generations, and thumbs
+add a `user_feedback` score.
+
+Instructors may type student details into questions, so before anything is sent to Langfuse,
+emails and runs of 7 or more digits (student IDs) are masked in every trace input and output,
+including the `rag-llm` prompts (`app/redaction.py`). Langfuse doesn't mask metadata, so no user
+text goes there. Logs contain no question text. Sentry gets no request bodies or stack locals,
+and its messages are redacted too.
+
+The SDK is langfuse 4.x (OpenTelemetry-based). The 2.x ingestion API is shut down on Langfuse
+Cloud on 2026-11-16, and new organizations can't read its data. `app/api/tracing.py`'s
+`RequestTrace` holds a request's trace open while the answer streams. To read traces in a new
+Langfuse organization, use `GET /api/public/v2/observations`, `/api/public/v2/metrics` (tags),
+and `/api/public/v3/scores`; the older read endpoints return 410. Tests never send anything to
+Langfuse: `tests/conftest.py` turns tracing off.
+
+To check all of this against a running server (live; reads traces back from Langfuse):
+
+```bash
+poetry run python main.py > server.log 2>&1      # in another terminal
+poetry run python scripts/trace_check.py --log server.log
+```
+
 ## Index guard
 
 The server refuses to start (`IndexConfigError`) unless:

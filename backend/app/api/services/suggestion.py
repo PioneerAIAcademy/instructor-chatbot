@@ -3,7 +3,9 @@ import os
 from typing import List, Optional
 
 from app.api.routers.models import Message
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
+
+from app.langfuse import langfuse
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.settings import Settings
 from pydantic import BaseModel
@@ -95,7 +97,7 @@ class NextQuestionSuggestion:
                 language_instruction=language_instruction,
             )
 
-            langfuse_context.update_current_observation(
+            langfuse.update_current_generation(
                 model=os.environ.get("MODEL", "gpt-4o-mini"),
                 input=conversation,
                 output=str(output.questions),
