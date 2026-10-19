@@ -11,8 +11,8 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0–4 merged (PRs #1–#5). Phase 5 (observability) done on
-> `phase-5-observability` (on `main`), uncommitted. Next: Phase 6.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0–4 merged (PRs #1–#5). Phase 5 (observability) in PR #6, with
+> review fixes on `phase-5-observability`. Next: Phase 6.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -536,8 +536,9 @@ references removed.
 - **Separate Langfuse project** for the Instructor Assistant (Q5), with its own
   `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`. Even so, tag everything, so traces stay
   identifiable if the projects are ever merged.
-- Trace `chat`: `session_id` = X-Session-ID, `user_id` = X-Device-ID (as upstream), `release` =
-  `ENVIRONMENT`.
+- Trace `chat`: `session_id` = X-Session-ID, `user_id` = X-Device-ID (as upstream). With
+  langfuse 4.x (Phase 5), Langfuse's first-class `environment` = `ENVIRONMENT` and `release` =
+  `APP_VERSION`. Upstream's 2.x code sent `release` = `ENVIRONMENT`.
 - Tags: `app:instructor-assistant`, `role:instructor`, `index:<PINECONE_INDEX_NAME>`,
   `feature:chat`, `workflow:classic`, `language:<xx>`, `security:<clean|risk_*>`. Plus `eval` and
   `eval_run:<id>` when the session ID starts with `eval-`. Plus `guard:audience_leak` if the
@@ -556,14 +557,22 @@ OpenAI, Voyage, Langfuse, and possibly Sentry.
 - UI notice under the input: "Don't include student names, IDs, or grades." (`chrome-strings.ts`,
   translated).
 - Redact before tracing: emails and digit runs of 7 or more (student IDs) in the Langfuse trace
-  input and output and in logs. **Resolved (2026-10-19):** langfuse 2.60.10 has a `mask` hook
-  (on the client and on `langfuse_context.configure`). `app/redaction.py` is wired into both, so
-  every trace, span, and `rag-llm` generation is masked. **The hook covers only `input` and
-  `output`, not `metadata`.** Never put user text in trace metadata (a test enforces it). Thumbs
-  comments are redacted explicitly. Logs carry no question text (Phase 4).
+  input and output and in logs.
+  - **Resolved, Phase 5 (langfuse 4.16.0):** `app/redaction.py` is the client's `mask`. In 4.x
+    that covers the **input, output, and metadata** of every observation, including `rag-llm`
+    prompts.
+  - URLs are cut out first and kept whole. Markdown link labels are masked. Dates such as
+    2026-10-23 are left alone.
+  - IDs written `#12345678`, `ID-12345678`, `id=12345678`, or `+1.801.555.1234` are masked.
+  - Thumbs comments are redacted explicitly (scores aren't observations).
+  - Logs carry no question text (Phase 4).
+  - Names can't be masked by pattern, so metadata still never carries the question (a test
+    enforces it).
 - `SENTRY_SEND_PII=false` (upstream default). Never attach request bodies to Sentry events:
   `max_request_body_size="never"`, `include_local_variables=False` (stack locals hold the
-  question), and a `before_send` that redacts exception and log messages.
+  question), and `before_send` / `before_breadcrumb` hooks that redact exception values, the
+  event message, log entries, and breadcrumbs (log lines recorded by Sentry's logging
+  integration).
 - Langfuse data retention for this project: Q17.
 
 ---
@@ -733,6 +742,35 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (PR #6 review fixes, on `phase-5-observability`)** — A review of PR #6 listed 10
+  findings. All 10 were checked against the code (the redaction gaps by running them) and
+  fixed. `pytest tests/` gives 528 passed, keyless.
+  - **Redaction gaps:** `#12345678`, `ID-12345678`, `id=12345678`, and `+1.801.555.1234` got
+    through; markdown link labels weren't masked; namedtuples broke the mask.
+    - Fix: one digit-run pattern; URLs cut out and kept whole; link labels masked; dates
+      (2026-10-23) kept.
+  - **Lost traces:** in 4.x an un-ended root is never exported.
+    - `RequestTrace.finish()` now always ends the root, even if recording fails.
+    - `_on_stream_end` calls `finish` in `finally`.
+    - Stream end also runs from `VercelStreamResponse.__call__`, for a client that leaves
+      before the body starts; `_Once` keeps it to one run.
+    - Draft edit closes its trace when the rewrite raises.
+  - **Late tags (`guard:audience_leak`, `outcome:*`) missed the trace:** now set on the root
+    span's trace-tags attribute before it ends, plus a `tags` event.
+  - **Failures counted as rerank misses:** `answer_metadata(completed=False)` sets the source
+    fields to None and `answer_completed: false`, and the root is `WARNING`.
+  - **Draft-edit trace input** is now what the model saw (sanitized when rated LOW).
+  - **Cost counted twice:** suggestions and draft edit were generations, as is the `rag-llm`
+    call under them. They're spans now.
+  - **Sentry:** the event message and breadcrumbs are redacted too (`before_breadcrumb`).
+  - **Docs:** §9.1 (`release` = `APP_VERSION`), §9.2 (the 4.x mask covers metadata), the status
+    line, README, and `UPSTREAM.md`.
+  - **Live `trace_check.py` re-run: 8/8 PASS.** It has a new check 8: a draft edit's
+    `outcome:*` tag, added when the trace finishes, reaches the trace (`outcome:success`).
+    The first run failed check 2 only because `APP_VERSION` wasn't set locally, and Langfuse
+    drops metadata keys with no value. Run with `APP_VERSION=<git sha>`, as a build sets it,
+    everything passed.
 
 - **2026-10-19 (`.env` fixed)** — With the owner's go-ahead, the two Langfuse values in
   `backend/.env` were swapped back in place (lines 39–40, no values printed). Now

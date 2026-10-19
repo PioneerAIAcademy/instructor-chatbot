@@ -22,6 +22,8 @@ Checks, each PASS/FAIL:
    root input and in the rag-llm prompt.
 7. No key or secret from .env appears in any fetched observation or in the
    server log (--log). Only booleans are printed, never values.
+8. Tags added when a trace finishes reach the trace: a draft edit's
+   `outcome:*` tag (the same path `guard:audience_leak` takes).
 
 Exits 1 if any check fails.
 """
@@ -89,13 +91,13 @@ class LangfuseReader:
         r.raise_for_status()
         return r.json().get("data") or []
 
-    def trace_tags_and_name(self, trace_id: str) -> tuple[set[str], set[str]]:
+    def trace_tags_and_name(self, trace_id: str, column: str = "traceId") -> tuple[set[str], set[str]]:
         start, end = self._window()
         query = {
             "view": "observations",
             "dimensions": [{"field": "tags"}, {"field": "traceName"}],
             "metrics": [{"measure": "count", "aggregation": "count"}],
-            "filters": [{"column": "traceId", "operator": "=", "value": trace_id, "type": "string"}],
+            "filters": [{"column": column, "operator": "=", "value": trace_id, "type": "string"}],
             "fromTimestamp": start.replace("+00:00", "Z"), "toTimestamp": end.replace("+00:00", "Z"),
         }
         r = requests.get(f"{self.host}/api/public/v2/metrics", params={"query": json.dumps(query)},
@@ -176,6 +178,11 @@ def main() -> int:
     eval_trace_id = run.ask(QUESTION, "eval-tracecheck")
     eval_run = run.session[len("eval-"):]
     pii_trace_id = run.ask(PII_QUESTION, "tracecheck")
+    draft_headers = api_contract.client_headers("tracecheck-draft")
+    requests.post(f"{run.url}/api/v1/chat/draft/edit", headers=draft_headers, timeout=120, json={
+        "draft_type": "message", "instruction": "Make it warmer.", "selected_text": "Hello class.",
+        "full_content": "Hello class. Welcome to the block.",
+    }).raise_for_status()
 
     obs = run.lf.wait_for(trace_id)
     tags, names = run.lf.trace_tags_and_name(trace_id)
@@ -237,6 +244,16 @@ def main() -> int:
                 for var, value in secrets if value in text]
     run.result("7. no secrets in traces or logs", problems,
                f"{len(secrets)} secret values checked against {', '.join(haystacks)}")
+
+    draft_tags: set[str] = set()
+    for _ in range(12):
+        draft_tags, _names = run.lf.trace_tags_and_name(draft_headers["X-Session-ID"], column="sessionId")
+        if any(t.startswith("outcome:") for t in draft_tags):
+            break
+        time.sleep(5)
+    outcome = sorted(t for t in draft_tags if t.startswith("outcome:"))
+    run.result("8. late tags reach the trace (draft edit outcome:*)",
+               [] if outcome else [f"no outcome:* tag (tags seen: {sorted(draft_tags)})"], ", ".join(outcome))
 
     print(f"\n{'ALL PASSED' if not run.failures else f'{run.failures} FAILED'}")
     return 1 if run.failures else 0

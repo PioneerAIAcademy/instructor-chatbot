@@ -52,6 +52,20 @@ _STREAM_HICCUP_MESSAGES: dict[str, str] = {
 _STREAM_FLUSH_PADDING = "\n" * 64
 
 
+class _Once:
+    """Wrap an async callback so only its first call runs."""
+
+    def __init__(self, callback: Optional[Callable[[str], Awaitable[None]]]):
+        self._callback = callback
+        self._called = False
+
+    async def __call__(self, final_response: str) -> None:
+        if self._called or self._callback is None:
+            return
+        self._called = True
+        await self._callback(final_response)
+
+
 class VercelStreamResponse(StreamingResponse):
     """
     Class to convert the response from the chat engine to the streaming format expected by Vercel
@@ -112,6 +126,11 @@ class VercelStreamResponse(StreamingResponse):
         emit_initial_status: bool = True,
         trace: Any = None,
     ):
+        # The stream calls on_stream_end in its `finally`. If the client leaves
+        # before the body is iterated at all, that `finally` never runs, so
+        # __call__ calls it too; _Once keeps it to one run either way (it
+        # finishes the request's trace, which is lost if it never ends).
+        self._stream_end = _Once(on_stream_end)
         content = VercelStreamResponse.content_generator(
             request,
             event_handler,
@@ -120,7 +139,7 @@ class VercelStreamResponse(StreamingResponse):
             trace_id,
             skip_suggestions,
             user_language,
-            on_stream_end,
+            self._stream_end,
             emit_initial_status,
             trace,
         )
@@ -132,6 +151,12 @@ class VercelStreamResponse(StreamingResponse):
         self.headers["Cache-Control"] = "no-cache, no-transform"
         self.headers["X-Accel-Buffering"] = "no"
         self.headers["Connection"] = "keep-alive"
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            await self._stream_end("")  # no-op if the stream already reported
 
     @classmethod
     async def content_generator(

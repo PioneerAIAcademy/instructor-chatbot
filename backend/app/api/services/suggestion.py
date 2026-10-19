@@ -39,7 +39,10 @@ class NextQuestions(BaseModel):
 
 class NextQuestionSuggestion:
     @staticmethod
-    @observe(as_type="generation", name="suggestion-generation")
+    # A span, not a generation: the LLM call inside it is recorded by the
+    # LlamaIndex bridge as a `rag-llm` generation with real token usage, so
+    # marking this one a gpt-4o-mini generation too would count its cost twice.
+    @observe(name="suggestion-generation")
     async def suggest_next_questions(
         messages: List[Message],
         number_of_questions: int = N_QUESTION_TO_GENERATE,
@@ -97,8 +100,7 @@ class NextQuestionSuggestion:
                 language_instruction=language_instruction,
             )
 
-            langfuse.update_current_generation(
-                model=os.environ.get("MODEL", "gpt-4o-mini"),
+            langfuse.update_current_span(
                 input=conversation,
                 output=str(output.questions),
             )

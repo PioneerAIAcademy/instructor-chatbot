@@ -35,6 +35,10 @@ def _node(n, slug, source="instructor-assistant"):
         ("write to maria.lopez@byupathway.edu today", "write to [email] today"),
         ("call 801-555-1234 or 801 555 1234", "call [number] or [number]"),
         ("Student 1234567", "Student [number]"),
+        ("ticket #12345678 is stuck", "ticket #[number] is stuck"),
+        ("ID-12345678 and id=12345678", "ID-[number] and id=[number]"),
+        ("call +1.801.555.1234", "call [number]"),
+        ("see [student 12345678](https://example.org/x)", "see [student [number]](https://example.org/x)"),
     ],
 )
 def test_redact_masks_emails_and_long_numbers(text, expected):
@@ -45,6 +49,7 @@ def test_redact_masks_emails_and_long_numbers(text, expected):
     "text",
     [
         "Due October 21, 2026 at 11:59 PM",
+        "Grades post 2026-10-23 (or 23-10-2026, 2026.10.23)",
         "Week 07, block 3, 2,500 points, code 123456",
         "https://byupathwayworldwideprod.sharepoint.com/sites/x/SitePages/123456789.aspx?id=9876543",
     ],
@@ -56,6 +61,15 @@ def test_redact_leaves_dates_short_numbers_and_urls(text):
 def test_mask_walks_nested_data():
     data = {"messages": [{"content": "ID 12345678"}, ("a@b.co", 3)], "n": 5}
     assert mask_for_langfuse(data=data) == {"messages": [{"content": "ID [number]"}, ("[email]", 3)], "n": 5}
+
+
+def test_mask_keeps_namedtuples_and_tuples():
+    from collections import namedtuple
+
+    Pair = namedtuple("Pair", "who note")
+    masked = mask_for_langfuse(data={"p": Pair("a@b.co", 12345678), "t": ("ID 12345678",)})
+    assert masked["p"] == Pair("[email]", 12345678) and isinstance(masked["p"], Pair)
+    assert masked["t"] == ("ID [number]",)
 
 
 def test_the_client_and_observe_share_one_masked_client():
@@ -127,8 +141,84 @@ def test_base_metadata(monkeypatch):
 def test_answer_metadata_counts_sources_and_cited_slugs():
     nodes = [_node(1, "pay-ia"), _node(2, "linked--x", "instructor-assistant-linked"), _node(3, "ferpa-ia")]
     meta = tracing.answer_metadata("Paid on the 8th [^1]. See the page [^2]. Again [^1].", nodes)
-    assert meta == {"sources_core": 2, "sources_linked": 1, "cited_slugs": ["pay-ia", "linked--x"], "rerank_empty": False}
+    assert meta == {"answer_completed": True, "sources_core": 2, "sources_linked": 1,
+                    "cited_slugs": ["pay-ia", "linked--x"], "rerank_empty": False}
     assert tracing.answer_metadata("Nothing found.", [])["rerank_empty"] is True
+
+
+def test_failed_answer_is_not_counted_as_a_rerank_miss():
+    meta = tracing.answer_metadata("", [], completed=False)
+    assert meta["answer_completed"] is False
+    assert meta["rerank_empty"] is None and meta["sources_core"] is None and meta["cited_slugs"] == []
+
+
+# --- RequestTrace ----------------------------------------------------------------------
+
+
+def _trace_with_mock_root():
+    from unittest.mock import MagicMock
+
+    trace = tracing.RequestTrace("chat", input="q", user_id="d", session_id="s",
+                                 tags=["app:instructor-assistant"], metadata={})
+    trace.root = MagicMock()
+    return trace
+
+
+def test_finish_ends_the_root_even_when_recording_fails():
+    trace = _trace_with_mock_root()
+    trace.root.update.side_effect = RuntimeError("bad payload")
+    trace.finish(output="answer")
+    trace.root.end.assert_called_once()
+    trace.finish(output="again")  # the second call is ignored
+    trace.root.end.assert_called_once()
+
+
+def test_late_tags_go_on_the_root_span():
+    from langfuse import LangfuseOtelSpanAttributes
+
+    trace = _trace_with_mock_root()
+    trace.finish(output="a", extra_tags=["guard:audience_leak"], level="ERROR")
+    trace.root._otel_span.set_attribute.assert_called_once_with(
+        LangfuseOtelSpanAttributes.TRACE_TAGS, ["app:instructor-assistant", "guard:audience_leak"]
+    )
+    trace.root.create_event.assert_called_once()
+    # The tags are set before the root ends (attributes on an ended span are dropped).
+    names = [c[0] for c in trace.root.method_calls]
+    assert names.index("create_event") < names.index("end")
+
+
+# --- the streaming response ------------------------------------------------------------
+
+
+def test_stream_end_runs_once_even_if_the_body_is_never_sent():
+    import asyncio
+
+    from app.api.routers.vercel_response import VercelStreamResponse, _Once
+
+    calls = []
+
+    async def _end(text):
+        calls.append(text)
+
+    once = _Once(_end)
+    asyncio.run(once("a"))
+    asyncio.run(once("b"))
+    assert calls == ["a"]
+
+    calls.clear()
+    response = VercelStreamResponse(None, None, None, None, on_stream_end=_end)
+
+    async def _receive():
+        await asyncio.sleep(10)
+        return {"type": "http.disconnect"}
+
+    async def _send(message):
+        raise OSError("client went away")  # before the body is iterated at all
+
+    scope = {"type": "http", "asgi": {"spec_version": "2.3"}}
+    with pytest.raises(BaseException):
+        asyncio.run(response(scope, _receive, _send))
+    assert calls == [""]
 
 
 # --- the chat trace end to end (stubbed orchestrator) -------------------------------
@@ -210,6 +300,84 @@ def test_thumbs_comment_is_redacted(monkeypatch):
     assert scores[0]["comment"] == "Wrong for student [number] ([email])"
 
 
+def test_failed_answer_trace_is_marked_not_completed(monkeypatch, fake_traces):
+    from app.api.routers import chat as chat_module
+
+    client = _client(monkeypatch)
+
+    async def _fail(self, *a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(chat_module.RetrievalOrchestrator, "run", _fail)
+    client.post("/api/v1/chat", json={"messages": [{"role": "user", "content": "When do I get paid?"}]})
+    (trace,) = fake_traces
+    assert trace.finished is not None
+    assert trace.finished["metadata"]["answer_completed"] is False
+    assert trace.finished["metadata"]["rerank_empty"] is None  # not counted as a rerank miss
+    assert trace.finished["level"] == "WARNING"
+
+
+def _draft_body():
+    return {"draft_type": "message", "instruction": "make it warmer",
+            "selected_text": "Hello class.", "full_content": "Hello class. Welcome."}
+
+
+def test_draft_edit_trace_input_is_what_the_model_saw(monkeypatch, fake_traces):
+    from app.api.routers import chat as chat_module
+
+    client = _client(monkeypatch)
+
+    async def _low(text):
+        return True, None, {"risk_level": "LOW"}
+
+    seen = {}
+
+    async def _rewrite(**kw):
+        seen.update(kw)
+        return "Hello, friends.", None, {}
+
+    monkeypatch.setattr(chat_module.InputValidator, "validate_input_security_async", _low)
+    monkeypatch.setattr(chat_module.InputValidator, "sanitize_input", lambda text: "SANITIZED")
+    monkeypatch.setattr(chat_module, "rewrite_selected_text_with_llm", _rewrite)
+    client.post("/api/v1/chat/draft/edit", json=_draft_body())
+    (trace,) = fake_traces
+    assert trace.input == "SANITIZED" and seen["instruction"] == "SANITIZED"
+
+
+def test_draft_edit_trace_closes_when_the_rewrite_raises(monkeypatch, fake_traces):
+    from fastapi.testclient import TestClient
+
+    from app.api.routers import chat as chat_module
+
+    _client(monkeypatch)
+
+    async def _boom(**kw):
+        raise RuntimeError("OpenAI 503")
+
+    monkeypatch.setattr(chat_module, "rewrite_selected_text_with_llm", _boom)
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    app.state.limiter = chat_module.limiter
+    app.include_router(chat_module.chat_router, prefix="/api/v1/chat")
+    r = TestClient(app, raise_server_exceptions=False).post("/api/v1/chat/draft/edit", json=_draft_body())
+    assert r.status_code == 500
+    (trace,) = fake_traces
+    assert trace.finished["level"] == "ERROR" and trace.finished["output"] is None
+
+
+def test_suggestions_and_draft_edit_are_spans_not_generations():
+    """The rag-llm bridge already records each LLM call as a generation, with
+    its cost. A second generation for the same call would count it twice."""
+    import inspect
+
+    from app.api.services import draft_edit, suggestion
+
+    for module in (draft_edit, suggestion):
+        source = inspect.getsource(module)
+        assert 'as_type="generation"' not in source and "update_current_generation" not in source
+
+
 def test_no_user_text_goes_into_trace_metadata(monkeypatch, fake_traces):
     """Metadata describes the answer, not the question. (langfuse 4.x masks
     metadata too, but names can't be masked, so the question stays out.)"""
@@ -236,12 +404,14 @@ def test_sentry_never_sends_bodies_locals_or_raw_identifiers():
         "import main, sentry_sdk\n"
         "o = sentry_sdk.get_client().options\n"
         "print(o['send_default_pii'], o['max_request_body_size'], o['include_local_variables'])\n"
-        "e = {'exception': {'values': [{'value': 'failed for ana@x.org id 12345678'}]}, 'logentry': {'message': 'm 7654321'}}\n"
-        "print(o['before_send'](e, {}))\n"
+        "e = {'exception': {'values': [{'value': 'failed for ana@x.org id 12345678'}]}, 'logentry': {'message': 'm 7654321'},\n"
+        "     'message': 'msg 2345678', 'breadcrumbs': {'values': [{'message': 'q from bo@y.org', 'data': {'q': 'ID 3456789'}}]}}\n"
+        "print(o['before_send'](e, {}), o['before_breadcrumb']({'message': 'log 4567890'}, {}))\n"
     )
     result = subprocess.run([sys.executable, "-c", code], cwd=BACKEND_DIR, env=env,
                             capture_output=True, text=True, timeout=180)
     assert result.returncode == 0, result.stderr[-2000:]
     lines = result.stdout.strip().splitlines()
     assert lines[-2] == "False never False"
-    assert "ana@x.org" not in lines[-1] and "12345678" not in lines[-1] and "7654321" not in lines[-1]
+    for raw in ("ana@x.org", "12345678", "7654321", "2345678", "bo@y.org", "3456789", "4567890"):
+        assert raw not in lines[-1], raw

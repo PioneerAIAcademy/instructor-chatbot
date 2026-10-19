@@ -7,11 +7,18 @@ Langfuse project is ever shared with another app.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
-from typing import Any, Iterable
+from contextlib import contextmanager
+from typing import Any, Iterable, Iterator, Optional
+
+from langfuse import LangfuseOtelSpanAttributes, propagate_attributes
 
 from app.engine.audience_guard import INSTRUCTOR_ROLE
+from app.langfuse import langfuse, real_id
+
+logger = logging.getLogger("uvicorn")
 
 APP_TAG = "app:instructor-assistant"
 ROLE_TAG = f"role:{INSTRUCTOR_ROLE}"
@@ -71,9 +78,21 @@ def _meta(node: Any) -> dict:
     return meta if isinstance(meta, dict) else {}
 
 
-def answer_metadata(answer: str, source_nodes: Iterable[Any]) -> dict[str, Any]:
+def answer_metadata(answer: str, source_nodes: Iterable[Any], *, completed: bool = True) -> dict[str, Any]:
     """Metadata about what the answer drew on (§9.1): counts by source, the
-    slugs actually cited, and whether rerank left nothing to answer from."""
+    slugs actually cited, and whether rerank left nothing to answer from.
+
+    `completed` is False when no answer came back (synthesis failed, a
+    timeout, a disconnect). The source fields are then None, not 0, so a
+    failure isn't counted as a rerank miss (Q15)."""
+    if not completed:
+        return {
+            "answer_completed": False,
+            "sources_core": None,
+            "sources_linked": None,
+            "cited_slugs": [],
+            "rerank_empty": None,
+        }
     nodes = list(source_nodes or [])
     by_citation = {str(getattr(n, "citation_node_id", "")): _meta(n) for n in nodes}
     cited = []
@@ -83,6 +102,7 @@ def answer_metadata(answer: str, source_nodes: Iterable[Any]) -> dict[str, Any]:
             cited.append(slug)
     sources = [_meta(n).get("source") for n in nodes]
     return {
+        "answer_completed": True,
         "sources_core": sources.count("instructor-assistant"),
         "sources_linked": sources.count("instructor-assistant-linked"),
         "cited_slugs": cited,
@@ -91,13 +111,6 @@ def answer_metadata(answer: str, source_nodes: Iterable[Any]) -> dict[str, Any]:
 
 
 # --- the per-request trace (langfuse 4.x) --------------------------------------------
-
-from contextlib import contextmanager  # noqa: E402
-from typing import Iterator, Optional  # noqa: E402
-
-from langfuse import propagate_attributes  # noqa: E402
-
-from app.langfuse import langfuse, real_id  # noqa: E402
 
 
 def _ascii_id(value: str | None) -> str | None:
@@ -185,23 +198,43 @@ class RequestTrace:
         status_message: str | None = None,
     ) -> None:
         """Record the output, final metadata, and any tags known only at the
-        end, then close the root. Safe to call twice (the second is ignored)."""
+        end, then close the root. Safe to call twice (the second is ignored).
+        The root is ended even if recording fails: in langfuse 4.x an
+        un-ended root is never exported, which would lose the whole trace."""
         if self._ended:
             return
         self._ended = True
-        update: dict[str, Any] = {"output": output}
-        if metadata is not None:
-            update["metadata"] = metadata
-        if level:
-            update["level"] = level
-        if status_message:
-            update["status_message"] = status_message
-        self.root.update(**update)
-        self.root.set_trace_io(output=output)
-        if extra_tags:
-            # Tags propagate to observations created inside the context, so the
-            # late tags ride on an event under the root (e.g. guard:audience_leak).
-            late = dict(self._attrs, tags=self.tags + [t for t in extra_tags if t not in self.tags])
-            with propagate_attributes(**late):
-                self.root.create_event(name="tags", metadata={"tags": extra_tags}, level=level)
-        self.root.end()
+        try:
+            update: dict[str, Any] = {"output": output}
+            if metadata is not None:
+                update["metadata"] = metadata
+            if level:
+                update["level"] = level
+            if status_message:
+                update["status_message"] = status_message
+            self.root.update(**update)
+            self.root.set_trace_io(output=output)
+            if extra_tags:
+                self._add_late_tags(extra_tags, level)
+        except Exception as exc:  # observability must never break the request
+            logger.warning("[trace] finishing %s failed: %s", self.name, exc)
+        finally:
+            try:
+                self.root.end()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("[trace] ending %s failed: %s", self.name, exc)
+
+    def _add_late_tags(self, extra_tags: list[str], level: str | None) -> None:
+        """Tags known only at the end (guard:audience_leak, outcome:*).
+
+        Set on the root span itself (its trace-tags attribute, while the root
+        is still open), so the trace carries them however the server merges
+        tags. Also on an event under the root, created with the full tag set,
+        so observation-level filters see them too."""
+        tags = self.tags + [t for t in extra_tags if t not in self.tags]
+        self.tags = tags
+        otel_span = getattr(self.root, "_otel_span", None)
+        if otel_span is not None:
+            otel_span.set_attribute(LangfuseOtelSpanAttributes.TRACE_TAGS, tags)
+        with propagate_attributes(**dict(self._attrs, tags=tags)):
+            self.root.create_event(name="tags", metadata={"tags": extra_tags}, level=level)

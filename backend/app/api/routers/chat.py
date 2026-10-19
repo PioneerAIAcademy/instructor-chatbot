@@ -252,6 +252,7 @@ async def chat(
             **base_metadata(),
         }
         answer_nodes: list[Any] = []
+        answer_completed = [False]  # set once the orchestrator returns an answer
 
         # The root of this request's trace. It stays open while the answer
         # streams; the orchestrator and suggestions attach to it later.
@@ -278,28 +279,35 @@ async def chat(
             # Read here, not after run() returns: a leak must reach the trace
             # even when the answer then fails.
             late_tags: list[str] = []
-            if orchestrator.audience_leak_dropped:
-                # Should never happen: the filter already excludes these. A
-                # finding, so it is tagged for a dashboard filter, not hidden.
-                late_tags.append(AUDIENCE_LEAK_TAG)
-                retrieval_metadata["audience_leak_dropped"] = orchestrator.audience_leak_dropped
-            retrieval_metadata["login_links"] = orchestrator.login_links
-            retrieval_metadata["login_links_labeled"] = orchestrator.login_links_labeled
             try:
-                clean_metadata.update(answer_metadata(final_response, answer_nodes))
+                if orchestrator.audience_leak_dropped:
+                    # Should never happen: the filter already excludes these. A
+                    # finding, so it is tagged for a dashboard filter, not hidden.
+                    late_tags.append(AUDIENCE_LEAK_TAG)
+                    retrieval_metadata["audience_leak_dropped"] = orchestrator.audience_leak_dropped
+                retrieval_metadata["login_links"] = orchestrator.login_links
+                retrieval_metadata["login_links_labeled"] = orchestrator.login_links_labeled
+                clean_metadata.update(
+                    answer_metadata(final_response, answer_nodes, completed=answer_completed[0])
+                )
                 if retrieval_metadata:
                     clean_metadata.update(retrieval_metadata)
                 clean_metadata["latency"] = {
                     "total_duration_ms": round((time.monotonic() - request_started_at) * 1000),
                 }
+            except Exception as metadata_error:
+                logger.error(f"Failed to build Langfuse trace metadata: {metadata_error}")
+            finally:
+                # Always close the trace: an un-ended root is never exported.
+                # WARNING when no answer came back (failure, timeout, disconnect);
+                # the orchestrator's own span carries the error itself.
                 trace.finish(
                     output=final_response,
                     metadata=clean_metadata,
                     extra_tags=late_tags,
-                    level="ERROR" if late_tags else None,
+                    level="ERROR" if late_tags else (None if answer_completed[0] else "WARNING"),
+                    status_message=None if answer_completed[0] else "answer not completed",
                 )
-            except Exception as langfuse_error:
-                logger.error(f"Failed to update Langfuse trace output: {langfuse_error}")
 
         async def _get_response() -> Any:
             logger.info(f"Creating chat engine with filters: {filters}")
@@ -318,6 +326,7 @@ async def chat(
                     **trace.child_kwargs(),
                 )
             answer_nodes.extend(getattr(response, "source_nodes", None) or [])
+            answer_completed[0] = True
             try:
                 retrieval_metadata.update(
                     {
@@ -433,11 +442,17 @@ async def draft_edit(
         else "NONE"
     )
 
+    # What the model will actually see: sanitized when the screen rated it LOW.
+    safe_instruction = instruction
+    if is_suspicious and security_details.get("risk_level") == "LOW":
+        safe_instruction = InputValidator.sanitize_input(instruction)
+
     # The trace starts once the security result is known; the rewrite call
-    # nests under it, and the outcome tag is added when it finishes.
+    # nests under it, and the outcome tag is added when it finishes. Its input
+    # is what the model saw (the raw instruction only when it was blocked).
     trace = RequestTrace(
         "draft_edit",
-        input=instruction,
+        input=instruction if blocked_message else safe_instruction,
         user_id=device_id,
         session_id=session_id,
         tags=[
@@ -474,19 +489,20 @@ async def draft_edit(
             reason="security_validation_failed",
         )
 
-    safe_instruction = instruction
-    if is_suspicious and security_details.get("risk_level") == "LOW":
-        safe_instruction = InputValidator.sanitize_input(instruction)
-
-    with trace.propagate():
-        edited_text, rejection_reason, rewrite_telemetry = await rewrite_selected_text_with_llm(
-            draft_type=edit_data.draft_type,
-            instruction=safe_instruction,
-            selected_text=edit_data.selected_text,
-            full_content=edit_data.full_content,
-            subject=edit_data.subject,
-            **trace.child_kwargs(),
-        )
+    try:
+        with trace.propagate():
+            edited_text, rejection_reason, rewrite_telemetry = await rewrite_selected_text_with_llm(
+                draft_type=edit_data.draft_type,
+                instruction=safe_instruction,
+                selected_text=edit_data.selected_text,
+                full_content=edit_data.full_content,
+                subject=edit_data.subject,
+                **trace.child_kwargs(),
+            )
+    except Exception as exc:
+        # Close the trace (an un-ended root is never exported), then fail as before.
+        trace.finish(output=None, level="ERROR", status_message=f"Draft edit failed: {type(exc).__name__}")
+        raise
 
     if not edited_text:
         terminal_reason = str(rewrite_telemetry.get("terminal_reason", "model_rejected"))

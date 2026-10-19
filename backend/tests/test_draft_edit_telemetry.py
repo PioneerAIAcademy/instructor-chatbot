@@ -89,7 +89,7 @@ def _install_fake_llm(monkeypatch, fake_llm: _FakeLLM) -> None:
     monkeypatch.setattr(draft_edit, "Settings", _FakeSettings(fake_llm))
     monkeypatch.setattr(
         draft_edit.langfuse,
-        "update_current_generation",
+        "update_current_span",
         lambda *args, **kwargs: None,
     )
 

@@ -225,10 +225,11 @@ Its metadata records which sources the answer used and cited, the sign-in link c
 add a `user_feedback` score.
 
 Instructors may type student details into questions, so before anything is sent to Langfuse,
-emails and runs of 7 or more digits (student IDs) are masked in every trace input and output,
-including the `rag-llm` prompts (`app/redaction.py`). Langfuse doesn't mask metadata, so no user
-text goes there. Logs contain no question text. Sentry gets no request bodies or stack locals,
-and its messages are redacted too.
+emails and runs of 7 or more digits (student IDs, phone numbers) are masked in every
+observation's input, output, and metadata, including the `rag-llm` prompts (`app/redaction.py`).
+URLs and dates are left alone. Names can't be masked by pattern, so metadata never carries the
+question. Logs contain no question text. Sentry gets no request bodies or stack locals, and its
+exception messages, log entries, and breadcrumbs are redacted.
 
 The SDK is langfuse 4.x (OpenTelemetry-based). The 2.x ingestion API is shut down on Langfuse
 Cloud on 2026-11-16, and new organizations can't read its data. `app/api/tracing.py`'s

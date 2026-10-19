@@ -176,7 +176,9 @@ async def _request_rewrite(*, system_prompt: str, user_prompt: str) -> str:
     return _clean_model_output(response.message.content or "")
 
 
-@observe(as_type="generation", name="draft-edit-rewrite")
+# A span, not a generation: the LLM call inside is recorded by the LlamaIndex
+# bridge as a `rag-llm` generation with real usage (no double-counted cost).
+@observe(name="draft-edit-rewrite")
 async def rewrite_selected_text_with_llm(
     *,
     draft_type: str,
@@ -264,8 +266,7 @@ async def rewrite_selected_text_with_llm(
                 telemetry["terminal_reason"] = "ok"
                 telemetry["validation_error"] = ""
                 telemetry["output_length"] = len(rewritten)
-                langfuse.update_current_generation(
-                    model=os.environ.get("MODEL", "gpt-4o-mini"),
+                langfuse.update_current_span(
                     input=safe_instruction,
                     output=rewritten,
                     status_message=(
