@@ -23,6 +23,7 @@ from app.engine.audience_guard import (
     assert_instructor_nodes,
     check_index_config,
     is_denied_index_name,
+    is_instructor_metadata,
     instructor_filters,
 )
 from app.engine.custom_condense_plus_context import source_label
@@ -407,3 +408,60 @@ def test_module_exposes_no_client_role_input():
     import inspect
 
     assert inspect.signature(audience_guard.instructor_filters).parameters == {}
+
+
+def test_is_instructor_metadata_is_the_guards_rule(monkeypatch):
+    assert is_instructor_metadata({"role": "instructor", "source": "instructor-assistant"})
+    assert not is_instructor_metadata({"role": "missionary", "source": "instructor-assistant"})
+    monkeypatch.setenv("RETRIEVAL_SOURCES", "instructor-assistant")
+    assert not is_instructor_metadata({"role": "instructor", "source": "instructor-assistant-linked"})
+
+
+def test_leak_count_is_live_when_a_disconnect_cancels_the_run():
+    """The stream cancels run() and reads the count before run()'s cleanup can
+    execute. The count must already be there."""
+    from app.engine.retrieval_orchestrator import RetrievalOrchestrator
+
+    guard = AudienceGuardPostprocessor()
+    engine = MagicMock()
+    engine.audience_guard = guard
+
+    async def _astream(*args, **kwargs):
+        guard.dropped = 2  # retrieval ran and the guard dropped two nodes
+        await asyncio.sleep(3600)  # synthesis still running when the client leaves
+
+    engine.astream_chat = _astream
+
+    async def scenario():
+        orchestrator = RetrievalOrchestrator()
+        with patch("app.engine.retrieval_orchestrator.get_chat_engine", return_value=engine):
+            task = asyncio.create_task(orchestrator.run(
+                "q", [], filters=None, params=None, timezone="UTC", event_handler=None
+            ))
+            await asyncio.sleep(0.05)
+            task.cancel()
+            seen_at_cancel = orchestrator.audience_leak_dropped  # what on_stream_end reads
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        return seen_at_cancel
+
+    assert asyncio.run(scenario()) == 2
+
+
+def test_readiness_builds_the_store_off_the_event_loop(monkeypatch):
+    import threading
+
+    from app.api.routers import health
+
+    monkeypatch.setattr(health.langfuse, "auth_check", lambda: True)
+    threads = []
+
+    def _store():
+        threads.append(threading.current_thread())
+        return MagicMock()
+
+    monkeypatch.setattr(health, "get_vector_store", _store)
+    asyncio.run(health.readiness())
+    assert threads and threads[0] is not threading.main_thread()

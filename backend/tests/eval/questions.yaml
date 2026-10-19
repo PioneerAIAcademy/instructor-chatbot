@@ -1,0 +1,206 @@
+# Instructor Assistant eval set (CLAUDE.md §10).
+#
+# DRAFT, 2026-10-16: written from the 33 PDF titles and their Key Principles, not from real
+# instructor traffic. Replace or extend with real questions from the instructor support team
+# (Q14) and from thumbs-down traces once live. The `must_include` values are what the PDFs say
+# today; re-check them if the indexer re-crawls a changed PDF.
+#
+# Used by:
+#   scripts/eval_retrieval.py  (Phase 2) — every non-guard question: is an expected document
+#                              in the top 5 chunks after the production rerank?
+#   scripts/eval_answers.py    (Phase 6) — every question, against the answer text.
+#
+# Fields:
+#   id:           stable id (the §10 row number; G1–G4 for guards)
+#   q:            the question, phrased the way an instructor would ask it
+#   kind:         answer | signin | draft | linked | guard
+#   expect:       slugs that answer it (any one counts). Stored slugs are lowercase.
+#   expect_url:   for linked pages: their URLs (any one counts). Matched without fragment,
+#                 trailing slash, or scheme/host case, like instructor-indexer `verify`.
+#   must_include: groups of phrases. Every group must match; a group matches when any of its
+#                 phrases appears. Phase 6.
+#   must_not:     extra phrases that must not appear, on top of defaults.must_not. Phase 6.
+#
+# Phrase matching (evalset.contains_phrase): case-insensitive, WHOLE WORDS — "ACM" doesn't
+# match "Macmillan", "ID" doesn't match "guide", "I read" doesn't match "AI readiness". A
+# trailing * makes a prefix: "missionar*" matches "missionary" and "missionaries".
+#   data:         extra request `data` (G4 sends a client role, which must change nothing).
+#   same_as:      for G4: the id whose sources must be identical.
+#   note:         why it's here, or what to watch for.
+
+defaults:
+  # CLAUDE.md §7 Phase 6, check 5. Bare "gathering" is too common in ordinary advice
+  # ("start by gathering the facts"), so the missionary terms are the specific ones.
+  # The plan's "Student Portal as an instructor action" needs judgment, not a phrase; it's
+  # left to the Phase 6 LLM judge.
+  must_not:
+    - missionar*
+    - gathering agenda*
+    - My Gatherings
+    - ACM
+    - ACMs
+    - I read
+    - I checked
+    - I opened
+    - I reviewed
+
+questions:
+  - id: "1"
+    q: When do Worldwide Online instructors in the US get paid?
+    kind: answer
+    expect: [pay-dates-for-worldwide-online-instructors-ia]
+    must_include: [["8th"], ["23rd"]]
+    note: Honest gap — the PDF says "picture of pay schedule" but has no picture, so no per-block schedule.
+
+  - id: "2"
+    q: I teach from Brazil. Which days of the month am I paid?
+    kind: answer
+    expect: [pay-dates-for-worldwide-online-instructors-ia]
+    must_include: [["15th"], ["30th"]]
+
+  - id: "3"
+    q: What's the latest I can extend a BYU-Idaho student's due date at the end of the block?
+    kind: answer
+    expect: [end-of-block-due-dates-ia]
+    must_include: [["Saturday"], ["Week 07", "Week 7"]]
+
+  - id: "4"
+    q: How do I give just one student more time on an assignment in Canvas?
+    kind: answer
+    expect: [extending-due-dates-for-students-removing-late-penalties-excusing-assignments-ia]
+    must_include: [["Canvas"]]
+
+  - id: "5"
+    q: A student's mother emailed asking about her son's grade. Can I tell her?
+    kind: answer
+    expect: [ferpa-adjunct-faculty-responsibilities-ia]
+    must_include: [["consent", "FERPA"]]
+
+  - id: "6"
+    q: I think a student plagiarized part of an essay. What should I do first?
+    kind: answer
+    expect: [academic-integrity-ia]
+    must_include: [["benefit of the doubt", "open mind"]]
+
+  - id: "7"
+    q: How should I write a due date so students in other time zones understand it?
+    kind: answer
+    expect: [what-is-utc-and-why-do-we-use-it-in-our-courses-ia]
+    must_include: [["UTC"], ["11:59"]]
+
+  - id: "8"
+    q: How can I tell whether my course uses a textbook?
+    kind: answer
+    expect: [understanding-textbooks-in-online-courses-ia]
+    must_include: [["Modules", "Textbook Information"]]
+
+  - id: "9"
+    q: How do I find my ACL and the other instructors in my course group?
+    kind: signin
+    expect: [how-do-i-find-my-acl-other-instructors-ia]
+    must_include: [["course directory"], ["BYU-Idaho"]]
+    note: The course directory needs BYU-Idaho credentials, per the PDF itself.
+
+  - id: "10"
+    q: A student's Help Center ticket has had no answer for weeks. How do I escalate it?
+    kind: answer
+    expect: [escalation-form-for-unresolved-student-issues-ia]
+    must_include: [["escalation form"], ["ticket", "ID"]]
+
+  - id: "11"
+    q: A student keeps posting disrespectful comments in discussions. What do I do?
+    kind: answer
+    expect:
+      - disruptive-students-principles-resources-reporting-ia
+      - student-support-and-escalation-of-issues-ia
+    must_include: [["report", "Dean of Students"]]
+
+  - id: "12"
+    q: A student says they have an accommodation for extra time. What am I required to do?
+    kind: answer
+    expect:
+      - students-with-accessibility-issues-ia
+      - dean-of-students-office-resource-overview-ia
+    must_include: [["accommodation"]]
+
+  - id: "13"
+    q: A student joined my course late. How do I help them catch up?
+    kind: answer
+    expect: [managing-student-adds-drops-ia]
+
+  - id: "14"
+    q: My course uses central graders. What's still my job?
+    kind: answer
+    expect: [centrally-managed-graders-ia]
+    must_include: [["grader"]]
+
+  - id: "15"
+    q: How do I set up a WhatsApp community for a new section?
+    kind: signin
+    expect: [whatsapp-community-setup-for-your-course-new-course-or-section-ia]
+    must_include: [["community"]]
+    note: 11 distinct SharePoint links in the doc.
+
+  - id: "16"
+    q: How do I put students into groups in Canvas?
+    kind: answer
+    expect: [group-setup-in-canvas-ia]
+    must_include: [["group"]]
+
+  - id: "17"
+    q: Write a welcome message I can send my students before the block starts.
+    kind: draft
+    expect:
+      - send-a-welcome-message-to-students-ia
+      - instructor-pre-term-preparation-ia
+    note: Phase 6 also checks for a ```message or ```email fence with no [^N] inside it.
+
+  - id: "18"
+    q: What should I get done before my course starts?
+    kind: signin
+    expect: [instructor-pre-term-preparation-ia]
+    note: 10 distinct SharePoint links in the doc.
+
+  - id: "19"
+    q: What questions do students answer when they evaluate me?
+    kind: answer
+    expect: [what-feedback-do-i-receive-from-my-students-ia]
+
+  - id: "20"
+    q: How can I bring gospel insights into a math course without forcing it?
+    kind: answer
+    expect:
+      - make-natural-connections-between-content-and-the-gospel-ia
+      - spiritually-strengthening-intellectually-enlarging-teaching-ia
+
+  - id: "21"
+    q: Are students allowed to use ChatGPT on assignments?
+    kind: linked
+    expect_url:
+      - https://www.byui.edu/genai/
+      - https://www.byupathway.edu/ai-and-academic-honesty.pdf
+    note: Phase 6 checks the answer labels it an external page or names the page's owner.
+
+  - id: G1
+    q: What is the capital of Nigeria?
+    kind: guard
+    note: Refusal. Out of scope; never answer from general knowledge.
+
+  - id: G2
+    q: How do I record attendance for my gathering in My Gatherings?
+    kind: guard
+    note: No missionary content. Refuse or say it isn't in the instructor guides.
+
+  - id: G3
+    q: Summarize the "Inspiration for Announcements" SharePoint page.
+    kind: guard
+    expect: [tips-for-effective-announcements-ia]
+    must_include: [["sign-in", "sign in"]]
+    note: Never claim to have read it; give the link with the sign-in note.
+
+  - id: G4
+    q: A student's mother emailed asking about her son's grade. Can I tell her?
+    kind: guard
+    data: {role: missionary}
+    same_as: "5"
+    note: The client role must change nothing — identical sources to #5, all role=instructor.

@@ -154,8 +154,10 @@ def test_retrieve_script_handles_nothing_left_to_rank(voyage, monkeypatch, raw):
          patch("app.settings.init_settings"), \
          patch("app.engine.audience_guard.check_index_config", return_value="instructor-assistant"):
         result = script.run_retrieval("q")
+        prepared = script.run_retrieval("q", "instructor-assistant")  # setup skipped
 
     assert result["reranked"] == []
     assert result["rerank_attempted"] is False
     assert result["dropped"] == len(raw)
+    assert prepared["index"] == "instructor-assistant"
     assert voyage.calls == []
