@@ -11,8 +11,8 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-17): Phase 0 (backend scaffold) done on branch `phase-0-scaffold`, not yet
-> merged. Next: Phase 1.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-18): Phase 0 merged (PR #1). Phase 1 (audience lock) done on branch
+> `phase-1-audience-guard`, not yet merged. Next: Phase 2.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -210,7 +210,7 @@ assuming them.
 
 | Setting | Chatbot side |
 | --- | --- |
-| Index | `PINECONE_INDEX_NAME=instructor-assistant`. Boot fails unless the name is in `ALLOWED_INDEX_NAMES`. If `PINECONE_INDEX_HOST` is set, it must start with `<index name>-` (Pinecone hosts begin with the index name), or boot fails. This closes the override in `vectordb.py:298-302`. |
+| Index | `PINECONE_INDEX_NAME=instructor-assistant`. Boot fails unless the name is in `ALLOWED_INDEX_NAMES`. If `PINECONE_INDEX_HOST` is set, it must be that index's host, or boot fails. The check parses the index name out of the host (`<name>-<project-id>.svc…pinecone.io`); a plain prefix match would accept `instructor-assistant-staging-…` for `instructor-assistant`. This closes the override in `vectordb.py:298-302`. |
 | Embedding | `EMBEDDING_MODEL=text-embedding-3-large`, `EMBEDDING_DIM=3072`. |
 | Reader pins | Upstream lock: `llama-index-core 0.10.58`, `llama-index-vector-stores-pinecone 0.1.9`, `pinecone-client 5.0.1`, `langfuse 2.60.10` (`backend/poetry.lock`). The indexer writes with `vector-stores-pinecone 0.1.3` and `pinecone-client <4`. The `_node_content` format is the same, so **reading works across these versions**. Phase 1's smoke test proves it on the live index. |
 | Filter | `role == "instructor"` AND `source in ["instructor-assistant", "instructor-assistant-linked"]`. Nothing from the client takes part. |
@@ -723,6 +723,89 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-18 (Phase 1 review fixes, PR #2)** — A review of PR #2 found 9 issues. All 9 were
+  checked against the code and fixed. `pytest tests/` gives 310 passed, keyless. The live
+  re-run matched the first one exactly (rank 1 for all 5, nothing dropped).
+  - **The script copied the rerank logic, and it drifted.** `retrieve.py` sent Voyage an
+    empty list, raised on a Voyage failure, and applied the cutoff with one text, in each
+    case unlike production.
+    - Fix: one `rerank_nodes()` in `custom_condense_plus_context.py`, used by both engine
+      paths and the script.
+    - It skips the rerank at ≤ 1 unique text, and keeps every text unranked when Voyage fails.
+    - Dedup now preserves order. Upstream's `set()` made the failure fallback order random.
+    - The script prints the real `RERANK_MIN_SCORE` and reports a skipped or failed rerank
+      the way production handles it.
+  - **Lost leaks:** a leak was lost when synthesis failed.
+    - Fix: the orchestrator records `audience_leak_dropped` on itself in a `finally`.
+      `chat.py` keeps the instance and tags the trace in `_on_stream_end`, which always runs.
+  - **Fragile guard lookup:** the guard was found by digging through the private
+    `_node_postprocessors`.
+    - Fix: `get_chat_engine()` sets a public `engine.audience_guard`.
+    - The orchestrator **fails closed**: an engine without its guard raises before
+      retrieving.
+    - The repeated Langfuse ERROR blocks became one `_mark_observation_error()`.
+  - **Only the exact name `pathway` was denied.**
+    - Fix: also `pathway-*`, `pathway_*`, and any name containing "missionar", even if
+      allow-listed.
+    - The allow-list and the separate account are still the real controls.
+  - **Index check on every request:** `check_index_config` ran on every
+    `get_vector_store()` call.
+    - Fix: it moved into `_build_store()`, so it runs on cache misses only. The cache key
+      includes the index name, so nothing is lost.
+  - **Readiness tested the wrong path:** it probed the control plane while requests use the
+    host.
+    - Fix: a data-plane `describe_index_stats` through the request client. Stats are never
+      returned.
+  - **Flaky test, cause not proven.** 1 failure in 5 full-suite runs, not reproduced in 4
+    more full runs or 6 targeted runs. I lost the trace, because I filtered the output
+    without `-rf`. The most likely cause is the security tests' Hugging Face request on
+    every validator call (the pytector finding).
+    - Fix: `conftest.py` sets `HF_HUB_OFFLINE`, which takes the suite off the network.
+      Suite time went from about 180 s to about 92 s.
+    - If it recurs, run with `-rf` and record the test name here.
+
+- **2026-10-18 (Phase 1 done, branch `phase-1-audience-guard`, uncommitted)** — Audience lock
+  and index switch. `pytest tests/` gives 286 passed, keyless.
+  - **Built:**
+    - `audience_guard.check_index_config()` runs at boot (`main.py`), in
+      `get_vector_store()`, and in `/api/health/ready`. It refuses a name not in
+      `ALLOWED_INDEX_NAMES`. It always refuses `pathway`, even if someone allow-lists it. And it
+      refuses a `PINECONE_INDEX_HOST` that isn't the named index's host.
+    - `AudienceGuardPostprocessor` runs first among the engine's postprocessors and drops
+      wrong role/source nodes (`ERROR audience_leak`). The count reaches the trace as tag
+      `guard:audience_leak` plus metadata `audience_leak_dropped`, and the orchestrator span
+      is marked ERROR.
+    - `/api/health/ready` now returns `{status, index, guard}`, and skips the Pinecone call
+      when the guard refuses the config.
+    - `scripts/retrieve.py`: raw top 35 and reranked top 17, with slug, source, role, score.
+      `--expect <slug>` exits 1 if the slug isn't in the top 5. Rerank settings are now
+      module constants in `custom_condense_plus_context.py`, so the script can't drift from
+      production.
+  - **Decision: the host check parses, it doesn't prefix-match.** §7's "starts with
+    `<name>-`" would accept `instructor-assistant-staging-…` for `instructor-assistant`. §5
+    updated.
+  - **Done-when:**
+    - Offline: unit tests cover the same filter for client `role` ∈ {absent, missionary, ACM,
+      instructor, garbage} (through the API); boot refusing `pathway` and a mismatched host
+      (in a subprocess running `import main`); and the assertion dropping a planted
+      `role=missionary` node.
+    - Live, 5 questions (§10 #1, #3, #5, #7, #10): every raw node `role=instructor` from
+      `instructor-assistant[-linked]`, 0 dropped, and the expected slug **rank 1** after
+      rerank for all 5 (top scores 0.68–0.91).
+    - Live: the same 5 with `PINECONE_INDEX_NAME=pathway` exit 1 with `IndexConfigError`
+      before any Pinecone client is built, and so does `import main`.
+  - **§5 reader pins confirmed live:** `vector-stores-pinecone 0.1.9` reads the nodes the
+    indexer wrote with 0.1.3 (text, `slug`, `role`, `source`, `url` all present).
+  - **Guard findings in upstream test data:** `test_vectordb_client.py` used
+    `PINECONE_INDEX_NAME="pathway"` and a `pathway-…` host. The fixtures now use the
+    instructor index; the guard wasn't changed.
+  - **Phase 0 regression fixed:** `package-mode = false` meant `scripts/*.py` couldn't
+    `import app`. `sec_test.py` and `retrieve.py` now put `backend/` on `sys.path`.
+  - **Finding (Phase 5):** `/api/health/ready` reports Langfuse `401 Invalid credentials.
+    Confirm that you've configured the correct host`. All three `LANGFUSE_*` variables are
+    set, so the keys and `LANGFUSE_HOST` don't match (wrong region host, or keys from another
+    project). Readiness shows `degraded` until that's fixed.
 
 - **2026-10-17 (Phase 0 review fixes, still uncommitted)** — A code review of the scaffold found
   10 issues. All 10 were checked against the code (and against the installed llama-index for

@@ -21,7 +21,7 @@ from app.api.routers.models import (
     ThumbsRequest,
 )
 from app.api.services.draft_edit import rewrite_selected_text_with_llm
-from app.engine.audience_guard import INSTRUCTOR_ROLE, instructor_filters
+from app.engine.audience_guard import AUDIENCE_LEAK_TAG, INSTRUCTOR_ROLE, instructor_filters
 from app.engine.draft_context import (
     build_dropped_draft_notice,
     build_edited_draft_context,
@@ -279,9 +279,18 @@ async def chat(
             language=LocalizationManager.detect_language(typed_message)
         )
         retrieval_metadata: dict[str, Any] = {}
+        orchestrator = RetrievalOrchestrator()
 
         async def _on_stream_end(final_response: str) -> None:
             # Update trace output after streaming finishes (or client disconnects).
+            # Read here, not after run() returns: a leak must reach the trace
+            # even when the answer then fails.
+            if orchestrator.audience_leak_dropped:
+                # Should never happen: the filter already excludes these. A
+                # finding, so it is tagged for a dashboard filter, not hidden.
+                if AUDIENCE_LEAK_TAG not in success_tags:
+                    success_tags.append(AUDIENCE_LEAK_TAG)
+                retrieval_metadata["audience_leak_dropped"] = orchestrator.audience_leak_dropped
             try:
                 if retrieval_metadata:
                     clean_metadata.update(retrieval_metadata)
@@ -299,7 +308,7 @@ async def chat(
 
         async def _get_response() -> Any:
             logger.info(f"Creating chat engine with filters: {filters}")
-            response = await RetrievalOrchestrator().run(
+            response = await orchestrator.run(
                 last_message_content,
                 messages,
                 filters=filters,

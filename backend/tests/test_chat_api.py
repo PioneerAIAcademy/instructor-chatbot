@@ -6,6 +6,7 @@ handed (edited-draft handling, language), and the failure stream.
 
 import json
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -15,6 +16,7 @@ from pydantic import ValidationError
 from app.api.routers import chat as chat_module
 from app.api.routers import vercel_response
 from app.api.routers.models import ChatData
+from app.engine.audience_guard import AUDIENCE_LEAK_TAG, instructor_filters
 from app.engine.retrieval_orchestrator import SynthesisFailedError
 
 
@@ -44,10 +46,16 @@ def client(monkeypatch):
 
     class _Orchestrator:
         result: Any = _Answer("Pay days are the 8th and 23rd.")
+        leak: int = 0
+
+        def __init__(self):
+            self.audience_leak_dropped = 0
 
         async def run(self, message, chat_history, **kwargs):
+            self.audience_leak_dropped = self.leak
             calls["message"] = message
             calls["history"] = chat_history
+            calls["filters"] = kwargs.get("filters")
             if isinstance(self.result, Exception):
                 raise self.result
             return self.result
@@ -120,10 +128,29 @@ def test_annotations_never_reach_the_prompt():
 # --- what the orchestrator gets ------------------------------------------------
 
 
-def test_client_role_does_not_change_the_request(client):
-    r = client.post("/api/v1/chat", json=_body([{"role": "user", "content": "When am I paid?"}], role="missionary"))
+@pytest.mark.parametrize("role", [None, "missionary", "ACM", "instructor", "garbage"])
+def test_client_role_never_changes_the_filter(client, role):
+    data = {} if role is None else {"role": role}
+    r = client.post("/api/v1/chat", json=_body([{"role": "user", "content": "When am I paid?"}], **data))
     assert r.status_code == 200
     assert client.calls["message"] == "When am I paid?"
+    assert client.calls["filters"] == instructor_filters()
+
+
+@pytest.mark.parametrize("answer_fails", [False, True])
+def test_audience_leak_tags_the_trace(client, monkeypatch, answer_fails):
+    client.orchestrator.leak = 1
+    if answer_fails:
+        client.orchestrator.result = SynthesisFailedError("every node below the cutoff")
+    fake_langfuse = MagicMock()
+    monkeypatch.setattr(chat_module, "langfuse", fake_langfuse)
+
+    r = client.post("/api/v1/chat", json=_body([{"role": "user", "content": "When am I paid?"}]))
+    assert r.status_code == 200
+
+    update = fake_langfuse.trace.return_value.update.call_args.kwargs
+    assert AUDIENCE_LEAK_TAG in update["tags"]
+    assert update["metadata"]["audience_leak_dropped"] == 1
 
 
 def test_screened_out_draft_tells_the_model(client, monkeypatch):

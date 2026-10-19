@@ -5,6 +5,7 @@ import pytest
 from llama_index.core.callbacks import CallbackManager
 from llama_index.core.settings import Settings
 
+from app.engine.audience_guard import AudienceGuardPostprocessor
 from app.engine.retrieval_orchestrator import (
     RetrievalOrchestrator,
     SynthesisFailedError,
@@ -39,6 +40,7 @@ def _engine(response):
     engine = MagicMock()
     engine.astream_chat = AsyncMock(return_value=response)
     engine.callback_manager.handlers = []
+    engine.audience_guard = AudienceGuardPostprocessor()
     return engine
 
 

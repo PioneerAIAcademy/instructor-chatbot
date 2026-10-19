@@ -9,14 +9,17 @@ It is a trimmed copy of the
 [`../CLAUDE.md`](../CLAUDE.md) holds the full plan, the repo rules, and the journal.
 [`../UPSTREAM.md`](../UPSTREAM.md) lists which files came from upstream and what changed.
 
-> **Status:** Phase 0 (scaffold) of the build plan in `CLAUDE.md` §7. The chat path works
-> end to end, but the index guard, the sign-in link labels, and the evals arrive in later phases.
+> **Status:** Phase 1 (audience lock and index switch) of the build plan in `CLAUDE.md` §7.
+> The chat path works end to end with all three audience guards. The sign-in link labels and
+> the evals arrive in later phases.
 
 ## How a question is answered
 
 1. `POST /api/v1/chat` checks the API key and the rate limit, then runs the input security screen.
 2. Retrieval is filtered to `role == "instructor"` and `source in RETRIEVAL_SOURCES`. This filter
-   is fixed on the server. Any `role` the client sends is ignored.
+   is fixed on the server. Any `role` the client sends is ignored. A second check after
+   retrieval drops any chunk with the wrong role or source and logs `audience_leak`. It should
+   never fire.
 3. Pinecone returns the top 35 chunks. Voyage `rerank-lite-1` keeps the top 17 with a score of at
    least 0.21. Chunks are then grouped by document and put back in page order.
 4. OpenAI writes the answer from those chunks, with `[^N]` citations.
@@ -89,7 +92,7 @@ the full contract to `API.md`.
 | POST | `/api/v1/chat/feedback/general` | API key | 5/min | General feedback, with an optional screenshot (Cloudinary) |
 | GET | `/api/v1/chat/config` | none | — | Starter questions, from `CONVERSATION_STARTERS` |
 | GET | `/api/health` | none | — | Liveness |
-| GET | `/api/health/ready` | none | — | Readiness: checks Pinecone and Langfuse |
+| GET | `/api/health/ready` | none | — | Readiness: checks the index guard, Pinecone (a data-plane call through the same client chat uses), and Langfuse. Returns `status`, `index`, `guard`. |
 
 Rate limits are per client IP. Requests send the API key in an `X-API-Key` header, checked
 against `API_KEYS` (comma-separated). The key is skipped only when `ENVIRONMENT=dev` **and**
@@ -114,6 +117,16 @@ and the `pre-push` hook moves `.env` aside first, so it matches CI.
 Tests that call OpenAI, Voyage, or Pinecone cost money. They run only when `RUN_LIVE_TESTS=1`
 is set.
 
+To see what retrieval returns for one question, through the same guard, filter, and rerank as
+`/api/v1/chat` (live and billable; no LLM answer is generated):
+
+```bash
+poetry run python scripts/retrieve.py "When do instructors in the US get paid?"
+poetry run python scripts/retrieve.py "..." --expect pay-dates-for-worldwide-online-instructors-ia
+```
+
+With `--expect`, it exits 1 unless that slug ranks in the top 5 after rerank.
+
 To re-run the security attack corpus after any change to
 `app/security/input_validator.py`:
 
@@ -129,7 +142,7 @@ app/
   api/routers/chat.py           chat, draft edit, thumbs, feedback
   api/routers/vercel_response.py  the SSE stream
   api/services/                 suggested questions, draft rewrite
-  engine/audience_guard.py      the server-pinned instructor filter
+  engine/audience_guard.py      index guard, instructor filter, post-retrieval role check
   engine/prompts.py             system, context, and condense prompts
   engine/retrieval_orchestrator.py  engine, then grounding guards
   engine/custom_condense_plus_context.py  retrieval, rerank, context building
@@ -137,8 +150,21 @@ app/
   engine/vectordb.py            bounded, cached Pinecone client
   security/input_validator.py   input security screen
 tests/                          offline tests
+scripts/retrieve.py             raw + reranked retrieval for one question (live)
 scripts/                        security corpus and harness
 ```
+
+## Index guard
+
+The server refuses to start (`IndexConfigError`) unless:
+
+- `PINECONE_INDEX_NAME` is in `ALLOWED_INDEX_NAMES` (default `instructor-assistant`);
+- it isn't `pathway`, the Missionary Assistant's index, or a copy named after it
+  (`pathway-…`, `pathway_…`, or anything containing "missionar"). These are refused even if
+  someone adds them to the allow-list;
+- `PINECONE_INDEX_HOST`, when set, is that same index's Pinecone host.
+
+The vector store repeats the check, so scripts that skip `main.py` are covered too.
 
 ## Rules that matter here
 
