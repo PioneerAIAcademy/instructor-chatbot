@@ -24,6 +24,7 @@ logger = logging.getLogger("uvicorn")
 class MessageType(Enum):
     """Types of messages that can be localized."""
     SECURITY_BLOCK = "security_block"
+    SIGN_IN_REQUIRED = "sign_in_required"
     ERROR = "error"
     GENERAL = "general"
 
@@ -66,6 +67,34 @@ class LocalizationManager:
 
     # Default fallback messages in multiple languages
     FALLBACK_MESSAGES = {
+        # Appended after links that need a BYU-Pathway / BYU-Idaho sign-in
+        # (app/engine/login_links.py). One entry per SUPPORTED_LANGUAGES code
+        # (tests/test_login_links.py checks this). en is source; the rest are
+        # LLM translations pending a native-speaker pass. Tagalog isn't a
+        # supported language here, so a tl entry could never be shown.
+        MessageType.SIGN_IN_REQUIRED: {
+            'en': "(sign-in required)",
+            'es': "(requiere iniciar sesión)",
+            'fr': "(connexion requise)",
+            'de': "(Anmeldung erforderlich)",
+            'it': "(accesso richiesto)",
+            'pt': "(requer login)",
+            'nl': "(inloggen vereist)",
+            'ru': "(требуется вход)",
+            'zh': "（需要登录）",
+            'ja': "（サインインが必要）",
+            'ko': "(로그인 필요)",
+            'ar': "(يتطلب تسجيل الدخول)",
+            'he': "(נדרשת התחברות)",
+            'hi': "(साइन इन आवश्यक)",
+            'th': "(ต้องลงชื่อเข้าใช้)",
+            'vi': "(cần đăng nhập)",
+            'tr': "(oturum açmak gerekir)",
+            'pl': "(wymagane logowanie)",
+            'cs': "(vyžaduje přihlášení)",
+            'hu': "(bejelentkezés szükséges)",
+        },
+
         MessageType.SECURITY_BLOCK: {
             'en': [
                 "Sorry, I can't answer that; could you please rephrase your question and make it shorter?",

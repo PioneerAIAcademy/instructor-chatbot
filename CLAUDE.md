@@ -11,8 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0 and 1 merged (PRs #1, #2). Phase 2 (retrieval eval) done on
-> branch `phase-2-retrieval-eval` (on `main`), uncommitted. Next: Phase 3.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0 and 1 merged (PRs #1, #2). Phase 2 in PR #3 (CI green, not yet
+> merged). Phase 3 (prompt and sign-in links) done on branch `phase-3-prompt-signin`, stacked on
+> Phase 2, uncommitted. Next: Phase 4.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -517,9 +518,12 @@ references removed.
   Use `source` from metadata (already in the `sources` annotation).
 - **Deterministic backstop (`login_links.py`):** after the grounding guards, find every markdown
   link or bare URL whose host matches `LOGIN_LINK_HOSTS` (suffix match, so `*.sharepoint.com` is
-  covered). Append ` (sign-in required)` once, localized through the existing string tables,
-  unless the next 40 characters already say so. Count them into trace metadata `login_links`.
-  The prompt does the explaining. This guarantees the label.
+  covered). Append ` (sign-in required)` once, localized through the existing string tables
+  **in the answer's language**, unless a parenthesized sign-in note already follows the link
+  (within 40 characters). A sentence that merely mentions signing in is not a note. Count the
+  sign-in links into trace metadata `login_links` and the labels added into
+  `login_links_labeled`. The prompt does the explaining, and tells the model **not** to write
+  the note itself. This guarantees the label. *(Revised in the Phase 3 review, 2026-10-19.)*
 - The bot **never fetches** a link at answer time. There is no browsing tool, and none will be
   added. Unindexed pages are the indexer's pending list (indexer §8, Q5), not a chatbot problem.
 
@@ -723,6 +727,82 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (Phase 3 review fixes)** — A review found 10 issues in the uncommitted Phase 3
+  work. All 10 were reproduced and fixed. `pytest tests/` gives 435 passed, keyless.
+  - **The backstop skipped unlabeled links.** Any nearby "sign in", "log in", or "signing"
+    (it matched "signin") counted as a label. The live #9 link had passed only because the
+    next sentence said "Log in…".
+    - Fix: a link counts as labeled only when a **parenthesized** note follows it, in any
+      supported language. §8.3 was revised.
+  - **Labels landed inside link syntax.** `URL[^1]` became `URL[^1 (label)]`, and labels
+    went inside autolinks and titled links.
+    - Fix: one shared parser, `app/utils/links.py` (`find_links`, `split_fences`), now used
+      by link integrity, the annotator, and `ask.py`.
+    - Bare URLs stop before `[`, so link integrity also no longer turns `URL[^1]` into a stray
+      `]`, and an invented URL no longer takes the sentence's period with it.
+  - **Labels could come out in the wrong language.**
+    - The prompt had the model write the English literal "(sign-in required)", which blocked
+      the localized label. Now the prompt says not to write a note, and the annotator always
+      adds one.
+    - The label followed the request language, which can come from the settings menu. Now
+      it follows the answer's detected language, falling back to the request language.
+    - Labels now cover all 20 supported languages; `tl` was never shown and is gone.
+  - **`login_links` counted only labels this code added** (0 when the model labeled the
+    links). Fix: `login_links` = sign-in links present, `login_links_labeled` = labels added.
+  - **`ask.py` checked with its own regex**, which flagged fenced drafts and missed
+    ru/zh/ja/ko labels. Fix: it uses `login_links.unlabeled_login_links`.
+  - **`import app.engine` needed `VOYAGE_API_KEY`** (the client was built at import). Fix:
+    the client is lazy, and `main.py` refuses to boot without the key.
+  - **Live re-run, 4 sign-in questions plus one in Portuguese: all checks ok.**
+    - #9's course-directory link is now labeled.
+    - The Portuguese answer gets "(requer login)".
+    - G3 still refuses to describe the page, and cites it.
+
+- **2026-10-19 (Phase 3 done, branch `phase-3-prompt-signin`, uncommitted)** — Final instructor
+  prompt, sign-in labels, prompt lock. `pytest tests/` gives 408 passed, keyless.
+  - **Built:**
+    - `prompts.py` finalized from §8.1–8.2. It adds TONE, TERMS (ACL/AIM/TGL as vocabulary
+      only: "facts … never from here"), LANGUAGE (answer in the question's language, Q12),
+      numbered steps, and the exact label `"(sign-in required)"`, so the model and the
+      annotator agree.
+    - `tests/test_prompts_lock.py` pins 22 load-bearing sentences.
+    - `login_links.py`: after the guards, appends the localized "(sign-in required)" to
+      login-host links. It matches hosts by suffix on a domain boundary, so
+      `notsharepoint.com` doesn't match. It skips a link when the text before the next link
+      (up to 40 characters) already mentions sign-in or log-in, and it skips fenced drafts.
+      It's idempotent. The count goes to trace metadata `login_links`. The label strings live
+      in `localization.py` (`SIGN_IN_REQUIRED`).
+    - `scripts/ask.py`: one question through the local API, with answer checks.
+    - SharePoint link-integrity tests: a link that is inline in the guide's text survives;
+      an invented one is stripped.
+  - **Token budget re-measured (o200k_base):** system prompt ~820, CONTEXT_PROMPT ~160,
+    retrieved contexts 1,600–2,300. That's about 3.2k at most of the 24k memory, so ~20k is
+    left for history.
+  - **Live check, 4 sign-in questions (§10 #9, #15, #18, G3), all CHECKS ok:**
+    - **First run, G3 failed on reading.** It said the page "offers ideas and examples to
+      help you create effective announcements". The guide only lists the link under
+      Resources, so the model guessed from the title. It also gave no `[^N]`.
+    - **Fix:** the SIGN-IN rule now says "A link's title is not a description", "If the guide
+      only lists the link … say that the guide links to it, and nothing more about its
+      content", and "cite the guide it came from with [^N]".
+    - **Re-run:** G3 says the page is behind a sign-in, gives the link with the label, and
+      cites [^1], with no content guessing.
+    - #9's course-directory link has no added label, correctly: the next step says "Log in
+      using your BYU-Idaho email and credentials".
+    - #15 and #18 surfaced no sign-in links (their guides have 11 and 10).
+  - **Flaky-test cause found (from the Phase 1 note):** `/api/v1/chat`'s real
+    `10/minute` limiter is process-wide. `test_chat_api.py` crossed 10 requests per minute
+    only when the timing was tight, which gave an intermittent 429. Fix: the fixture calls
+    `limiter.reset()` for each test (3 repeat runs clean).
+  - **Found, not fixed:**
+    - **Other hosts that may need a sign-in.** `forms.office.com` (12 links),
+      `customervoice.microsoft.com` (14), `docs.google.com` (17), and `video.byui.edu` (11)
+      appear in the guides. Whether they need a sign-in is unverified, and adding a host to
+      `LOGIN_LINK_HOSTS` is an owner decision.
+    - **Repeated lines in a merged context.** The WhatsApp community guide's context repeats
+      "Click on the Communities icon…" several times. That looks like overlapping chunks
+      concatenated by `_merge_nodes_with_headers`. Check it in Phase 6, if answers suffer.
 
 - **2026-10-19 (Phase 2 review fixes)** — A review found 10 issues across the merged Phase 1
   code and the uncommitted Phase 2 eval. All 10 were confirmed and fixed. `pytest tests/` gives

@@ -51,9 +51,12 @@ def get_chat_engine(filters=None, params=None, timezone: str = "UTC") -> CustomC
 
     # token_limit is the TOTAL budget for system prompt + retrieved context +
     # chat history; ChatMemoryBuffer.get() raises if system + context alone
-    # exceed it. Upstream sized 24K around a ~8K-token missionary prompt. The
-    # instructor prompt is far shorter, so this leaves more room for history.
-    # Re-measure with tiktoken (o200k_base) once Phase 3 finalizes the prompt.
+    # exceed it. Measured with tiktoken (o200k_base), 2026-10-19:
+    #   - system prompt (final, Phase 3):          ~820 tokens
+    #   - CONTEXT_PROMPT without contexts:          ~160 tokens
+    #   - retrieved contexts (top 17, merged):    1,600-2,300 tokens
+    # ~3,200 at most, leaving ~20K for chat history (upstream's ~8K missionary
+    # prompt left 9-12K). Re-measure before adding a prompt block.
     memory = ChatMemoryBuffer.from_defaults(token_limit=24000)
 
     engine = CustomCondensePlusContextChatEngine.from_defaults(

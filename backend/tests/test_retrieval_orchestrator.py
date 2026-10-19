@@ -179,3 +179,50 @@ async def test_draft_fence_survives_guards_and_its_citations_are_hoisted():
     text = await _collect(result)
     assert "```message\nHi [Student Name], welcome to [Course]!\n```\n\n[^2]" in text
     assert "based on the guide [^1]." in text
+
+
+_SP = "https://byupathwayworldwideprod.sharepoint.com/sites/onlineinstructor/SitePages/X.aspx"
+
+
+async def _labeled(answer: str, user_language: str):
+    nodes = [_node("https://x.example/guide", f"See [the checklist]({_SP}).")]
+    engine = _engine(_FakeStream(answer, nodes))
+    orchestrator = RetrievalOrchestrator()
+    with patch("app.engine.retrieval_orchestrator.get_chat_engine", return_value=engine):
+        result = await orchestrator.run(
+            "q", [], filters=None, params=None, timezone="UTC", event_handler=None, user_language=user_language
+        )
+    return await _collect(result), orchestrator
+
+
+@pytest.mark.asyncio
+async def test_sign_in_links_are_labeled_after_the_guards():
+    answer = (
+        f"Para preparar su curso, revise la [lista de verificación]({_SP}) [^1]. "
+        "Complete todas las tareas antes de que los estudiantes tengan acceso al curso."
+    )
+    text, orchestrator = await _labeled(answer, "es")
+    assert f"[lista de verificación]({_SP}) (requiere iniciar sesión) [^1]." in text
+    assert orchestrator.login_links == 1 and orchestrator.login_links_labeled == 1
+
+
+@pytest.mark.asyncio
+async def test_label_follows_the_answer_language_not_the_settings_language():
+    # The gear menu says Spanish, but the model answered the question in English.
+    answer = (
+        f"To prepare your course, review the [pre-term checklist]({_SP}) [^1]. "
+        "Complete every task before students get access to the course on Friday."
+    )
+    text, _ = await _labeled(answer, "es")
+    assert f"[pre-term checklist]({_SP}) (sign-in required) [^1]." in text
+
+
+@pytest.mark.asyncio
+async def test_annotator_failure_ships_the_guarded_answer():
+    engine = _engine(_FakeStream("Answer [^1].", [_node("https://x.example", "t")]))
+    with patch("app.engine.retrieval_orchestrator.get_chat_engine", return_value=engine), \
+         patch("app.engine.retrieval_orchestrator.annotate_login_links", side_effect=RuntimeError("boom")):
+        result = await RetrievalOrchestrator().run(
+            "q", [], filters=None, params=None, timezone="UTC", event_handler=None
+        )
+    assert await _collect(result) == "Answer [^1]."

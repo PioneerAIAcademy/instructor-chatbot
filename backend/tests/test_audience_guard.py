@@ -194,7 +194,7 @@ def test_vector_store_checks_on_cache_miss_not_every_hit(monkeypatch):
     assert check.call_count == 1
 
 
-def _boot(index_name: str, host: str = "") -> subprocess.CompletedProcess:
+def _boot(index_name: str, host: str = "", voyage_key: str = "placeholder") -> subprocess.CompletedProcess:
     env = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
@@ -204,7 +204,7 @@ def _boot(index_name: str, host: str = "") -> subprocess.CompletedProcess:
         "EMBEDDING_MODEL": "text-embedding-3-large",
         "EMBEDDING_DIM": "3072",
         "OPENAI_API_KEY": "placeholder",
-        "VOYAGE_API_KEY": "placeholder",
+        "VOYAGE_API_KEY": voyage_key,
         "PINECONE_INDEX_NAME": index_name,
         "PINECONE_INDEX_HOST": host,
     }
@@ -465,3 +465,19 @@ def test_readiness_builds_the_store_off_the_event_loop(monkeypatch):
     monkeypatch.setattr(health, "get_vector_store", _store)
     asyncio.run(health.readiness())
     assert threads and threads[0] is not threading.main_thread()
+
+
+def test_boot_refuses_a_missing_voyage_key():
+    result = _boot("instructor-assistant", voyage_key="")
+    assert result.returncode != 0
+    assert "VOYAGE_API_KEY" in result.stderr
+
+
+def test_app_engine_imports_without_a_voyage_key():
+    # Offline callers (scripts/ask.py's check, tests) import app.engine.login_links.
+    result = subprocess.run(
+        [sys.executable, "-c", "import app.engine.login_links"],
+        cwd=BACKEND_DIR, capture_output=True, text=True, timeout=180,
+        env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "")},
+    )
+    assert result.returncode == 0, result.stderr[-2000:]

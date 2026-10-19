@@ -50,9 +50,13 @@ def client(monkeypatch):
 
         def __init__(self):
             self.audience_leak_dropped = 0
+            self.login_links = 0
+            self.login_links_labeled = 0
 
         async def run(self, message, chat_history, **kwargs):
             self.audience_leak_dropped = self.leak
+            self.login_links = 2
+            calls["user_language"] = kwargs.get("user_language")
             calls["message"] = message
             calls["history"] = chat_history
             calls["filters"] = kwargs.get("filters")
@@ -62,6 +66,10 @@ def client(monkeypatch):
 
     monkeypatch.setattr(chat_module, "RetrievalOrchestrator", _Orchestrator)
 
+    # The route's real 10/minute limit is process-wide; this file makes more
+    # requests than that, so start each test with a fresh window (a stale one
+    # caused intermittent 429s).
+    chat_module.limiter.reset()
     app = FastAPI()
     app.state.limiter = chat_module.limiter
     app.include_router(chat_module.chat_router, prefix="/api/v1/chat")
@@ -205,3 +213,17 @@ def test_synthesis_failure_streams_hiccup_not_blank_answer(client):
     assert "service hiccup" in _text_of(r.text)
     assert "OpenAI 503" not in r.text  # no internal error text to the client
     assert not any(a.get("type") == "sources" for a in _annotations(r.text))
+
+
+def test_reply_language_reaches_the_orchestrator_and_login_links_reach_the_trace(client, monkeypatch):
+    async def _clean(text):
+        return False, None, {}
+
+    monkeypatch.setattr(chat_module.InputValidator, "validate_input_security_async", _clean)
+    fake_langfuse = MagicMock()
+    monkeypatch.setattr(chat_module, "langfuse", fake_langfuse)
+    r = client.post("/api/v1/chat", json=_body([{"role": "user", "content": "Quando eu recebo o pagamento do meu salário?"}]))
+    assert r.status_code == 200
+    assert client.calls["user_language"] == "pt"
+    metadata = fake_langfuse.trace.return_value.update.call_args.kwargs["metadata"]
+    assert metadata["login_links"] == 2 and metadata["login_links_labeled"] == 0

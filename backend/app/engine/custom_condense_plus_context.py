@@ -12,7 +12,17 @@ from llama_index.core.callbacks.schema import CBEventType, EventPayload
 from llama_index.core.types import Thread
 
 import voyageai
-vo = voyageai.Client()  # This will automatically use the environment variable VOYAGE_API_KEY.
+# Created on first use, not at import, so importing app.engine (tests, scripts,
+# app.engine.login_links) doesn't need VOYAGE_API_KEY. main.py still refuses to
+# boot without it. Tests replace `vo` with a fake.
+vo = None
+
+
+def _voyage_client():
+    global vo
+    if vo is None:
+        vo = voyageai.Client()  # reads VOYAGE_API_KEY
+    return vo
 
 # Rerank settings (CLAUDE.md §2 row 15). Module-level so scripts/retrieve.py
 # reranks exactly like production. Q15: leave the 0.21 cutoff alone until the
@@ -38,7 +48,7 @@ def _do_voyage_rerank(
     last_exc: Exception | None = None
     for attempt in range(retries):
         try:
-            reranking = vo.rerank(message, node_texts, model=model, top_k=top_k)
+            reranking = _voyage_client().rerank(message, node_texts, model=model, top_k=top_k)
             filtered = [r.document for r in reranking.results if r.relevance_score >= RERANK_MIN_SCORE]
             scores = {
                 r.document: r.relevance_score
@@ -136,14 +146,10 @@ class CustomCondensePlusContextChatEngine(CondensePlusContextChatEngine):
     def _retrieve_context(self, message: str) -> Tuple[str, List[NodeWithScore]]:
         """Build context for a message from retriever."""
         nodes = self._retriever.retrieve(message)
-        for i, node in enumerate(nodes):
-            print(f"Node {i+1}: {node.text}\n\n\n")
         for postprocessor in self._node_postprocessors:
             nodes = postprocessor.postprocess_nodes(
                 nodes, query_bundle=QueryBundle(message)
             )
-            for i, node in enumerate(nodes):
-                print(f"Node {i+1}: {node.text}\n\n\n")
         
         # print(nodes)
 

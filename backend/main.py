@@ -101,6 +101,12 @@ from app.engine.audience_guard import check_index_config
 
 check_index_config()
 
+# The Voyage client is created lazily (app/engine/custom_condense_plus_context.py),
+# so check its key here: without it every rerank would fail and answers would
+# silently fall back to unranked retrieval.
+if not os.getenv("VOYAGE_API_KEY"):
+    raise RuntimeError("VOYAGE_API_KEY is not set; the reranker needs it")
+
 # Request IDs, 499 on client disconnect, crash logging.
 from app.middleware.monitoring_middleware import MonitoringMiddleware
 
