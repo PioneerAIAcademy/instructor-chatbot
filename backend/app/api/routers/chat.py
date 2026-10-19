@@ -291,6 +291,8 @@ async def chat(
                 if AUDIENCE_LEAK_TAG not in success_tags:
                     success_tags.append(AUDIENCE_LEAK_TAG)
                 retrieval_metadata["audience_leak_dropped"] = orchestrator.audience_leak_dropped
+            retrieval_metadata["login_links"] = orchestrator.login_links
+            retrieval_metadata["login_links_labeled"] = orchestrator.login_links_labeled
             try:
                 if retrieval_metadata:
                     clean_metadata.update(retrieval_metadata)
@@ -315,6 +317,7 @@ async def chat(
                 params=params,
                 timezone=user_timezone,
                 event_handler=event_handler,
+                user_language=user_language,
                 # This runs inside the SSE generator after chat()'s @observe
                 # context popped, so re-parent the span under the `chat` trace.
                 langfuse_parent_trace_id=trace_id,

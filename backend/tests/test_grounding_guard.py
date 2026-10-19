@@ -223,3 +223,45 @@ def test_decluster_leaves_adjacent_distinct_citations_intact():
 def test_decluster_strips_leading_space_cleanly():
     out = decluster_citations("First sentence [^1].\nSecond sentence [^1].")
     assert "First sentence." in out  # no double space, no dangling space
+
+
+# --- link integrity on sign-in links (Phase 3) -----------------------------------
+
+_SP = "https://byupathwayworldwideprod.sharepoint.com/sites/onlineinstructor/SitePages/Group-Setup-in-Canvas.aspx"
+
+
+def test_link_integrity_keeps_a_sharepoint_link_found_in_the_guide_text():
+    # The guide's PDF URL is the node url; the SharePoint link only appears inline in its text.
+    nodes = [_lnode("https://missionaries.prod.byu-pathway.psdops.com/group-setup-in-canvas-ia",
+                    text=f"Follow the [I-Learn Canvas Group Setup]({_SP}) steps.")]
+    out = enforce_link_integrity(f"Use [Group Setup]({_SP}) [^1].", nodes)
+    assert f"[Group Setup]({_SP})" in out
+
+
+def test_link_integrity_strips_an_invented_sharepoint_link():
+    nodes = [_lnode("https://missionaries.prod.byu-pathway.psdops.com/group-setup-in-canvas-ia",
+                    text=f"Follow the [I-Learn Canvas Group Setup]({_SP}) steps.")]
+    invented = "https://byupathwayworldwideprod.sharepoint.com/sites/onlineinstructor/SitePages/Made-Up.aspx"
+    out = enforce_link_integrity(f"See [the page]({invented}) [^1].", nodes)
+    assert invented not in out and "the page" in out
+
+
+# --- shared link parser (Phase 3 review) -------------------------------------------
+
+
+def test_link_integrity_keeps_a_citation_glued_to_an_allowed_url():
+    nodes = [_lnode(_SP)]
+    assert enforce_link_integrity(f"Open {_SP}[^1].", nodes) == f"Open {_SP}[^1]."
+
+
+def test_link_integrity_drops_an_invented_url_but_keeps_its_citation():
+    out = enforce_link_integrity("Open https://fake.example.com/x[^1].", [_lnode(_SP)])
+    assert out == "Open [^1]."
+
+
+def test_link_integrity_handles_titled_and_autolinks():
+    nodes = [_lnode(_SP)]
+    titled = f'[form]({_SP} "Form")'
+    assert enforce_link_integrity(titled, nodes) == titled
+    assert enforce_link_integrity('[form](https://fake.example.com/x "Form")', nodes) == "form"
+    assert enforce_link_integrity(f"See <{_SP}>.", nodes) == f"See <{_SP}>."

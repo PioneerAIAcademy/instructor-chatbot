@@ -23,6 +23,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.utils.links import find_links, is_fence_line
+
 _CITATION_RE = re.compile(r"\[\^\d+\]")
 
 
@@ -113,7 +115,7 @@ def ensure_citation_coverage(text: str, source_nodes: list[Any]) -> str:
     in_fence = False
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped.startswith("```"):
+        if is_fence_line(line):
             in_fence = not in_fence
             fixed_lines.append(line)
             continue
@@ -168,10 +170,6 @@ def decluster_citations(text: str) -> str:
     return text
 
 
-_URL_RE = re.compile(r"https?://[^\s)\]]+")
-_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
-
-
 def _node_url_and_text(node: Any) -> tuple[str | None, str]:
     """Extract (url, text) from any source-node shape: dict, NodeWithScore, or
     the supervisor's `_SourceNodeAdapter` (mirrors critic.py lesson #103/#66)."""
@@ -207,8 +205,8 @@ def _allowed_urls(source_nodes: list[Any]) -> set[str]:
         url, text = _node_url_and_text(n)
         if url:
             allowed.add(_norm_url(url))
-        for m in _URL_RE.findall(text):
-            allowed.add(_norm_url(m))
+        for link in find_links(text):
+            allowed.add(_norm_url(link.url))
     return allowed
 
 
@@ -222,25 +220,18 @@ def enforce_link_integrity(text: str, source_nodes: list[Any]) -> str:
     if not text:
         return text
     allowed = _allowed_urls(source_nodes)
-    kept: list[str] = []
-
-    def _md_sub(m: "re.Match[str]") -> str:
-        label, url = m.group(1), m.group(2)
-        if _norm_url(url) in allowed:
-            token = f"\x00KEPT{len(kept)}\x00"
-            kept.append(m.group(0))
-            return token  # protect kept md-links from the bare-URL pass
-        return label
-
-    out = _MD_LINK_RE.sub(_md_sub, text)
-
-    def _bare_sub(m: "re.Match[str]") -> str:
-        return m.group(0) if _norm_url(m.group(0)) in allowed else ""
-
-    out = _URL_RE.sub(_bare_sub, out)
-    for i, original in enumerate(kept):
-        out = out.replace(f"\x00KEPT{i}\x00", original)
-    return re.sub(r"[ \t]{2,}", " ", out)
+    out: list[str] = []
+    cursor = 0
+    for link in find_links(text):  # app.utils.links: the same parser as the annotator
+        out.append(text[cursor:link.start])
+        cursor = link.end
+        if _norm_url(link.url) in allowed:
+            out.append(text[link.start:link.end])
+        elif link.kind == "markdown":
+            out.append(link.label)  # keep the words, drop the dead link
+        # an unknown bare URL or autolink is dropped; trailing punctuation stays
+    out.append(text[cursor:])
+    return re.sub(r"[ \t]{2,}", " ", "".join(out))
 
 
 def apply_grounding_guards(

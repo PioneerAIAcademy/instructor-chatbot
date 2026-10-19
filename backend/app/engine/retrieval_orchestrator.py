@@ -2,10 +2,11 @@
 
 Classic path (CLAUDE.md §3): the plain CustomCondensePlusContextChatEngine,
 then the deterministic grounding guards (citation coverage, decluster, link
-integrity), then draft-fence citation hoisting. Upstream's recency-aware
+integrity), then draft-fence citation hoisting, then the sign-in link
+annotator (§8.3). Upstream's recency-aware
 engine and missionary critic are not ported. The answer is drained before it
-streams so the guards see the whole text; the sign-in link annotator
-(Phase 3) and the post-retrieval role assertion (Phase 1) slot in here.
+streams so the guards see the whole text. The post-retrieval role assertion
+(Phase 1) lives in the engine's postprocessors.
 
 Degradation ladder:
 - A guard failure ships the unguarded draft.
@@ -25,6 +26,8 @@ from app.engine import get_chat_engine
 from app.engine.audience_guard import AudienceGuardPostprocessor
 from app.engine.draft_normalizer import hoist_draft_citations
 from app.engine.grounding_guard import apply_grounding_guards, ensure_citation_coverage
+from app.engine.login_links import annotate_login_links
+from app.utils.localization import LocalizationManager
 
 logger = logging.getLogger("uvicorn")
 
@@ -90,6 +93,20 @@ class _GuardedStreamingResponse:
             yield self._text[i : i + 40]
 
 
+def _label_language(answer: str, user_language: str | None) -> str:
+    """The language for sign-in labels: the answer's own, so a label never
+    clashes with the text around it. The request language can come from the
+    settings menu (a short question isn't detected confidently), while the
+    model answers in the question's language."""
+    try:
+        detected, confident = LocalizationManager.detect_language_confident(answer)
+        if confident:
+            return detected
+    except Exception:  # pragma: no cover - defensive
+        pass
+    return user_language or "en"
+
+
 def _mark_observation_error(status_message: str) -> None:
     """Mark the current Langfuse observation ERROR. Never raises."""
     try:
@@ -117,6 +134,10 @@ class RetrievalOrchestrator:
 
     def __init__(self) -> None:
         self._guard: AudienceGuardPostprocessor | None = None
+        # Sign-in links in the final answer (trace metadata `login_links`), and
+        # how many of them the annotator labeled (`login_links_labeled`).
+        self.login_links = 0
+        self.login_links_labeled = 0
 
     @property
     def audience_leak_dropped(self) -> int:
@@ -132,6 +153,7 @@ class RetrievalOrchestrator:
         timezone,
         event_handler,
         emit_stage: Callable[[str], None] | None = None,
+        user_language: str | None = "en",
     ):
         """Return a streaming-compatible response for `message`. A guard
         failure degrades to the unguarded draft; a synthesis failure raises
@@ -198,5 +220,12 @@ class RetrievalOrchestrator:
         except Exception as exc:
             logger.warning("[orch] grounding guards failed (%s) — returning unguarded draft", exc)
             final_answer = draft
+        # Separate from the guards: even an unguarded draft gets its sign-in labels.
+        try:
+            annotated = annotate_login_links(final_answer, _label_language(final_answer, user_language))
+            final_answer = annotated.text
+            self.login_links, self.login_links_labeled = annotated.links, annotated.added
+        except Exception as exc:
+            logger.warning("[orch] sign-in annotator failed (%s) — links left unlabeled", exc)
         _stage("done")
         return _GuardedStreamingResponse(final_answer, source_nodes)

@@ -9,9 +9,10 @@ It is a trimmed copy of the
 [`../CLAUDE.md`](../CLAUDE.md) holds the full plan, the repo rules, and the journal.
 [`../UPSTREAM.md`](../UPSTREAM.md) lists which files came from upstream and what changed.
 
-> **Status:** Phase 2 (retrieval eval) of the build plan in `CLAUDE.md` §7. The chat path works
-> end to end with all three audience guards, and retrieval is measured against the §10
-> questions. The sign-in link labels and the answer eval arrive in later phases.
+> **Status:** Phase 3 (instructor prompt and sign-in links) of the build plan in `CLAUDE.md` §7.
+> The chat path works end to end with the audience guards, the final instructor prompt, and
+> sign-in labels; retrieval is measured against the §10 questions. The answer eval arrives in
+> Phase 6.
 
 ## How a question is answered
 
@@ -27,6 +28,11 @@ It is a trimmed copy of the
    citations. They leave drafts in ```` ```message ```` or ```` ```email ```` blocks free of citations, and strip
    any link that doesn't appear in a source. If the answer fails, the stream sends a short
    "service hiccup" message instead of an empty reply.
+6. Links to pages that need a BYU-Pathway or BYU-Idaho sign-in (hosts in `LOGIN_LINK_HOSTS`:
+   SharePoint and OneDrive, the course directory, Companion, the portal) get the sign-in note,
+   "(sign-in required)", in the answer's language, once. The model is told not to write the
+   note itself, so the label is always the localized one. Links inside a drafted message are
+   left alone. The bot never opens those pages; the prompt forbids describing them.
 6. The answer streams back in the Vercel AI SDK data-stream format, followed by the sources and
    suggested follow-up questions. The request is traced in Langfuse.
 
@@ -46,7 +52,7 @@ questions you need at least:
 | Variable | Notes |
 | --- | --- |
 | `OPENAI_API_KEY` | The LLM and query embeddings. |
-| `VOYAGE_API_KEY` | The reranker. **Required at startup**: the Voyage client is created on import. |
+| `VOYAGE_API_KEY` | The reranker. **Required at startup**: `main.py` refuses to boot without it. (The client itself is created on first use, so scripts and tests can import the app without it.) |
 | `PINECONE_API_KEY` | A key from the **instructor** Pinecone account. Never the missionary bot's key. |
 | `PINECONE_INDEX_NAME` | `instructor-assistant` |
 | `PINECONE_ENVIRONMENT` | `us-east-1` |
@@ -117,6 +123,18 @@ and the `pre-push` hook moves `.env` aside first, so it matches CI.
 Tests that call OpenAI, Voyage, or Pinecone cost money. They run only when `RUN_LIVE_TESTS=1`
 is set.
 
+To ask one question through the running local API and check the answer (live and billable; a
+real chat request):
+
+```bash
+poetry run python main.py                                  # in another terminal
+poetry run python scripts/ask.py "How do I find my ACL?"
+```
+
+It prints the answer, its sources, and the trace ID, then checks that every sign-in link carries
+the note, that there are no reading claims ("I read/opened/checked/reviewed"), that every `[^N]`
+maps to a source, and that every source is `role=instructor`. It exits 1 if a check fails.
+
 To see what retrieval returns for one question, through the same guard, filter, and rerank as
 `/api/v1/chat` (live and billable; no LLM answer is generated):
 
@@ -163,13 +181,15 @@ app/
   api/routers/vercel_response.py  the SSE stream
   api/services/                 suggested questions, draft rewrite
   engine/audience_guard.py      index guard, instructor filter, post-retrieval role check
-  engine/prompts.py             system, context, and condense prompts
+  engine/prompts.py             system, context, and condense prompts (locked by tests/test_prompts_lock.py)
+  engine/login_links.py         "(sign-in required)" labels on sign-in links
   engine/retrieval_orchestrator.py  engine, then grounding guards
   engine/custom_condense_plus_context.py  retrieval, rerank, context building
   engine/grounding_guard.py     citation coverage, link integrity
   engine/vectordb.py            bounded, cached Pinecone client
   security/input_validator.py   input security screen
 tests/                          offline tests
+scripts/ask.py                  one question through the local API, with answer checks (live)
 scripts/retrieve.py             raw + reranked retrieval for one question (live)
 scripts/eval_retrieval.py       retrieval eval over tests/eval/questions.yaml (live)
 scripts/evalset.py              eval-set loader and scoring (shared with the Phase 6 answer eval)
