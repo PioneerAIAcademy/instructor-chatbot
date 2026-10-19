@@ -4,7 +4,7 @@ on:
   push:
   pull_request:
 
-# Backend only until Phase 8 adds the frontend job (CLAUDE.md §7).
+# Backend tests, plus the production image (Phase 7). Phase 8 adds the frontend job.
 
 # Cancel older runs of the same branch — only the latest commit matters.
 concurrency:
@@ -45,3 +45,84 @@ jobs:
       - name: Run tests
         run: poetry run pytest tests/ -x -q
 
+
+  # Phase 7: the production image. Builds it and checks what staging relies on,
+  # with placeholder keys (nothing external is called).
+  docker:
+    name: backend (docker image)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      # A planted .env must NOT reach the image (.dockerignore is an allow-list).
+      - name: Plant a fake .env
+        run: echo "OPENAI_API_KEY=planted-must-not-ship" > .env
+
+      - name: Build
+        run: docker build --build-arg APP_VERSION=${GITHUB_SHA::7} -t instructor-backend .
+
+      - name: Image holds no .env, tests, or scripts, and runs as non-root
+        run: |
+          docker run --rm --entrypoint sh instructor-backend -c '
+            set -e
+            test ! -e /app/.env
+            ! grep -rqs "planted-must-not-ship" /app
+            test ! -e /app/tests && test ! -e /app/scripts
+            test -f /app/main.py && test -d /app/app
+            test "$(id -u)" = 10001
+            test "$ENVIRONMENT" = prod
+            test -n "$APP_VERSION"
+            echo image ok'
+
+      - name: Boot guard refuses the missionary index
+        run: |
+          if docker run --rm -e PINECONE_INDEX_NAME=pathway -e PINECONE_API_KEY=x \
+               -e PINECONE_ENVIRONMENT=us-east-1 -e OPENAI_API_KEY=x -e VOYAGE_API_KEY=x \
+               -e MODEL_PROVIDER=openai -e MODEL=gpt-4o-mini \
+               -e EMBEDDING_MODEL=text-embedding-3-large -e EMBEDDING_DIM=3072 \
+               instructor-backend timeout 120 python -c "import main" > guard.log 2>&1; then
+            echo "booted with PINECONE_INDEX_NAME=pathway"; exit 1
+          fi
+          # It must be the guard that stopped it, not some other crash.
+          grep -q IndexConfigError guard.log || { cat guard.log; exit 1; }
+          echo "refused by the index guard, as it should"
+
+      - name: Start the container
+        run: |
+          docker run -d --name api -p 8000:8000 \
+            -e PINECONE_INDEX_NAME=instructor-assistant -e PINECONE_API_KEY=x \
+            -e PINECONE_ENVIRONMENT=us-east-1 -e OPENAI_API_KEY=x -e VOYAGE_API_KEY=x \
+            -e MODEL_PROVIDER=openai -e MODEL=gpt-4o-mini \
+            -e EMBEDDING_MODEL=text-embedding-3-large -e EMBEDDING_DIM=3072 \
+            -e API_KEYS=ci-key -e ALLOWED_ORIGINS=https://instructor.example.org \
+            instructor-backend
+          for i in $(seq 1 90); do
+            curl -sf localhost:8000/api/health && exit 0
+            sleep 2
+          done
+          docker logs api; exit 1
+
+      - name: Reachable from outside, fails closed without a key, CORS locked
+        run: |
+          set -e
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8000/api/v1/chat \
+            -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"hi"}]}')
+          echo "chat without a key: $code"; test "$code" = 401
+          allowed=$(curl -s -o /dev/null -D - -X OPTIONS localhost:8000/api/v1/chat \
+            -H 'Origin: https://instructor.example.org' -H 'Access-Control-Request-Method: POST' \
+            | grep -i '^access-control-allow-origin' || true)
+          other=$(curl -s -o /dev/null -D - -X OPTIONS localhost:8000/api/v1/chat \
+            -H 'Origin: https://evil.example.com' -H 'Access-Control-Request-Method: POST' \
+            | grep -i '^access-control-allow-origin' || true)
+          echo "allowed origin: $allowed"; echo "other origin: ${other:-none}"
+          test -n "$allowed" && test -z "$other"
+
+      - name: Logs are JSON and hold no planted secret
+        if: always()
+        run: |
+          docker logs api > api.log 2>&1 || true
+          ! grep -q "planted-must-not-ship" api.log
+          grep -q '^{' api.log && echo "json logs ok"
