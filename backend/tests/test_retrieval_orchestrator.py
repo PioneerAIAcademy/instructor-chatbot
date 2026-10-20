@@ -99,8 +99,9 @@ def test_ensure_minimum_citations_adds_marker_to_uncited_sourced_answer():
 
     fixed = _ensure_minimum_citations(text, [node])
 
-    assert "Pay days are the 8th and 23rd. [^1]" in fixed
-    assert "- Check the pay schedule. [^1]" in fixed
+    # The nearest real citation, not a blanket [^1].
+    assert "Pay days are the 8th and 23rd. [^2]" in fixed
+    assert "- Check the pay schedule. [^2]" in fixed
 
 
 def test_ensure_minimum_citations_leaves_already_cited_answer_alone():

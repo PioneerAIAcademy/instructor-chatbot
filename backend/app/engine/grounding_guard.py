@@ -93,14 +93,22 @@ def _append_marker_to_table_row(line: str, marker: str) -> str:
 
 
 def ensure_citation_coverage(text: str, source_nodes: list[Any]) -> str:
-    """Attach a top-source marker to uncited substantive lines.
+    """Attach the nearest real citation to uncited substantive lines.
 
     Last-resort presentation guard after synthesis. It does not replace real
     citation placement (the prompts own that) — it just prevents a cited
     answer from displaying claim-bearing bullets or paragraphs with no visible
     evidence trail.
 
-    Two cases are left alone:
+    Which marker: the last citation before the line, or (for lines before any
+    citation) the first one after it. Upstream always stamped [^1], which
+    pointed lines at whatever guide happened to be source 1: in the Phase 6
+    eval, an intro and a summary line cited the due-date guide in an answer
+    built from the adds/drops and pre-term guides.
+
+    Left alone:
+    - A lead-in line ending in ":" ("Here's what to do:"). It introduces a
+      list and makes no claim of its own.
     - An answer with no citations at all. That is a refusal or an
       ungrounded reply, and stamping [^1] on it would fake a source.
     - Fenced code blocks, including the fence lines. A ```message/```email
@@ -110,10 +118,16 @@ def ensure_citation_coverage(text: str, source_nodes: list[Any]) -> str:
     if not text or not source_nodes or not _CITATION_RE.search(text):
         return text
 
-    marker = "[^1]"
-    out: list[str] = []
     # Fences come from app.utils.links, the same parser the sign-in annotator uses.
-    for in_fence, segment in split_fences(text):
+    segments = split_fences(text)
+    prose = "".join(seg for in_fence, seg in segments if not in_fence)
+    first_marker = next(iter(_CITATION_RE.findall(prose)), None)
+    if first_marker is None:  # the only citations are inside a draft fence
+        return text
+    last_marker: str | None = None
+
+    out: list[str] = []
+    for in_fence, segment in segments:
         if in_fence:
             out.append(segment)
             continue
@@ -121,9 +135,14 @@ def ensure_citation_coverage(text: str, source_nodes: list[Any]) -> str:
             body = line.rstrip("\r\n")
             ending = line[len(body):]
             stripped = body.strip()
-            if not _line_needs_citation(stripped):
+            cited = _CITATION_RE.findall(body)
+            if cited:
+                last_marker = cited[-1]
+            if not _line_needs_citation(stripped) or stripped.endswith(":"):
                 out.append(line)
-            elif stripped.startswith("|") and stripped.endswith("|"):
+                continue
+            marker = last_marker or first_marker  # a whole "[^N]"
+            if stripped.startswith("|") and stripped.endswith("|"):
                 out.append(_append_marker_to_table_row(body, marker) + ending)
             else:
                 out.append(body.rstrip() + f" {marker}" + ending)

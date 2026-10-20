@@ -11,9 +11,10 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0–6 merged (PRs #1–#7). Phase 7 prep in PR #8, Phase 8
-> frontend in PR #9 (stacked on #8). Phase 9 prep (e2e script, deploy guide) on
-> `phase-9-e2e-prep`, uncommitted. Phases 7 and 9 themselves wait on the owner's hosting.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-20): Phases 0–6 merged (PRs #1–#7). Phase 7 prep #8, Phase 8 frontend #9,
+> Phase 9 prep #10 (stacked in that order). Pre-deploy fixes on `pre-deploy-fixes`
+> (uncommitted). Hosting will be Render; the owner wants everything else finished before
+> deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -643,6 +644,7 @@ Backend (`backend/.env`):
 | `ALLOWED_INDEX_NAMES` | no | `instructor-assistant` | **New.** Boot guard allow-list (comma-separated). Add a staging index name here, never `pathway`. |
 | `RETRIEVAL_SOURCES` | no | `instructor-assistant,instructor-assistant-linked` | **New.** The `source` filter. Dropping the linked source is allowed. Adding any other value is a code-review decision. |
 | `LOGIN_LINK_HOSTS` | no | `sharepoint.com,companion.byupathway.edu,pathwayadmin.byui.edu,portal.byupathway.edu` | **New.** Suffix match for the sign-in annotator (§8.3) |
+| `PROMPT_INJECTION_ML_ENABLED` | no | `true` | **New.** The ML injection detector (pytector). ~714 MB model download on first start, ~0.5 GB RAM per server process. Tests set it `false`. |
 | `VOYAGE_API_KEY` | yes | — | Reranker |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | yes in prod | — | Instructor Langfuse project |
 | `LANGFUSE_LLAMAINDEX_ENABLED` | no | `true` | `rag-llm` generations |
@@ -745,6 +747,60 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-20 (pre-deploy fixes, branch `pre-deploy-fixes`, uncommitted)** — Hosting will be
+  Render. The owner chose to finish everything before deployment, picked three fixes, and
+  decided to **keep the site indexed** (`index: true`, as upstream). `pytest tests/` gives
+  599 passed, in about 1 minute (it was about 2.5).
+  - **1. The ML injection detector works (it never loaded, here or upstream).**
+    - **Cause:** transformers 5.3.0 needs torch ≥ 2.4, but torch is pinned at 2.2.2 (the
+      last build for Intel Macs; this Mac is x86_64). So transformers acted as if PyTorch
+      were missing.
+    - **Fix:** `transformers==4.57.1`, the newest 4.x, which accepts torch ≥ 2.2. Only
+      huggingface-hub moves (1.16.1 → 0.36.2); six CLI-only packages are dropped.
+    - **The model:** `protectai/deberta-v3-base-prompt-injection`, 714 MB on disk.
+      - First load, including the download: 39 s. From cache: 3 s.
+      - About 0.5 GB RAM per server process; inference 0.2–0.3 s.
+    - **Turning it on exposed three latent bugs, all fixed:**
+      - Detection ran inside the async handler, so it froze every other request. It now
+        runs in a worker thread (`asyncio.to_thread`).
+      - A failed load was retried on every message. It now backs off for 10 minutes.
+      - The first question paid for the load. The model now preloads in a background
+        thread at startup, behind a lock.
+    - `PROMPT_INJECTION_ML_ENABLED` (default `true`) turns it off. Tests turn it off, so
+      results don't depend on whether this machine has the model cached.
+  - **2. The safe-word exceptions are rewritten, measured with the detector on.**
+    - Upstream's `CALENDAR_TERMS` and `PATHWAY_TERMS` are removed: they were substring
+      matches ("term", "student", "canvas") that excused flagged jailbreaks.
+    - The short-follow-up exception now refuses text about the assistant itself (its
+      rules, instructions, prompt; "you are now", "pretend", "disregard"…).
+    - **Comparison (option E is what shipped):**
+      - Short jailbreaks blocked: 2/10 → **8/10**.
+      - Unchanged at full marks: the 25 eval questions, 14 Portuguese/Spanish/French
+        questions, 14 short follow-ups, and the 6 legitimate corpus cases.
+    - Removing only the exceptions would have blocked "you missed one", "try again",
+      "no, I meant block 3", and "that's not what I asked". The detector scores those
+      0.97–0.9998, too close to the jailbreaks for a threshold, hence the word rule.
+    - **Security test set:** 29/32 → **30/32** ("Code Block Injection" is now blocked).
+      Still missed, and left to the prompt: "Length-Based Overflow" and "Plausible
+      Deniability", plus 2 of the 10 short jailbreaks that score ~0 and match no regex.
+  - **3. Citation coverage no longer stamps `[^1]`.** An uncited line gets the nearest real
+    citation (the last one before it, else the first one after), and a lead-in ending in
+    ":" gets none. #13's intro and summary no longer point at the unrelated due-date
+    guide. #13 still fails, because the model never cites the adds/drops guide.
+  - **Answer eval with the detector on, `20261020T084205Z-answers.json`:** answers 19/21 =
+    **90%**, and no real question was blocked.
+    - **G4 first failed:** #5 got 3 sources and G4 got 4. The extra one was an instructor
+      guide at the tail (0.3360), after a shared passage scored 0.3443 in one call and
+      0.3368 in the other. That's retrieval noise, not an audience difference.
+    - **Fix:** G4's `same_sources` accepts sources that differ only below every shared
+      one (`sources_match`). The filter's independence from the role stays covered
+      offline, exactly. Re-scored: guards 4/4, **PASSED**; no other saved run changes.
+  - **For the deployment talk (Render), not changed now:**
+    - Each gunicorn worker loads its own model, so 2 workers need about 1 GB more RAM.
+    - The 714 MB model is downloaded at each container start unless baked into the image.
+    - The lock pulls 12 NVIDIA CUDA packages with torch (Linux wheels), which makes the
+      image large. CPU-only torch would shrink it.
 
 - **2026-10-19 (Phase 9 prep, branch `phase-9-e2e-prep`, uncommitted)** — Phase 8 is in
   PR #9 (CI green, including the first run of the new `frontend` job). Phases 7 and 9 need
