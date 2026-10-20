@@ -11,9 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0–6 merged (PRs #1–#7). Phase 7 prep in PR #8 (the staging
-> deploy waits on hosting). Phase 8 (frontend, design direction D) on `phase-8-frontend`
-> (stacked on #8), uncommitted.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0–6 merged (PRs #1–#7). Phase 7 prep in PR #8, Phase 8
+> frontend in PR #9 (stacked on #8). Phase 9 prep (e2e script, deploy guide) on
+> `phase-9-e2e-prep`, uncommitted. Phases 7 and 9 themselves wait on the owner's hosting.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -239,6 +239,7 @@ How each upstream reader behaves when the classifier fields are missing:
 instructor-chatbot/
 ├── CLAUDE.md                        ← this file
 ├── UPSTREAM.md                      ← every Keep/Adapt file: upstream path, upstream commit, local changes
+├── DEPLOY.md                        ← both services: build, settings, checks, going live (Phases 7–9)
 ├── .claude/agents/chatbot-operator.md
 ├── .githooks/{commit-msg,pre-push,post-commit}
 ├── .github/workflows/{test.yml,payload-guard.yml}
@@ -246,7 +247,7 @@ instructor-chatbot/
 ├── backend/
 │   ├── .env.example                 ← names only (§11)
 │   ├── API.md                       ← Phase 4: the stream contract the frontend builds against
-│   ├── DEPLOY.md, .dockerignore     ← Phase 7: image build, host settings, post-deploy checks
+│   ├── .dockerignore                ← Phase 7: the image gets only main.py and app/
 │   ├── Dockerfile, pyproject.toml, poetry.lock   ← Python 3.12, upstream pins
 │   ├── main.py                      ← routers: /api/v1/chat (+ /config), /api (health)
 │   ├── app/
@@ -744,6 +745,34 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (Phase 9 prep, branch `phase-9-e2e-prep`, uncommitted)** — Phase 8 is in
+  PR #9 (CI green, including the first run of the new `frontend` job). Phases 7 and 9 need
+  hosts, so this is everything Phase 9 needs that doesn't.
+  - **`frontend/scripts/e2e_check.mjs`:** Phase 9's "5 §10 questions through the
+    production UI", automated.
+    - It drives headless Chrome through the DevTools protocol with Node 22's built-in
+      WebSocket, so it needs no npm packages.
+    - It asks #1, #5, #9, #21, and G3 through the real page and checks:
+      - the empty chat's starters and FERPA notice;
+      - citation badges, and "Sources (N)" matching them;
+      - a source-type label on every card;
+      - "(sign-in required)" after every sign-in link;
+      - no missionary wording;
+      - a thumbs click answered 200.
+    - It saves a screenshot per question.
+    - **Local run against `next dev` + the local backend: ALL PASSED (7/7).**
+    - The first run failed twice, and both were the script's fault:
+      - the sign-in check located the link by searching for its text, which also
+        appeared earlier in the sentence (G3); it now reads the text after the link
+        element;
+      - the thumbs check didn't wait for the response.
+  - **`DEPLOY.md` moved to the repo root** and now covers both services:
+    - Part 1, the backend (as before);
+    - Part 2, the frontend: the image, build arguments, `ALLOWED_ORIGINS`, and a `curl`
+      check that CORS refuses another origin;
+    - Part 3, going live: `api_check.py`, `eval_answers.py`, and `e2e_check.mjs` against
+      production, plus Phase 9's "Done when".
 
 - **2026-10-19 (Phase 8 review: 10 findings, all checked and fixed)** — Still uncommitted
   on `phase-8-frontend`. `pytest tests/` gives 579 passed. The frontend `build`, `tsc`, and

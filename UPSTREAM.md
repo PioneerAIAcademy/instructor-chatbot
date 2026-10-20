@@ -168,7 +168,7 @@ New in this repo, with no upstream source: `backend/app/engine/audience_guard.py
 `backend/API.md`, `backend/scripts/api_contract.py`, `backend/scripts/api_check.py`, `backend/tests/test_api_contract.py`, `backend/app/engine/login_links.py`, `backend/app/utils/links.py`, `backend/tests/test_links.py`, `backend/scripts/ask.py`, `backend/tests/test_login_links.py`, `backend/tests/test_prompts_lock.py`, `backend/scripts/retrieve.py`, `backend/scripts/evalset.py`, `backend/scripts/eval_retrieval.py`, `backend/tests/eval/questions.yaml`, `backend/tests/test_evalset.py`, `backend/.env.example` (rewritten from §11), `backend/README.md` (rewritten),
 Phase 5: `backend/app/api/tracing.py`, `backend/app/redaction.py`, `backend/scripts/trace_check.py`, `backend/tests/test_tracing.py`.
 Phase 6: `backend/scripts/eval_answers.py`, `backend/tests/test_eval_answers.py`.
-Phase 7: `backend/.dockerignore`, `backend/DEPLOY.md`.
+Phase 7: `backend/.dockerignore`, `DEPLOY.md` (moved to the repo root in Phase 9 prep, now covering both services).
 Frontend (Phase 8): `frontend/.dockerignore`, `frontend/app/components/starter-questions.tsx`, `frontend/app/components/ui/chat/chat-status.tsx`, `frontend/app/components/ui/chat/hooks/use-starter-questions.ts`.
 `scripts/upstream_diff.sh`, `LICENSE`, this file.
 

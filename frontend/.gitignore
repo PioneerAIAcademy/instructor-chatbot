@@ -36,3 +36,6 @@ yarn-error.log*
 next-env.d.ts
 
 output/
+
+# scripts/e2e_check.mjs screenshots
+/e2e-shots/

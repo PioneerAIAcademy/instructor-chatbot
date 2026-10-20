@@ -33,6 +33,17 @@ npm run build && npx tsc --noEmit && npm run lint
 `npm run build` writes the static site to `out/`. It also creates `next-env.d.ts`, which
 `tsc` needs, so build first.
 
+End-to-end check (live, billable: 5 real questions through the page, in headless Chrome):
+
+```bash
+node scripts/e2e_check.mjs --url http://localhost:3000     # or the production URL
+```
+
+It checks starters and the FERPA notice, citation badges and the Sources count, the source
+type labels, sign-in labels, no missionary wording, and that thumbs reach the backend. It
+saves a screenshot per question in `e2e-shots/` (gitignored). Needs Node 22+ and Chrome
+(`CHROME_PATH` if not at the macOS default).
+
 ## Settings (build time)
 
 `NEXT_PUBLIC_*` values are compiled into the JavaScript and visible to anyone, so none of
@@ -80,7 +91,7 @@ from Google are gone.
 
 ## Deploy
 
-`Dockerfile` builds the static site and serves it with a pinned `serve` on `$PORT`
+[`../DEPLOY.md`](../DEPLOY.md) Part 2 covers both services together. In short: `Dockerfile` builds the static site and serves it with a pinned `serve` on `$PORT`
 (default 3000). `public/serve.json` sets the security headers: CSP, `X-Frame-Options`,
 `nosniff`, and a referrer policy. `.dockerignore` is an allow-list, so no `.env*` file
 reaches the image. Pass the `NEXT_PUBLIC_*` values as build arguments:
