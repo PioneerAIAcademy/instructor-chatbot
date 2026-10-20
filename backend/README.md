@@ -11,7 +11,7 @@ It is a trimmed copy of the
 
 > **Status:** Phase 7 (staging prep) of the build plan in `CLAUDE.md` §7. The API is fixed and
 > documented in [`API.md`](API.md), the contract the frontend builds against.
-> [`DEPLOY.md`](DEPLOY.md) is how to build the image and run it on a host.
+> [`../DEPLOY.md`](../DEPLOY.md) is how to build and run both services on a host.
 
 ## How a question is answered
 
