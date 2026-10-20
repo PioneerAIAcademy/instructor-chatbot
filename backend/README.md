@@ -9,9 +9,9 @@ It is a trimmed copy of the
 [`../CLAUDE.md`](../CLAUDE.md) holds the full plan, the repo rules, and the journal.
 [`../UPSTREAM.md`](../UPSTREAM.md) lists which files came from upstream and what changed.
 
-> **Status:** Phase 4 (chat API) of the build plan in `CLAUDE.md` §7. The API is fixed and
-> documented in [`API.md`](API.md), the contract the frontend builds against. The answer eval
-> arrives in Phase 6.
+> **Status:** Phase 7 (staging prep) of the build plan in `CLAUDE.md` §7. The API is fixed and
+> documented in [`API.md`](API.md), the contract the frontend builds against.
+> [`DEPLOY.md`](DEPLOY.md) is how to build the image and run it on a host.
 
 ## How a question is answered
 

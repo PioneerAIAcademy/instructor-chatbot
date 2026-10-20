@@ -1,0 +1,9 @@
+# Allow-list: the image gets only what the server runs. Everything else stays
+# out, above all .env and its backups (keys), logs, and eval results.
+*
+!main.py
+!app/
+!pyproject.toml
+!poetry.lock
+**/__pycache__
+**/*.pyc

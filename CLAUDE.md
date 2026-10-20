@@ -11,9 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0–5 merged (PRs #1–#6). Phase 6 (answer eval) done on
-> `phase-6-answer-eval`, uncommitted: answers 90% / 86% in two runs, guards 100% (§14). Next:
-> Phase 7.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0–6 merged (PRs #1–#7). Phase 7 prep (security terms, Docker
+> image, deploy guide) on `phase-7-staging-prep`, uncommitted. The staging deploy itself waits on
+> the owner's hosting choice.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -246,6 +246,7 @@ instructor-chatbot/
 ├── backend/
 │   ├── .env.example                 ← names only (§11)
 │   ├── API.md                       ← Phase 4: the stream contract the frontend builds against
+│   ├── DEPLOY.md, .dockerignore     ← Phase 7: image build, host settings, post-deploy checks
 │   ├── Dockerfile, pyproject.toml, poetry.lock   ← Python 3.12, upstream pins
 │   ├── main.py                      ← routers: /api/v1/chat (+ /config), /api (health)
 │   ├── app/
@@ -743,6 +744,42 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (Phase 7 prep, branch `phase-7-staging-prep`, uncommitted)** — The owner will
+  pick hosting later. Everything that doesn't need a host is done. `pytest tests/` passes,
+  keyless.
+  - **Security screen, instructor terms (§4 Adapt):**
+    - `INSTRUCTOR_TERMS` are matched as **whole words**, so "acl" doesn't hide in "oracle"
+      or "aim" in "claim". The existing lists match substrings.
+    - They only excuse an ML-only (pytector) MEDIUM flag, never a pattern hit.
+    - `sec_test.py`: identical per-case results before and after (29/32; the same 3 known
+      gaps, which rely on later defenses).
+    - **No effect today:** pytector still doesn't load (confirmed; Phase 0 finding), so only
+      the pattern checks run.
+  - **Docker image, three real problems fixed (all upstream too):**
+    1. **No `.dockerignore`, so `COPY . .` would copy `backend/.env` (every key) into the
+       image.** Now an allow-list: `main.py`, `app/`, `pyproject.toml`, `poetry.lock`.
+    2. **gunicorn had no `--bind`, so it listened on 127.0.0.1 inside the container**,
+       unreachable unless the host sets `PORT`. Now `0.0.0.0:${PORT:-8000}`.
+    3. **Poetry wasn't pinned.** Now 2.4.1, as in CI.
+    - Also `ENV ENVIRONMENT=prod` as the image default (unset means `dev` in `main.py`), and
+      an `APP_VERSION` build arg.
+  - **CI job `docker`:** Docker isn't installed on the owner's Mac, so the image is built in
+    GitHub Actions. It plants a fake `.env` and checks it isn't in the image. It also checks
+    non-root (uid 10001), `ENVIRONMENT=prod`, the boot guard refusing `pathway`
+    (`IndexConfigError`), 401 without a key, CORS for one origin only, and JSON logs.
+  - **Local rehearsal (the image's gunicorn command, `ENVIRONMENT=prod`, a throwaway
+    `API_KEYS`, `ALLOWED_ORIGINS=http://localhost:3000`, the real keys):**
+    - readiness ok (`index=instructor-assistant`, `guard=ok`);
+    - 401 without a key; no CORS header for another origin;
+    - `api_check.py` ALL PASSED, but WARN on 8: the local `.env` has no
+      `CONVERSATION_STARTERS`;
+    - `eval_answers.py --ids G1 G2 G3 G4`: guards 4/4 (`20261019T205018Z-answers.json`);
+    - the key never appears in the server log.
+  - **`backend/DEPLOY.md`:** build, host settings (names only), health checks, and the
+    post-deploy checks that make up Phase 7's "Backend done" gate.
+  - **Still to do for Phase 7:** a host, the production keys, then the gate checks against
+    the staging URL.
 
 - **2026-10-19 (Phase 6 done: prompt and guard fixes, two passing runs)** — With the owner's
   go-ahead, two prompt rules were added. The eval then showed three more defects, all fixed.
