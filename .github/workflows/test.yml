@@ -126,3 +126,57 @@ jobs:
           docker logs api > api.log 2>&1 || true
           ! grep -q "planted-must-not-ship" api.log
           grep -q '^{' api.log && echo "json logs ok"
+
+  # Phase 8: the frontend builds, type-checks and lints cleanly, carries no
+  # missionary features, and its image holds only the built site.
+  frontend:
+    name: frontend (build, tsc, lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Build first: it generates next-env.d.ts, which tsc needs.
+      - name: Build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_CHAT_API: http://localhost:8000
+        run: npm run build
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # No exceptions: every match fails, so nothing can hide behind a filter.
+      - name: No missionary features in the app
+        run: |
+          if grep -rniE 'missionar|\bACM\b|gathering' app; then
+            echo "missionary terms found in frontend/app"; exit 1
+          fi
+          echo "ok"
+
+      - name: Image holds only the built site
+        run: |
+          echo "NEXT_PUBLIC_API_KEY=planted-must-not-ship" > .env.local
+          docker build --build-arg NEXT_PUBLIC_CHAT_API=http://localhost:8000 -t instructor-frontend .
+          docker run --rm --entrypoint sh instructor-frontend -c '
+            set -e
+            test ! -e /app/.env.local && test ! -e /app/node_modules && test ! -e /app/app
+            test -f /app/out/index.html
+            ! grep -rqs "planted-must-not-ship" /app
+            test "$(id -un)" = node
+            echo image ok'

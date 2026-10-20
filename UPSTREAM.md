@@ -25,10 +25,10 @@ them in this shape.
 | --- | --- | --- | --- |
 | `.githooks/commit-msg` | `.githooks/commit-msg` | Keep\* | Rule references point to CLAUDE.md §0 rule 1. |
 | `.githooks/post-commit` | `.githooks/post-commit` | Keep | — |
-| `.githooks/pre-push` | `.githooks/pre-push` | Keep\* | Frontend `tsc`/`lint` removed until Phase 8. |
+| `.githooks/pre-push` | `.githooks/pre-push` | Keep\* | Frontend `tsc`/`lint` restored in Phase 8; skipped when `frontend/node_modules` is absent. |
 | `.githooks/README.md` | `.githooks/README.md` | Keep\* | Lists all three hooks; activation via `setup-dev.sh`. |
 | `.github/workflows/payload-guard.yml` | `.github/workflows/payload-guard.yml` | Keep | — |
-| `.github/workflows/test.yml` | `.github/workflows/test.yml` | Keep\* | Poetry 2.4.1 (the version that wrote `poetry.lock`) instead of 1.8.2. Phase 7 adds a `docker` job: builds the image and checks no `.env` inside, non-root, `ENVIRONMENT=prod`, the boot guard refusing `pathway`, 401 without a key, CORS locked, JSON logs. The frontend job comes in Phase 8. |
+| `.github/workflows/test.yml` | `.github/workflows/test.yml` | Keep\* | Poetry 2.4.1 (the version that wrote `poetry.lock`) instead of 1.8.2. Phase 7 adds a `docker` job: builds the image and checks no `.env` inside, non-root, `ENVIRONMENT=prod`, the boot guard refusing `pathway`, 401 without a key, CORS locked, JSON logs. Phase 8 adds a `frontend` job: build, `tsc`, lint, no missionary terms, and an image holding only `out/`. |
 | `scripts/setup-dev.sh` | `scripts/setup-dev.sh` | Keep\* | Rule and context references point to CLAUDE.md. |
 | `docs/agent-onboarding/journal-skill/SKILL.md` | `docs/agent-onboarding/journal-skill/SKILL.md` | Keep\* | CLAUDE.md is committed here, so it must never hold secrets. |
 | `.gitignore` | `.gitignore` | Adapt | Rewritten. `.claude/agents/` stays tracked. |
@@ -90,11 +90,92 @@ them in this shape.
 | `backend/tests/test_user_language_pref.py` | `backend/tests/test_user_language_pref.py` | Keep\* | Geo tiebreaker cases removed. |
 | `backend/tests/test_language_detection_bias.py` | `backend/tests/test_language_detection_bias.py` | Keep | — |
 | `backend/tests/test_retrieval_orchestrator.py` | `backend/tests/test_retrieval_orchestrator.py` | Adapt | Rewritten for the classic path: guards, callback scoping, synthesis failure, draft-fence hoisting. |
+| `frontend/.env.example` | `frontend/.env.example` | Keep\* | Instructor settings only; adds `NEXT_PUBLIC_HELP_URL` and the Sentry build variables; drops the missionary site URL. |
+| `frontend/.eslintrc.json` | `frontend/.eslintrc.json` | Keep | — |
+| `frontend/.gitignore` | `frontend/.gitignore` | Keep | — |
+| `frontend/Dockerfile` | `frontend/Dockerfile` | Keep\* | Release stage holds only `out/` (built from the `.dockerignore` allow-list); serves on `$PORT`; all `NEXT_PUBLIC_*` as build args. |
+| `frontend/README.md` | `frontend/README.md` | Adapt | Rewritten for the Instructor Assistant (run, settings, API use, deploy). The false "headers set in next.config.json" claim removed. |
+| `frontend/app/components/chat-section.tsx` | `frontend/app/components/chat-section.tsx` | Adapt | No ACM state, `?acm=`, `role`, dictation, correction, or upload data. Starter cards on the empty chat; FERPA notice and AI note under the input; blank input sends nothing; the error banner clears on a new send; no CSS smooth scroll (reduced motion); error banner and scroll button restyled. |
+| `frontend/app/components/disclaimer-message.tsx` | `frontend/app/components/disclaimer-message.tsx` | Keep\* | Restyled as an info notice (Blue 3 bar). |
+| `frontend/app/components/general-feedback-drawer.tsx` | `frontend/app/components/general-feedback-drawer.tsx` | Keep\* | Direction D colors (Blue 4 Send, outlined Cancel, theme focus ring and link). |
+| `frontend/app/components/greeting.tsx` | `frontend/app/components/greeting.tsx` | Keep\* | Crimson Pro `h2` with a subtitle; missionary greetings replaced; greeting version bumped. |
+| `frontend/app/components/header.tsx` | `frontend/app/components/header.tsx` | Adapt | Rewritten for direction D: white header (Gray 4 in dark), logo as-is (lightened by a filter in dark), icon logo on phones. |
+| `frontend/app/components/loading-spinner.tsx` | `frontend/app/components/loading-spinner.tsx` | Keep\* | Blue 4 spinner on the theme background. |
+| `frontend/app/components/settings-menu.tsx` | `frontend/app/components/settings-menu.tsx` | Keep\* | Restyled (segmented theme control, 44px rows). Help link shown only when `NEXT_PUBLIC_HELP_URL` is set: upstream linked the missionary guide. |
+| `frontend/app/components/theme-provider.tsx` | `frontend/app/components/theme-provider.tsx` | Keep | — |
+| `frontend/app/components/ui/button.tsx` | `frontend/app/components/ui/button.tsx` | Keep | — |
+| `frontend/app/components/ui/chat/chat-input.tsx` | `frontend/app/components/ui/chat/chat-input.tsx` | Adapt | Rewritten: no uploads, dictation, ACM pill, or LlamaCloud. Blue 4 send/stop; Enter ignores a blank input; short placeholder on phones; accessible name; no inline style. |
+| `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.module.css` | `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.module.css` | Keep | — |
+| `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.tsx` | `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.tsx` | Keep\* | Round outlined thumbs with `aria-pressed` (filled icon when pressed); Blue 4 submit; instructor wording. |
+| `frontend/app/components/ui/chat/chat-message/chat-avatar.tsx` | `frontend/app/components/ui/chat/chat-message/chat-avatar.tsx` | Keep\* | Assistant avatar is a Blue 4 circle with a sparkle (was the gold icon logo). |
+| `frontend/app/components/ui/chat/chat-message/chat-events.tsx` | `frontend/app/components/ui/chat/chat-message/chat-events.tsx` | Keep\* | Status line uses the shared `ChatStatus` (blue dots, `role=status`). |
+| `frontend/app/components/ui/chat/chat-message/chat-sources.tsx` | `frontend/app/components/ui/chat/chat-message/chat-sources.tsx` | Adapt | Numbered Blue 2 citation badges (no Google favicon requests). "Sources (N)" counts only the cited sources, and the panel lists only them, numbered as their badges; no button when nothing is cited. Cards show "Instructor guide (PDF)" / "External page · host" and an open link; Escape closes. |
+| `frontend/app/components/ui/chat/chat-message/chat-suggestedQuestions.tsx` | `frontend/app/components/ui/chat/chat-message/chat-suggestedQuestions.tsx` | Adapt | Rewritten: Blue 1 pill buttons (were `<a>` without `href`, not keyboard-reachable). |
+| `frontend/app/components/ui/chat/chat-message/copy-utils.ts` | `frontend/app/components/ui/chat/chat-message/copy-utils.ts` | Keep\* | Comment wording only. |
+| `frontend/app/components/ui/chat/chat-message/index.tsx` | `frontend/app/components/ui/chat/chat-message/index.tsx` | Adapt | Only the API.md annotations (calendar, tuition, image, file, tool, correction branches removed); `date_spans` passed to Markdown; sources processed once and passed down; actions row (Sources, copy, thumbs, regenerate) then suggestions; Gray 4 user bubble. |
+| `frontend/app/components/ui/chat/chat-message/markdown.module.css` | `frontend/app/components/ui/chat/chat-message/markdown.module.css` | Adapt | Rewritten with direction D tokens: Crimson Pro headings, prototype table, Blue 3 blockquote. |
+| `frontend/app/components/ui/chat/chat-message/markdown.tsx` | `frontend/app/components/ui/chat/chat-message/markdown.tsx` | Keep\* | Calendar ("Block/Term N") and program-catalog heading promotion removed. Date highlight is Blue 1; drafts use Mulish; answer text 16px in the theme color. |
+| `frontend/app/components/ui/chat/chat-message/thumb_request.ts` | `frontend/app/components/ui/chat/chat-message/thumb_request.ts` | Keep | — |
+| `frontend/app/components/ui/chat/chat-messages.tsx` | `frontend/app/components/ui/chat/chat-messages.tsx` | Keep\* | Starter-question fetch and (never-shown) rendering removed; they live on the empty chat now (`use-starter-questions.ts`, `starter-questions.tsx`). |
+| `frontend/app/components/ui/chat/chat-pending-indicator.tsx` | `frontend/app/components/ui/chat/chat-pending-indicator.tsx` | Keep\* | Uses `ChatStatus` and the localized "Thinking…". |
+| `frontend/app/components/ui/chat/chat.interface.ts` | `frontend/app/components/ui/chat/chat.interface.ts` | Keep | — |
+| `frontend/app/components/ui/chat/hooks/use-config.ts` | `frontend/app/components/ui/chat/hooks/use-config.ts` | Keep | — |
+| `frontend/app/components/ui/chat/hooks/use-copy-to-clipboard.tsx` | `frontend/app/components/ui/chat/hooks/use-copy-to-clipboard.tsx` | Keep | — |
+| `frontend/app/components/ui/chat/hooks/use-throttled-value.ts` | `frontend/app/components/ui/chat/hooks/use-throttled-value.ts` | Keep | — |
+| `frontend/app/components/ui/chat/index.ts` | `frontend/app/components/ui/chat/index.ts` | Adapt | Annotation types cut to `events`, `date_spans`, `user_language`, `sources`, `suggested_questions`. `getSourceAnnotationData` is pure and cached per annotation (upstream changed the annotation in place and sorted by score). |
+| `frontend/app/components/ui/chat/utils/localization.ts` | `frontend/app/components/ui/chat/utils/localization.ts` | Keep | — |
+| `frontend/app/components/ui/chat/widgets/DraftComposer.tsx` | `frontend/app/components/ui/chat/widgets/DraftComposer.tsx` | Keep\* | Direction D colors (Blue 1 strip and placeholders); Mulish body; 44px header buttons; Blue 4 Accept, outlined Undo; inserted text underlined, not color alone. |
+| `frontend/app/components/ui/hover-card.tsx` | `frontend/app/components/ui/hover-card.tsx` | Keep | — |
+| `frontend/app/components/ui/lib/utils.ts` | `frontend/app/components/ui/lib/utils.ts` | Keep | — |
+| `frontend/app/components/ui/toast.tsx` | `frontend/app/components/ui/toast.tsx` | Keep\* | Gray 4 toast with white text; the icon carries the status. |
+| `frontend/app/components/ui/tooltip.tsx` | `frontend/app/components/ui/tooltip.tsx` | Keep\* | Gray 4 tooltip. |
+| `frontend/app/global-error.tsx` | `frontend/app/global-error.tsx` | Keep\* | Direction D colors (it can't use the app stylesheet); instructor copy. |
+| `frontend/app/globals.css` | `frontend/app/globals.css` | Adapt | Direction D palette as `--ia-*` tokens (light and dark); shared component colors and older per-element variables mapped to it; Inter and tuition fonts dropped; blue selection; no automatic hyphenation; date-chip rule removed. |
+| `frontend/app/layout.tsx` | `frontend/app/layout.tsx` | Keep\* | Mulish and Crimson Pro via `next/font/local` from pinned `@fontsource-variable` packages (no Google request at build or visit); Instructor Assistant metadata; theme colors; console easter egg removed. |
+| `frontend/app/lib/chrome-strings.ts` | `frontend/app/lib/chrome-strings.ts` | Adapt | English only (Q12) with instructor copy; ACM, dictation, and "missionaries only" strings removed; FERPA, source-type, and phone-placeholder strings added; other languages fall back to English. |
+| `frontend/app/lib/draft-registry.ts` | `frontend/app/lib/draft-registry.ts` | Keep | — |
+| `frontend/app/lib/i18n.ts` | `frontend/app/lib/i18n.ts` | Keep\* | Comment wording only. |
+| `frontend/app/markdown.css` | `frontend/app/markdown.css` | Keep\* | Direction D links and citation badges; citation hover outlines the panel card in Blue 4; Blue 1 `mark`; Crimson Pro headings. |
+| `frontend/app/not-found.tsx` | `frontend/app/not-found.tsx` | Keep\* | Direction D colors and Mulish. |
+| `frontend/app/page.tsx` | `frontend/app/page.tsx` | Keep\* | Theme background and text color. |
+| `frontend/app/utils/session.ts` | `frontend/app/utils/session.ts` | Keep\* | Storage keys renamed `pathway-instructor-assistant-*`; comment wording. |
+| `frontend/next.config.json` | `frontend/next.config.json` | Keep\* | `outputFileTracingIncludes` (template server leftovers) removed. |
+| `frontend/next.config.mjs` | `frontend/next.config.mjs` | Keep\* | `withLlamaIndex` wrapper and its config migration removed; Sentry org/project from `SENTRY_ORG`/`SENTRY_PROJECT`. |
+| `frontend/package-lock.json` | `frontend/package-lock.json` | Keep\* | Regenerated after the dependency changes in `package.json`. |
+| `frontend/package.json` | `frontend/package.json` | Keep\* | Renamed `instructor-assistant`; `predev` banner and `generate` scripts removed; 22 unused dependencies dropped (code sandbox, search, LlamaIndex, PDF viewer, …); `@fontsource-variable/mulish` and `crimson-pro` 5.3.0 added (pinned). |
+| `frontend/postcss.config.js` | `frontend/postcss.config.js` | Keep | — |
+| `frontend/prettier.config.js` | `frontend/prettier.config.js` | Keep | — |
+| `frontend/public/BYU-pathway-icon-logo.png` | `frontend/public/BYU-pathway-icon-logo.png` | Keep | — |
+| `frontend/public/android-chrome-192x192.png` | `frontend/public/android-chrome-192x192.png` | Keep | — |
+| `frontend/public/android-chrome-512x512.png` | `frontend/public/android-chrome-512x512.png` | Keep | — |
+| `frontend/public/android-chrome-maskable-192x192.png` | `frontend/public/android-chrome-maskable-192x192.png` | Keep | — |
+| `frontend/public/android-chrome-maskable-512x512.png` | `frontend/public/android-chrome-maskable-512x512.png` | Keep | — |
+| `frontend/public/apple-touch-icon.png` | `frontend/public/apple-touch-icon.png` | Keep | — |
+| `frontend/public/byu-pathway-og-image.jpg` | `frontend/public/byu-pathway-og-image.jpg` | Keep | — |
+| `frontend/public/favicon.ico` | `frontend/public/favicon.ico` | Keep | — |
+| `frontend/public/gmail.png` | `frontend/public/gmail.png` | Keep | — |
+| `frontend/public/ms-outlook.svg` | `frontend/public/ms-outlook.svg` | Keep | — |
+| `frontend/public/pathway-horizontal-logo.png` | `frontend/public/pathway-horizontal-logo.png` | Keep | — |
+| `frontend/public/serve.json` | `frontend/public/serve.json` | Keep\* | The `fonts/**` cache rule removed (no fonts in `public/` any more). |
+| `frontend/public/site.webmanifest` | `frontend/public/site.webmanifest` | Keep\* | Instructor Assistant name and description. |
+| `frontend/sentry.client.config.ts` | `frontend/sentry.client.config.ts` | Keep | — |
+| `frontend/tailwind.config.ts` | `frontend/tailwind.config.ts` | Keep\* | `ia-*` colors, Mulish as `sans`, a Crimson Pro `display` font, `ia-pop`/`ia-panel` shadows. |
+| `frontend/tsconfig.json` | `frontend/tsconfig.json` | Keep | — |
+| `frontend/webpack.config.mjs` | `frontend/webpack.config.mjs` | Keep | — |
 
 New in this repo, with no upstream source: `backend/app/engine/audience_guard.py`,
 `backend/app/engine/prompts.py`, `backend/tests/test_audience_guard.py`, `backend/tests/test_chat_api.py`, `backend/tests/test_rerank.py`,
 `backend/API.md`, `backend/scripts/api_contract.py`, `backend/scripts/api_check.py`, `backend/tests/test_api_contract.py`, `backend/app/engine/login_links.py`, `backend/app/utils/links.py`, `backend/tests/test_links.py`, `backend/scripts/ask.py`, `backend/tests/test_login_links.py`, `backend/tests/test_prompts_lock.py`, `backend/scripts/retrieve.py`, `backend/scripts/evalset.py`, `backend/scripts/eval_retrieval.py`, `backend/tests/eval/questions.yaml`, `backend/tests/test_evalset.py`, `backend/.env.example` (rewritten from §11), `backend/README.md` (rewritten),
-`scripts/upstream_diff.sh`, this file.
+Phase 5: `backend/app/api/tracing.py`, `backend/app/redaction.py`, `backend/scripts/trace_check.py`, `backend/tests/test_tracing.py`.
+Phase 6: `backend/scripts/eval_answers.py`, `backend/tests/test_eval_answers.py`.
+Phase 7: `backend/.dockerignore`, `backend/DEPLOY.md`.
+Frontend (Phase 8): `frontend/.dockerignore`, `frontend/app/components/starter-questions.tsx`, `frontend/app/components/ui/chat/chat-status.tsx`, `frontend/app/components/ui/chat/hooks/use-starter-questions.ts`.
+`scripts/upstream_diff.sh`, `LICENSE`, this file.
+
+Removed from the upstream frontend (Phase 8): the calendar, tuition, weather, and
+LlamaCloud widgets; dictation; uploads and file previews; the correction UI; the console
+and dev banners; the template `docs/`; the Inter and tuition fonts; unused images, icons,
+and UI components (`drawer`, `select`, `input`).
 
 ## Intentional matches for `grep -rniE 'tuition|calendar|agenda|ACM' backend/app`
 

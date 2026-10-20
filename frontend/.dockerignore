@@ -1,0 +1,14 @@
+# Allow-list: the image build gets only the source it compiles. Everything
+# else stays out, above all .env* files and any Sentry token file.
+*
+!app/
+!public/
+!package.json
+!package-lock.json
+!next.config.mjs
+!next.config.json
+!webpack.config.mjs
+!sentry.client.config.ts
+!tailwind.config.ts
+!postcss.config.js
+!tsconfig.json
