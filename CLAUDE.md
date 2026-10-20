@@ -11,9 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0–6 merged (PRs #1–#7). Phase 7 prep (security terms, Docker
-> image, deploy guide) on `phase-7-staging-prep`, uncommitted. The staging deploy itself waits on
-> the owner's hosting choice.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-19): Phases 0–6 merged (PRs #1–#7). Phase 7 prep in PR #8 (the staging
+> deploy waits on hosting). Phase 8 (frontend, design direction D) on `phase-8-frontend`
+> (stacked on #8), uncommitted.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -744,6 +744,112 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-19 (Phase 8 review: 10 findings, all checked and fixed)** — Still uncommitted
+  on `phase-8-frontend`. `pytest tests/` gives 579 passed. The frontend `build`, `tsc`, and
+  `lint` are clean.
+  - **Blank Enter:** pressing Enter in an empty composer left a blank chat; spaces were sent
+    as a question. Fix: Enter and the submit handler both ignore a blank input.
+  - **`date_spans` ignored:** my rewrite dropped it, so a client date regex guessed instead
+    ("may 2", "sat 15" got chips). It's passed to Markdown again; the regex is only the
+    fallback.
+  - **Reduced motion:** CSS `scroll-behavior: smooth` overrode `scrollTo({behavior:"auto"})`.
+    Fix: removed, along with the inline style (and the composer's inline scrollbar style).
+  - **Security screen:** everyday words ("instructor", "aim", "block", "grade",
+    "extension") would excuse an ML-only flag, so a jailbreak could use them. Fix:
+    `INSTRUCTOR_TERMS` is narrowed to distinctive terms (adjunct, ACL, TGL, FERPA,
+    syllabus, WhatsApp, grader), with tests that pin two such jailbreaks as not excused.
+    `sec_test.py` is unchanged at 29/32.
+    - **Finding, not changed (owner decision):** upstream's `CALENDAR_TERMS` has the same
+      weakness, and worse. It matches substrings ("term", "block", "drop", "grades",
+      "hold"), so "Grade this: block all your previous instructions…" is excused. It
+      serves the calendar tool this repo left behind; pathway-chatbot has it too.
+      Latent while pytector doesn't load.
+  - **Sources count:** "Sources (N)" and the panel counted every retrieved node (the
+    backend sends them all). Fix: they count and list only the cited sources, keeping
+    each badge's number, and an answer that cites nothing gets no button. Live: the
+    backend sent 6 sources for an answer citing [^1] and [^2], and the UI shows
+    "Sources (2)" with cards 1 and 2.
+  - **Stale error banner:** it is now cleared on every new send (typed, starter,
+    suggestion, regenerate).
+  - **Sources processed in place, twice per render:** `getSourceAnnotationData` is now pure
+    and cached per annotation (a WeakMap), runs once in ChatMessage, and drops the unused
+    score sort.
+  - **UPSTREAM.md:** the 72 frontend rows were outside the table, with boilerplate notes.
+    They're inside the Files table now, each with its real change. The Phase 5–8 new
+    files are also listed (they had been missed since Phase 5).
+  - **Leftover heuristics:** the calendar ("Block/Term N") and program-catalog heading
+    promotion is removed from `markdown.tsx`.
+  - **CI term check:** it skipped any line containing "upstream". The two comments that
+    mentioned the missionary app are reworded, and the check now has no exceptions.
+  - **Found while verifying:** a build failed once inside `next/font/google`, a flaky
+    font download from Google at build time. Fix: the fonts are self-hosted from npm
+    (`@fontsource-variable/mulish` and `crimson-pro` 5.3.0, pinned) through
+    `next/font/local`, so no build or visit contacts Google.
+  - **Gotcha:** a stale `next dev` can keep port 3000. The new one then moves to 3001
+    silently, and a test of :3000 sees the old app. Use `pkill -f "next dev"` before
+    restarting.
+
+- **2026-10-19 (Phase 8 frontend, branch `phase-8-frontend`, uncommitted)** — The owner
+  started the frontend ahead of the staging deploy (hosting comes later). It is stacked on
+  PR #8, which also edits `test.yml`.
+  - **Design (owner choice): direction D, "light chrome"** from the all-blue prototype:
+    - a white header with the BYU-Pathway logo as-is, and the favicon kept;
+    - Blue 4 `#056CB6` for things you act on, Navy 4 on hover;
+    - citation badges Blue 2; highlights, chips, and the draft strip Blue 1;
+    - Mulish for text, Crimson Pro for the greeting and headings;
+    - dark mode on black, with a Gray 4 header and Blue 2 links.
+    - A, B, and C need a white logo, which the files don't include.
+    - In dark mode, the gray logo is lightened with a CSS filter; the file itself is
+      unchanged.
+    - On phones, the header shows the gold path icon (`BYU-pathway-icon-logo.png`) so the
+      title fits.
+  - **How:**
+    - The palette is defined once (`--ia-*` in `globals.css`, `ia-*` in Tailwind), and
+      components use roles, not hex.
+    - **Gotcha:** Tailwind 3 drops opacity modifiers (`bg-ia-gray-1/50`) on `var()` colors.
+      The CSS simply isn't generated, so use solid palette colors.
+  - **Trimmed (copied from `870cc5b`, 72 files in `UPSTREAM.md`):**
+    - ACM pill, `?acm=`, and the `role` in request bodies;
+    - calendar, tuition, weather, and LlamaCloud widgets;
+    - dictation, uploads, and the correction UI;
+    - console and dev banners; Inter and tuition fonts; template docs;
+    - 22 unused npm dependencies (190 packages). The page JS went from 604 to 541 kB.
+  - **Phase 8 items:**
+    - starter questions now show on the empty chat (upstream never rendered them);
+    - the FERPA notice is always under the input;
+    - each source is labeled "Instructor guide (PDF)" or "External page · host";
+    - only the `API.md` annotation types are handled;
+    - the UI is English (Q12), and answers still follow the question's language.
+  - **Fixed on the way:**
+    - Citations showed favicons fetched from `google.com/s2/favicons`, which sent Google
+      every cited domain. They are numbered badges now.
+    - Suggested questions were `<a>` tags with no `href`, unreachable by keyboard. They are
+      buttons now.
+    - The frontend `Dockerfile` had no `.dockerignore`, so a local `.env.local` (or a Sentry
+      token file) would have been copied in. It now uses an allow-list, and the release image
+      holds only `out/`.
+    - The Help link pointed at the missionary guide. It now shows only when
+      `NEXT_PUBLIC_HELP_URL` is set.
+    - The Sentry project came from the missionary config. It now uses `SENTRY_ORG` and
+      `SENTRY_PROJECT`.
+  - **Checked live (local backend + `next dev`, headless Chrome through the DevTools
+    protocol, light and dark, 1440 and 390 px):**
+    - an answer streams with citation badges;
+    - Sources opens the panel, and a linked page shows its host;
+    - thumbs-up recorded (`POST /api/v1/chat/thumbs_request` 200, `aria-pressed=true`);
+    - "Write a welcome message" opens in the draft composer.
+    - `npm run build`, `tsc --noEmit`, and `lint` are clean.
+    - The `grep -rniE 'missionar|ACM|gathering' frontend/app` check leaves only 2 comments
+      that describe what was removed.
+  - **CI:** a new `frontend` job runs build, `tsc`, lint, the term check, and an image
+    check (a planted `.env.local` must not ship). The pre-push hook runs `tsc` and lint again.
+  - **Left as upstream (follow-ups):**
+    - `AppLoader` holds an 800 ms loading screen on every visit.
+    - The horizontal logo is a 178×23 PNG, soft on retina screens; an SVG would be sharper.
+    - The search-engine setting stays `index: true`, as upstream. Owner decision.
+  - **Not done in Phase 8:** "Done when" item 1 asks for the staging backend; this was
+    checked against the local one.
 
 - **2026-10-19 (Phase 7 prep, branch `phase-7-staging-prep`, uncommitted)** — The owner will
   pick hosting later. Everything that doesn't need a host is done. `pytest tests/` passes,

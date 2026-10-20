@@ -1,0 +1,331 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.pathway-chat-scroll-shell,
+.pathway-chat-input-shell {
+  transition-property: padding-right;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (min-width: 1024px) {
+  .pathway-chat-scroll-shell[data-sources-open="true"],
+  .pathway-chat-input-shell[data-sources-open="true"] {
+    padding-right: 400px; /* the Sources panel's width (chat-sources.tsx) */
+  }
+}
+
+/* Fonts: Mulish (text) and Crimson Pro (greeting, headings), per the
+ * Instructor Assistant design (direction D). Loaded with next/font in
+ * app/layout.tsx, which downloads them at build time and serves them from this
+ * site, so no visitor request goes to Google. CJK text falls back to system
+ * fonts. */
+
+/* Direction D palette (closed: only these colors). Light chrome: a white
+ * header with the gray logo; blue only on things you can act on. */
+:root {
+  --ia-gold-1: #fff0cf;
+  --ia-gold-3: #ffc328;
+  --ia-gray-1: #e3e1de;
+  --ia-gray-2: #a8a5a1;
+  --ia-gray-3: #7e7a76;
+  --ia-gray-4: #454540;
+  --ia-gray-5: #000000;
+  --ia-blue-1: #e7f0fa; /* placeholder tint, AA-checked */
+  --ia-blue-2: #8ebdde; /* placeholder, AA-checked */
+  --ia-blue-3: #009bb6;
+  --ia-blue-4: #056cb6; /* primary: white on it is 5.5:1 */
+  --ia-navy-4: #0f4b8f; /* primary hover */
+  --ia-green-3: #6abe4e;
+  --ia-red-3: #dd4926;
+  --ia-white: #ffffff;
+
+  /* Light theme roles */
+  --ia-bg: var(--ia-white);
+  --ia-surface: var(--ia-white);
+  --ia-text: var(--ia-gray-4);
+  --ia-text-strong: var(--ia-gray-4);
+  --ia-border: var(--ia-gray-1);
+  --ia-border-strong: var(--ia-gray-4);
+  --ia-link: var(--ia-navy-4);
+  --ia-focus: var(--ia-navy-4);
+  --ia-header-bg: var(--ia-white);
+  --ia-header-text: var(--ia-gray-4);
+  --ia-header-border: var(--ia-gray-1);
+  --ia-bubble: var(--ia-gray-4);
+  --ia-scrim: rgba(69, 69, 64, 0.4);
+  --ia-shadow-pop: 0 8px 24px rgba(69, 69, 64, 0.18);
+  --ia-shadow-panel: -8px 0 24px rgba(69, 69, 64, 0.12);
+}
+
+.dark {
+  --ia-bg: var(--ia-gray-5);
+  --ia-surface: var(--ia-gray-4);
+  --ia-text: var(--ia-gray-1);
+  --ia-text-strong: var(--ia-white);
+  --ia-border: var(--ia-gray-3);
+  --ia-border-strong: var(--ia-gray-1);
+  /* Blue 4 on black is only 3.8:1, so links step up to Blue 2. */
+  --ia-link: var(--ia-blue-2);
+  --ia-focus: var(--ia-gold-3);
+  --ia-header-bg: var(--ia-gray-4);
+  --ia-header-text: var(--ia-gray-1);
+  --ia-header-border: var(--ia-gray-3);
+  --ia-bubble: var(--ia-gray-4);
+  --ia-scrim: rgba(0, 0, 0, 0.6);
+}
+
+@layer base {
+  /* The shared (shadcn) component colors, mapped onto the palette above. */
+  :root {
+    --background: 0 0% 100%; /* white */
+    --foreground: 60 4% 26%; /* Gray 4 */
+
+    --muted: 36 8% 88%; /* Gray 1 */
+    --muted-foreground: 60 4% 26%; /* Gray 4: Gray 3 fails AA below 18px */
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 60 4% 26%;
+
+    --border: 36 8% 88%;
+    --input: 36 8% 88%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 60 4% 26%;
+
+    --primary: 205 95% 37%; /* Blue 4 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 213 70% 94%; /* Blue 1 */
+    --secondary-foreground: 60 4% 26%;
+
+    --accent: 213 70% 94%;
+    --accent-foreground: 60 4% 26%;
+
+    --destructive: 11 73% 51%; /* Red 3 */
+    --destructive-foreground: 0 0% 100%;
+
+    --ring: 212 81% 31%; /* Navy 4 */
+
+    --radius: 0.5rem;
+
+    /* Older per-element colors, kept as names and mapped to direction D. */
+    --page-bg: 0 0% 100%; /* white */
+    --header-bg: 0 0% 100%; /* white header (direction D) */
+    --greeting-text: 60 4% 26%; /* Gray 4 */
+    --chat-bg: 0 0% 100%;
+    --user-bubble: 60 4% 26%; /* Gray 4 bubble, white text */
+    --bot-text: 60 4% 26%;
+    --input-bg: 0 0% 100%;
+    --input-text: 60 4% 26%;
+    --input-border: 36 8% 88%; /* Gray 1 */
+    --reference-badge: 205 54% 71%; /* Blue 2 citation badge */
+    --date-chip-text: 60 4% 26%; /* date highlight: Gray 4 on Blue 1 */
+    --date-chip-border: transparent;
+
+    /* Links: Navy 4 on white (8.9:1). */
+    --link: 212 81% 31%;
+    --link-hover: 205 95% 37%; /* Blue 4 */
+    --link-visited: 212 81% 31%;
+
+    /* Keyboard-focus ring: Navy 4 in light mode, Gold 3 in dark mode. */
+    --focus-ring: #0f4b8f;
+
+    /* Theme transition (used by SettingsMenu) */
+    --theme-transition-duration: 1200ms;
+    --theme-transition-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --theme-transition-blur: 18px;
+  }
+
+  .dark {
+    --background: 0 0% 0%; /* black */
+    --foreground: 36 8% 88%; /* Gray 1 */
+
+    --muted: 60 4% 26%; /* Gray 4 */
+    --muted-foreground: 36 8% 88%;
+
+    --accent: 60 4% 26%;
+    --accent-foreground: 0 0% 100%;
+
+    --popover: 60 4% 26%;
+    --popover-foreground: 36 8% 88%;
+
+    --border: 30 3% 48%; /* Gray 3 */
+    --input: 30 3% 48%;
+
+    --card: 60 4% 26%;
+    --card-foreground: 36 8% 88%;
+
+    --primary: 205 95% 37%; /* Blue 4 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 60 4% 26%;
+    --secondary-foreground: 36 8% 88%;
+
+    --destructive: 11 73% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --ring: 45 100% 58%; /* Gold 3 */
+
+    --radius: 0.5rem;
+
+    /* Older per-element colors, dark mode. */
+    --page-bg: 0 0% 0%; /* black */
+    --header-bg: 60 4% 26%; /* Gray 4 header */
+    --greeting-text: 36 8% 88%; /* Gray 1 */
+    --chat-bg: 0 0% 0%;
+    --user-bubble: 60 4% 26%;
+    --bot-text: 36 8% 88%;
+    --input-bg: 60 4% 26%;
+    --input-text: 36 8% 88%;
+    --reference-badge: 205 54% 71%; /* Blue 2 */
+    --date-chip-text: 60 4% 26%;
+    --date-chip-border: transparent;
+
+    /* Links: Blue 2 on black (Blue 4 is only 3.8:1 there). */
+    --link: 205 54% 71%;
+    --link-hover: 213 70% 94%;
+    --link-visited: 205 54% 71%;
+
+    --focus-ring: #ffc328; /* Gold 3 */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply h-full;
+    font-family:
+      var(--font-mulish, Mulish), ui-sans-serif, system-ui, sans-serif,
+      "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+      "Noto Color Emoji";
+    color-scheme: light;
+    view-transition-name: root;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground h-full;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+
+  /* Text selection in Blue 1 (light) / translucent Blue 4 (dark). */
+  ::selection {
+    background-color: var(--ia-blue-1);
+    color: var(--ia-gray-4);
+  }
+  .dark ::selection {
+    background-color: rgba(5, 108, 182, 0.45);
+    color: var(--ia-white);
+  }
+
+  .background-gradient {
+    background: linear-gradient(to bottom right, #e8e8e8, #ffffff 60%);
+  }
+
+  /* Custom slim scrollbar for textarea */
+  textarea::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  textarea::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  textarea::-webkit-scrollbar-thumb {
+    background-color: var(--ia-gray-3);
+    border-radius: 10px;
+  }
+
+  textarea::-webkit-scrollbar-thumb:hover {
+    background-color: var(--ia-gray-4);
+  }
+
+  /*
+    Smooth theme transitions for browsers without the View Transitions API.
+    Enabled briefly by toggling the `theme-color-transition` class on `<html>`.
+  */
+  html.theme-color-transition,
+  html.theme-color-transition *,
+  html.theme-color-transition *::before,
+  html.theme-color-transition *::after {
+    transition-property:
+      background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: var(--theme-transition-duration);
+    transition-timing-function: var(--theme-transition-ease);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-color-transition,
+    html.theme-color-transition *,
+    html.theme-color-transition *::before,
+    html.theme-color-transition *::after {
+      transition-duration: 0.01ms;
+    }
+  }
+}
+
+/* Subtle theme crossfade using the View Transitions API. */
+@supports (view-transition-name: root) {
+  html.theme-view-transition::view-transition-old(root),
+  html.theme-view-transition::view-transition-new(root) {
+    animation-duration: var(--theme-transition-duration);
+    animation-timing-function: var(--theme-transition-ease);
+    animation-fill-mode: both;
+    mix-blend-mode: normal;
+  }
+
+  html.theme-view-transition::view-transition-old(root) {
+    animation-name: theme-fade-out;
+    z-index: 1;
+    will-change: opacity, filter;
+  }
+
+  html.theme-view-transition::view-transition-new(root) {
+    animation-name: theme-fade-in;
+    z-index: 2;
+    will-change: opacity, filter;
+  }
+}
+
+@keyframes theme-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(var(--theme-transition-blur)) brightness(1.02) saturate(1.08)
+      sepia(0.08);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0px) brightness(1) saturate(1) sepia(0);
+  }
+}
+
+@keyframes theme-fade-out {
+  from {
+    opacity: 1;
+    filter: blur(0px);
+  }
+  to {
+    opacity: 0;
+    filter: blur(calc(var(--theme-transition-blur) * 0.75));
+  }
+}
+
+@layer utilities {
+  /* Ensure long words and URLs break properly to prevent horizontal overflow */
+  .overflow-wrap-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    /* No automatic hyphenation: "pay-ments" mid-word hurts reading. */
+    hyphens: manual;
+  }
+}

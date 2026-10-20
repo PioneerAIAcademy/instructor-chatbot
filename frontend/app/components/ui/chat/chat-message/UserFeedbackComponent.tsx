@@ -1,0 +1,488 @@
+import { ArrowUp, ThumbsDown, ThumbsUp } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { getChromeStrings } from "../../../../lib/chrome-strings";
+import { resolveUiLanguage } from "../../../../lib/i18n";
+import { Button } from "../../button";
+import { Tooltip } from "../../tooltip";
+import { cn } from "../../lib/utils";
+import { Toast, useToast } from "../../toast";
+import { useClientConfig } from "../hooks/use-config";
+import { FeedbackValue, sendUserFeedback } from "./thumb_request";
+import styles from "./UserFeedbackComponent.module.css";
+
+type UserFeedbackComponentProps = {
+  traceId: string;
+  isLastMessage?: boolean;
+};
+
+const BORDER_ANIMATION_MS = 680;
+const BUTTON_REVEAL_MS = 520;
+const FOCUS_MS = 600;
+const CLOSE_ANIMATION_MS = 240;
+const SCROLL_DELAY_MS = 100;
+const MAX_COMMENT_LENGTH = 1000;
+const MOBILE_POPOVER_MARGIN_PX = 16;
+
+// Same round outlined action as the copy and regenerate buttons (40px, 44px
+// on phones). A pressed thumb fills its icon and turns blue; the fill, not
+// the color alone, shows the state.
+const THUMB_BUTTON =
+  "h-11 w-11 sm:h-10 sm:w-10 rounded-full border border-ia-border bg-transparent text-ia-text " +
+  "hover:border-ia-border-strong hover:bg-transparent transition-colors " +
+  "focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg";
+
+export function UserFeedbackComponent({
+  traceId,
+  isLastMessage = false,
+}: UserFeedbackComponentProps) {
+  const { backend = "" } = useClientConfig();
+  const { show, message, showToast, hideToast } = useToast();
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [submittedFeedback, setSubmittedFeedback] = useState<FeedbackValue>(
+    FeedbackValue.EMPTY,
+  );
+  const [showInput, setShowInput] = useState(false);
+  const [comment, setComment] = useState("");
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [showButtons, setShowButtons] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const thumbsDownButtonRef = useRef<HTMLButtonElement>(null);
+  const buttonRowRef = useRef<HTMLDivElement>(null);
+  const popoverAnchorRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const animationTimers = useRef<number[]>([]);
+  const feedbackBeforeOpenRef = useRef<FeedbackValue>(FeedbackValue.EMPTY);
+  const [reservedSpacePx, setReservedSpacePx] = useState(0);
+  const [mobilePopoverOffsetX, setMobilePopoverOffsetX] = useState(0);
+  const [mobilePopoverMaxWidthPx, setMobilePopoverMaxWidthPx] = useState<
+    number | null
+  >(null);
+  const [uiLang, setUiLang] =
+    useState<ReturnType<typeof resolveUiLanguage>>("en");
+  useEffect(() => {
+    setUiLang(resolveUiLanguage());
+    const handler = () => setUiLang(resolveUiLanguage());
+    window.addEventListener("user-language-pref-changed", handler);
+    return () =>
+      window.removeEventListener("user-language-pref-changed", handler);
+  }, []);
+  const strings = getChromeStrings(uiLang);
+
+  const thumbsUpActive = submittedFeedback === FeedbackValue.GOOD;
+  const thumbsDownActive = submittedFeedback === FeedbackValue.BAD;
+
+  const clearTimers = () => {
+    animationTimers.current.forEach((timer) => window.clearTimeout(timer));
+    animationTimers.current = [];
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!showInput) {
+      setReservedSpacePx(0);
+      return;
+    }
+
+    const row = buttonRowRef.current;
+    const popover = popoverRef.current;
+    if (!row || !popover) {
+      return;
+    }
+
+    const measure = () => {
+      const rowRect = row.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const needed = Math.max(0, popoverRect.bottom - rowRect.bottom);
+      setReservedSpacePx((prev) =>
+        Math.abs(prev - needed) > 1 ? Math.ceil(needed) : prev,
+      );
+    };
+
+    measure();
+    const raf = window.requestAnimationFrame(measure);
+    return () => window.cancelAnimationFrame(raf);
+  }, [showInput, showButtons]);
+
+  // Mobile-only: keep the popover within the viewport (prevents horizontal scrolling).
+  useLayoutEffect(() => {
+    if (!showInput || isClosing) {
+      return;
+    }
+
+    const popover = popoverRef.current;
+    const anchor = popoverAnchorRef.current;
+    const actionsRow = rootRef.current?.parentElement;
+    if (!popover || !anchor || !actionsRow) {
+      return;
+    }
+
+    const isMobile = window.matchMedia("(max-width: 639px)").matches;
+    if (!isMobile) {
+      setMobilePopoverOffsetX(0);
+      setMobilePopoverMaxWidthPx(null);
+      return;
+    }
+
+    const adjust = () => {
+      const anchorRect = anchor.getBoundingClientRect();
+      const rowRect = actionsRow.getBoundingClientRect();
+
+      // Mobile: anchor at thumbs-down, but align the popover's left edge with the action
+      // row (copy icon). To avoid horizontal scrolling, constrain the popover width so it
+      // can fit to the right of that aligned start point.
+      const desiredLeft = Math.max(rowRect.left, MOBILE_POPOVER_MARGIN_PX);
+      const offset = desiredLeft - anchorRect.left;
+      setMobilePopoverOffsetX(Math.round(offset));
+
+      const maxWidth = Math.floor(
+        window.innerWidth - desiredLeft - MOBILE_POPOVER_MARGIN_PX,
+      );
+      setMobilePopoverMaxWidthPx(maxWidth > 0 ? maxWidth : null);
+    };
+
+    adjust();
+    const raf = window.requestAnimationFrame(adjust);
+    window.addEventListener("resize", adjust);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("resize", adjust);
+    };
+  }, [showInput, showButtons, isClosing]);
+
+  const handleUserFeedback = async (
+    traceId: string,
+    value: FeedbackValue,
+    feedbackComment?: string,
+  ) => {
+    const ok = await sendUserFeedback(backend, traceId, value, feedbackComment);
+    if (ok && value !== FeedbackValue.EMPTY) {
+      showToast(strings.feedbackThanksToast);
+    }
+  };
+
+  const closeInput = (opts?: { revertFeedback?: boolean }) => {
+    clearTimers();
+    if (!showInput) {
+      setIsAnimating(false);
+      return;
+    }
+    if (opts?.revertFeedback) {
+      setSubmittedFeedback(feedbackBeforeOpenRef.current);
+    }
+    setIsClosing(true);
+    const thumbsDownButton = thumbsDownButtonRef.current;
+    if (thumbsDownButton) {
+      try {
+        thumbsDownButton.focus({ preventScroll: true });
+      } catch {
+        thumbsDownButton.focus();
+      }
+    }
+    animationTimers.current.push(
+      window.setTimeout(() => {
+        setShowInput(false);
+        setShowButtons(false);
+        setComment("");
+        setIsAnimating(false);
+        setIsClosing(false);
+        setMobilePopoverOffsetX(0);
+        setMobilePopoverMaxWidthPx(null);
+      }, CLOSE_ANIMATION_MS),
+    );
+  };
+
+  const handleThumbsDown = () => {
+    if (isClosing) {
+      clearTimers();
+      setIsClosing(false);
+      setSubmittedFeedback(FeedbackValue.BAD);
+      return;
+    }
+
+    if (showInput) {
+      // Closing/canceling feedback input
+      closeInput({ revertFeedback: true });
+      return;
+    }
+
+    // Opening feedback input
+    feedbackBeforeOpenRef.current = submittedFeedback;
+    setSubmittedFeedback(FeedbackValue.BAD);
+    if (window.matchMedia("(max-width: 639px)").matches) {
+      const anchor = popoverAnchorRef.current;
+      const actionsRow = rootRef.current?.parentElement;
+      if (anchor && actionsRow) {
+        const rowRect = actionsRow.getBoundingClientRect();
+        const anchorRect = anchor.getBoundingClientRect();
+        const desiredLeft = Math.max(rowRect.left, MOBILE_POPOVER_MARGIN_PX);
+        setMobilePopoverOffsetX(Math.round(desiredLeft - anchorRect.left));
+
+        const maxWidth = Math.floor(
+          window.innerWidth - desiredLeft - MOBILE_POPOVER_MARGIN_PX,
+        );
+        setMobilePopoverMaxWidthPx(maxWidth > 0 ? maxWidth : null);
+      } else {
+        setMobilePopoverOffsetX(0);
+        setMobilePopoverMaxWidthPx(null);
+      }
+    } else {
+      setMobilePopoverOffsetX(0);
+      setMobilePopoverMaxWidthPx(null);
+    }
+    clearTimers();
+    setShowInput(true);
+    setIsAnimating(true);
+    setShowButtons(false);
+    setIsClosing(false);
+
+    // Smooth scroll to show buttons and input (only for last message)
+    if (isLastMessage) {
+      animationTimers.current.push(
+        window.setTimeout(() => {
+          const root = rootRef.current;
+          if (root) {
+            // Find the scrollable parent container (chat-section's scroll container)
+            let scrollParent: HTMLElement | null = root.parentElement;
+            while (scrollParent) {
+              const overflowY = window.getComputedStyle(scrollParent).overflowY;
+              if (overflowY === "auto" || overflowY === "scroll") {
+                break;
+              }
+              scrollParent = scrollParent.parentElement;
+            }
+
+            if (scrollParent) {
+              // Calculate position to scroll to (120px from top of scroll container)
+              const rootRect = root.getBoundingClientRect();
+              const containerRect = scrollParent.getBoundingClientRect();
+              const scrollOffset = rootRect.top - containerRect.top - 120;
+
+              scrollParent.scrollBy({ top: scrollOffset, behavior: "smooth" });
+            }
+          }
+        }, SCROLL_DELAY_MS),
+      );
+    }
+
+    // Trigger border animation, then show buttons
+    animationTimers.current.push(
+      window.setTimeout(() => {
+        setShowButtons(true);
+      }, BUTTON_REVEAL_MS),
+    );
+
+    animationTimers.current.push(
+      window.setTimeout(() => {
+        setIsAnimating(false);
+      }, BORDER_ANIMATION_MS),
+    );
+
+    animationTimers.current.push(
+      window.setTimeout(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) {
+          return;
+        }
+        try {
+          textarea.focus({ preventScroll: true });
+        } catch {
+          textarea.focus();
+        }
+      }, FOCUS_MS),
+    );
+  };
+
+  const handleSubmit = async () => {
+    await handleUserFeedback(
+      traceId,
+      FeedbackValue.BAD,
+      comment.trim() || undefined,
+    );
+    setSubmittedFeedback(FeedbackValue.BAD);
+    closeInput();
+  };
+
+  const handleCancel = () => {
+    closeInput({ revertFeedback: true });
+  };
+
+  const handleThumbsUp = async () => {
+    const nextValue = thumbsUpActive ? FeedbackValue.EMPTY : FeedbackValue.GOOD;
+    setSubmittedFeedback(nextValue);
+    setComment("");
+    setShowButtons(false);
+    setIsAnimating(false);
+    setIsClosing(false);
+    setShowInput(false);
+    setMobilePopoverOffsetX(0);
+    setMobilePopoverMaxWidthPx(null);
+    clearTimers();
+    // Passing an empty string clears any previous "bad" comment when switching to Good.
+    await handleUserFeedback(traceId, nextValue, "");
+  };
+
+  return (
+    <div ref={rootRef} className="flex flex-col items-start">
+      <div ref={buttonRowRef} className="flex items-start gap-1">
+        <Tooltip label={strings.feedbackLoveTitle} side="top" align="start">
+        <Button
+          size="icon"
+          variant="ghost"
+          className={`${THUMB_BUTTON} ${thumbsUpActive ? "border-ia-blue-4 text-ia-blue-4 dark:border-ia-blue-2 dark:text-ia-blue-2" : ""}`}
+          aria-label={strings.feedbackLoveTitle}
+          aria-pressed={thumbsUpActive}
+          onClick={handleThumbsUp}
+        >
+          <ThumbsUp
+            aria-hidden="true"
+            fill={thumbsUpActive ? "currentColor" : "none"}
+            className="h-[18px] w-[18px]"
+          />
+        </Button>
+        </Tooltip>
+
+        <div ref={popoverAnchorRef} className="relative">
+          <Tooltip label={strings.feedbackNeedsImprovementTitle} side="top" align="start">
+          <Button
+            size="icon"
+            variant="ghost"
+            className={`${THUMB_BUTTON} ${thumbsDownActive ? "border-ia-blue-4 text-ia-blue-4 dark:border-ia-blue-2 dark:text-ia-blue-2" : ""}`}
+            aria-label={strings.feedbackNeedsImprovementTitle}
+            aria-pressed={thumbsDownActive}
+            onClick={handleThumbsDown}
+            ref={thumbsDownButtonRef}
+          >
+            <ThumbsDown
+              aria-hidden="true"
+              fill={thumbsDownActive ? "currentColor" : "none"}
+              className="h-[18px] w-[18px]"
+            />
+          </Button>
+          </Tooltip>
+
+          {showInput && (
+            <div
+              className="absolute top-12 left-0 z-10"
+              style={{
+                transform:
+                  mobilePopoverOffsetX !== 0
+                    ? `translateX(${mobilePopoverOffsetX}px)`
+                    : undefined,
+              }}
+            >
+              <div
+                ref={popoverRef}
+                className={cn(
+                  styles.popover,
+                  "w-[clamp(16rem,65vw,44rem)] sm:w-[clamp(18rem,65vw,44rem)]",
+                )}
+                style={
+                  mobilePopoverMaxWidthPx
+                    ? { maxWidth: `${mobilePopoverMaxWidthPx}px` }
+                    : undefined
+                }
+                data-state={isClosing ? "closing" : "open"}
+              >
+                {/* Feedback UI */}
+                <div className="flex flex-col">
+                  <div
+                    className={cn(
+                      styles.field,
+                      "relative rounded-xl overflow-hidden text-ia-blue-4",
+                    )}
+                    data-animating={isAnimating ? "true" : "false"}
+                    data-closing={isClosing ? "true" : "false"}
+                  >
+                    <svg
+                      className={cn(styles.drawBorder, "pointer-events-none")}
+                      aria-hidden="true"
+                      width="100%"
+                      height="100%"
+                    >
+                      <rect
+                        className={styles.drawBorderRect}
+                        pathLength="1"
+                        x="0"
+                        y="0"
+                        width="100%"
+                        height="100%"
+                        rx="14"
+                        ry="14"
+                      />
+                    </svg>
+
+                    <div
+                      className={cn(
+                        styles.fieldInner,
+                        "bg-ia-surface px-4 py-3.5",
+                      )}
+                    >
+                      <textarea
+                        ref={textareaRef}
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        placeholder={strings.feedbackPlaceholder}
+                        aria-label={strings.feedbackPlaceholder}
+                        maxLength={MAX_COMMENT_LENGTH}
+                        rows={2}
+                        className="w-full min-h-[72px] bg-transparent border-none text-ia-text placeholder:text-ia-text placeholder:opacity-100 focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none text-sm resize-none max-h-[160px] leading-6"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Footer with fade-in animation */}
+                  {showButtons && (
+                    <div
+                      className={cn(
+                        styles.footer,
+                        "flex items-center justify-end gap-3 mt-2",
+                      )}
+                    >
+                      <span className="text-[13px] text-ia-text tabular-nums mr-1">
+                        {MAX_COMMENT_LENGTH - comment.length}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCancel}
+                        className="h-10 rounded-full border border-ia-border bg-transparent px-4 text-sm font-semibold text-ia-text hover:border-ia-border-strong hover:bg-transparent focus-visible:ring-2 focus-visible:ring-ia-focus"
+                      >
+                        {strings.feedbackCancelButton}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSubmit}
+                        className="h-10 rounded-full bg-ia-blue-4 px-4 text-sm font-semibold text-white hover:bg-ia-navy-4 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2"
+                      >
+                        {strings.feedbackSubmitButton}
+                        <ArrowUp aria-hidden="true" className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Reserve vertical space so the popover doesn't overlap messages below it */}
+      {showInput && (
+        <div
+          aria-hidden="true"
+          className="transition-[height] duration-200 ease-out"
+          style={{ height: reservedSpacePx }}
+        />
+      )}
+
+      <Toast show={show} message={message} onClose={hideToast} />
+    </div>
+  );
+}
