@@ -1,6 +1,6 @@
+import { Loader2 } from "lucide-react";
 import { getChromeStrings } from "../../../../lib/chrome-strings";
 import { resolveUiLanguage } from "../../../../lib/i18n";
-import { ChatStatus } from "../chat-status";
 import { EventData } from "../index";
 
 /**
@@ -31,5 +31,10 @@ export function ChatEvents({
   const displayMessage =
     latestMessage || getChromeStrings(resolveUiLanguage()).thinkingDefault;
 
-  return <ChatStatus text={displayMessage} />;
+  return (
+    <div className="flex items-center gap-2 text-xs text-[#73726C] dark:text-[#C2C0B6]">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      <span>{displayMessage}</span>
+    </div>
+  );
 }

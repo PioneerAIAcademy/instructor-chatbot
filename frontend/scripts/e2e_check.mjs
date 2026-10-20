@@ -11,8 +11,8 @@
 //
 // Checks, PASS/FAIL per question:
 //   - an answer appears, with no raw "[^N]" markers left in the text;
-//   - answer questions show citation badges, and "Sources (N)" matches the
-//     number of distinct badges (the panel lists only cited sources);
+//   - answer questions show citation pills, and the Sources pill's count
+//     matches the number of cards in the sources drawer (cited sources only);
 //   - every card in the Sources panel says "Instructor guide (PDF)" or
 //     "External page · <host>";
 //   - every sign-in link (SharePoint, course directory, …) is followed by
@@ -123,8 +123,8 @@ const STATE = `(() => {
   const last = answers[answers.length - 1];
   const md = last?.querySelector('.custom-markdown');
   const text = md?.innerText || "";
-  const badges = [...new Set([...(md?.querySelectorAll('a.citation-link') || [])].map((a) => a.textContent.trim()))];
-  const sourcesButton = last?.querySelector('button[aria-label^="Open "]')?.textContent?.trim() || "";
+  const badges = [...(md?.querySelectorAll('.citation-link') || [])].map((a) => a.textContent.trim());
+  const sourcesButton = last?.querySelector('button[aria-label^="Open "]')?.textContent?.replace(/\\s+/g, " ").trim() || "";
   const loginHosts = ${JSON.stringify(LOGIN_HOSTS)};
   const unlabeled = [];
   for (const a of md?.querySelectorAll('a[href^="http"]:not(.citation-link)') || []) {
@@ -185,18 +185,19 @@ for (const [index, question] of QUESTIONS.entries()) {
   const problems = [];
   if (!finished || !s.text.trim()) problems.push("no finished answer");
   if (/\[\^\d*\w*\]/.test(s.text)) problems.push("raw citation marker left in the text");
-  if (question.kind !== "guard" && s.badges.length === 0) problems.push("no citation badges");
-  const count = parseInt((s.sourcesButton.match(/\((\d+)\)/) || [])[1] || "0", 10);
-  if (s.badges.length && count !== s.badges.length) problems.push(`"${s.sourcesButton}" but ${s.badges.length} distinct badges`);
+  if (question.kind !== "guard" && s.badges.length === 0) problems.push("no citation pills");
+  const count = parseInt((s.sourcesButton.match(/(\d+)/) || [])[1] || "0", 10);
+  if (s.badges.length && !s.sourcesButton) problems.push("citations but no Sources pill");
   if (s.unlabeled.length) problems.push(`sign-in link without "(sign-in required)": ${s.unlabeled.join(", ")}`);
   if (s.missionary) problems.push("missionary wording on the page");
 
   if (s.sourcesButton) {
     await evaluate(`[...document.querySelectorAll('[data-message-role="assistant"]')].pop().querySelector('button[aria-label^="Open "]').click()`);
     await sleep(900);
-    const cards = await evaluate(`[...document.querySelectorAll('aside li.reference-list-item')].map((li) => li.innerText)`);
+    const cards = await evaluate(`[...document.querySelectorAll('aside .reference-list-item')].map((li) => li.innerText)`);
     const unlabeledCards = (cards || []).filter((c) => !/Instructor guide \(PDF\)|External page · /.test(c));
     if (!cards?.length) problems.push("the Sources panel is empty");
+    if (cards?.length !== count) problems.push(`"${s.sourcesButton}" but ${cards?.length ?? 0} cards in the drawer`);
     if (unlabeledCards.length) problems.push(`${unlabeledCards.length} source card(s) without a type label`);
     await shot(`${String(index + 1).padStart(2, "0")}-q${question.id}-sources`);
     await evaluate(`document.querySelector('aside button[aria-label="Close sources"]')?.click()`);
@@ -204,11 +205,11 @@ for (const [index, question] of QUESTIONS.entries()) {
   } else {
     await shot(`${String(index + 1).padStart(2, "0")}-q${question.id}`);
   }
-  report(`#${question.id} ${question.q}`, problems, `${s.badges.length} cited, ${s.sourcesButton || "no Sources button"}`);
+  report(`#${question.id} ${question.q}`, problems, `${s.badges.length} citation pill(s), ${s.sourcesButton || "no Sources pill"}`);
 }
 
 // --- thumbs ------------------------------------------------------------------
-await evaluate(`[...document.querySelectorAll('button[aria-label="Helpful"]')].pop()?.click()`);
+await evaluate(`[...document.querySelectorAll('button[aria-label="Love this"]')].pop()?.click()`);
 await sleep(4000); // the request and its response
 report(
   "thumbs-up reaches /api/v1/chat/thumbs_request",

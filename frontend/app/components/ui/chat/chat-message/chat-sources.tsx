@@ -17,8 +17,8 @@ export type SourcesPanelEventDetail = {
   open: boolean;
   nodes?: SourceNode[];
   groupId?: string;
-  // Positions (in citation order) of the sources the answer cites. The panel
-  // lists only these, numbered as their badges are.
+  // Positions (in citation order) of the sources the answer cites. The drawer
+  // lists only these, numbered as their citations are.
   citedIndices?: number[];
 };
 
@@ -33,6 +33,7 @@ const METADATA_TITLE_KEYS = [
   "name",
 ];
 
+const MAX_CITATION_LABEL_LENGTH = 34;
 const MAX_SNIPPET_LENGTH = 230;
 
 const getCitationNumber = (node: SourceNode) =>
@@ -43,10 +44,9 @@ export const getSortedSources = (nodes: SourceNode[] = []) =>
 
 /**
  * Which sources an answer cites: the positions, in getSortedSources order,
- * of the nodes its [^N] markers point at. Markdown maps a marker to a badge
- * the same way (preprocessFootnoteCitations), so a badge's number and its
- * card's number always agree. The backend sends every retrieved node, cited
- * or not; only the cited ones back the answer.
+ * of the nodes its [^N] markers point at (Markdown maps markers the same
+ * way). The backend sends every retrieved node; only the cited ones back the
+ * answer.
  */
 export const getCitedIndices = (answer: string, sorted: SourceNode[]) => {
   const indices = new Set<number>();
@@ -57,6 +57,20 @@ export const getCitedIndices = (answer: string, sorted: SourceNode[]) => {
   }
   return Array.from(indices).sort((a, b) => a - b);
 };
+
+// The instructor guides are `source=instructor-assistant`; the public pages
+// they link to are `instructor-assistant-linked` (CLAUDE.md §1, §8.3).
+export const isExternalSource = (node?: SourceNode) =>
+  node?.metadata?.source === "instructor-assistant-linked";
+
+/** "Instructor guide (PDF)" or "External page · <host>" (CLAUDE.md §8.3). */
+export const getSourceTypeLabel = (
+  node: SourceNode | undefined,
+  strings: ChromeStrings,
+) =>
+  isExternalSource(node)
+    ? strings.sourceTypeExternal.replace("{host}", getSourceDomain(node?.url))
+    : strings.sourceTypeGuide;
 
 export const buildSourcesGroupId = (nodes: SourceNode[] = []) => {
   if (nodes.length === 0) return "";
@@ -138,6 +152,15 @@ const isChromeSourceTitle = (value: string) => {
   return false;
 };
 
+const labelFromTitle = (value: string) => {
+  const cleanValue = normalizeSourceTitle(value).replace(
+    /^About\s+(BYU-Pathway\b.*)$/i,
+    "$1",
+  );
+
+  return cleanValue;
+};
+
 export const getSourceTitle = (node?: SourceNode) => {
   if (!node) return "Source";
 
@@ -164,6 +187,16 @@ export const getSourceTitle = (node?: SourceNode) => {
 const truncateText = (value: string, maxLength: number) => {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength - 1).trimEnd()}...`;
+};
+
+const getCitationLabel = (node: SourceNode | undefined, index: number) => {
+  const title = getSourceTitle(node);
+  const domain = getSourceDomain(node?.url);
+  const label =
+    title && title !== "Source"
+      ? labelFromTitle(title)
+      : prettifyDomain(domain) || `Source ${index + 1}`;
+  return truncateText(label, MAX_CITATION_LABEL_LENGTH);
 };
 
 export const getSourceSnippet = (
@@ -199,23 +232,40 @@ const highlightReferenceListItem = (
     );
 };
 
-// The instructor guides are `source=instructor-assistant`; the public pages
-// they link to are `instructor-assistant-linked` (CLAUDE.md §1, §8.3).
-const LINKED_SOURCE = "instructor-assistant-linked";
+// The small round icon in citation pills and source rows. Upstream showed the
+// site's favicon from google.com/s2/favicons, which sent Google every cited
+// domain; this shows a local icon by source type instead, in the same circle.
+function SourceFavicon({
+  node,
+  className,
+}: {
+  node?: SourceNode;
+  className?: string;
+  size?: number;
+}) {
+  const Icon = isExternalSource(node) ? Globe : FileText;
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-[#454540] ring-1 ring-black/10 dark:bg-[#2f302d] dark:text-[#ECEBE7] dark:ring-white/10",
+        className,
+      )}
+    >
+      <Icon aria-hidden="true" className="h-[70%] w-[70%]" />
+    </span>
+  );
+}
 
-export const isExternalSource = (node?: SourceNode) =>
-  node?.metadata?.source === LINKED_SOURCE;
+// The outlined pill shared by "Sources (N)" and the round action buttons.
+export const OUTLINE_PILL =
+  "inline-flex h-11 items-center justify-center rounded-full border border-[rgba(31,30,29,0.15)] bg-transparent text-[15px] font-medium text-[#454540] " +
+  "transition-colors hover:border-[#454540] dark:border-[rgba(252,252,252,0.18)] dark:text-[#D6D6D6] dark:hover:border-[#D6D6D6] " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2";
 
-/** "Instructor guide (PDF)" or "External page · <host>" (CLAUDE.md §8.3). */
-export const getSourceTypeLabel = (
-  node: SourceNode | undefined,
-  strings: ChromeStrings,
-) =>
-  isExternalSource(node)
-    ? strings.sourceTypeExternal.replace("{host}", getSourceDomain(node?.url))
-    : strings.sourceTypeGuide;
+// A round outlined icon button in the action row: 44px on phones, 40px up.
+export const ACTION_BUTTON = `${OUTLINE_PILL} h-11 w-11 shrink-0 p-0 hover:bg-transparent sm:h-10 sm:w-10`;
 
-function useChromeStrings() {
+export function ChatSources({ data, answer }: { data: SourceData; answer: string }) {
   const [uiLang, setUiLang] =
     useState<ReturnType<typeof resolveUiLanguage>>("en");
   useEffect(() => {
@@ -225,36 +275,7 @@ function useChromeStrings() {
     return () =>
       window.removeEventListener("user-language-pref-changed", handler);
   }, []);
-  return getChromeStrings(uiLang);
-}
-
-function SourceTypeLine({
-  node,
-  strings,
-}: {
-  node?: SourceNode;
-  strings: ChromeStrings;
-}) {
-  const external = isExternalSource(node);
-  return (
-    <p className="m-0 flex items-center gap-1.5 text-[13px] leading-snug text-ia-text">
-      {external ? (
-        <Globe aria-hidden="true" className="h-3.5 w-3.5 flex-shrink-0 text-ia-blue-3" />
-      ) : (
-        <FileText aria-hidden="true" className="h-3.5 w-3.5 flex-shrink-0" />
-      )}
-      <span className="truncate">{getSourceTypeLabel(node, strings)}</span>
-    </p>
-  );
-}
-
-/**
- * The "Sources (N)" button under an answer (prototype btn-secondary). N counts
- * the sources the answer cites. An answer that cites nothing (a refusal, "not
- * in the guides") gets no button: nothing backs it.
- */
-export function ChatSources({ data, answer }: { data: SourceData; answer: string }) {
-  const strings = useChromeStrings();
+  const strings = getChromeStrings(uiLang);
   const sortedSources = useMemo(
     () => getSortedSources(data.nodes),
     [data.nodes],
@@ -263,10 +284,13 @@ export function ChatSources({ data, answer }: { data: SourceData; answer: string
     () => buildSourcesGroupId(sortedSources),
     [sortedSources],
   );
+  // Count and list only what the answer cites; an answer that cites nothing
+  // (a refusal, "not in the guides") gets no Sources pill.
   const citedIndices = useMemo(
     () => getCitedIndices(answer, sortedSources),
     [answer, sortedSources],
   );
+  const citedSources = citedIndices.map((index) => sortedSources[index]);
 
   if (citedIndices.length === 0) return null;
 
@@ -283,36 +307,34 @@ export function ChatSources({ data, answer }: { data: SourceData; answer: string
     );
   };
 
+  // An outlined pill in the answer's action row: book icon, "Sources (N)".
   return (
-    <>
-      <button
-        type="button"
-        onClick={openSourcesPanel}
-        className="inline-flex h-11 items-center gap-2 rounded-full border border-ia-border bg-transparent px-4 text-sm font-semibold text-ia-text transition-colors hover:border-ia-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg sm:h-10"
-        aria-label={strings.sourcesOpenAria.replace(
-          "{n}",
-          String(citedIndices.length),
-        )}
-      >
-        <BookOpen className="h-[18px] w-[18px]" aria-hidden="true" />
-        <span>
-          {strings.sourcesTitle} ({citedIndices.length})
-        </span>
-      </button>
-    </>
+    <button
+      type="button"
+      onClick={openSourcesPanel}
+      className={`${OUTLINE_PILL} gap-2 px-4 sm:h-10`}
+      aria-label={strings.sourcesOpenAria.replace(
+        "{n}",
+        String(citedIndices.length),
+      )}
+    >
+      <BookOpen className="h-[18px] w-[18px]" aria-hidden="true" />
+      <span>
+        {strings.sourcesTitle} ({citedIndices.length})
+      </span>
+    </button>
   );
 }
 
 function CitationPopoverContent({
   node,
   index,
-  strings,
 }: {
   node?: SourceNode;
   index: number;
-  strings: ChromeStrings;
 }) {
   const title = getSourceTitle(node);
+  const domain = getSourceTypeLabel(node, getChromeStrings(resolveUiLanguage()));
   const snippet = getSourceSnippet(node, 190);
 
   return (
@@ -320,35 +342,40 @@ function CitationPopoverContent({
       href={node?.url || "#"}
       target={node?.url ? "_blank" : undefined}
       rel={node?.url ? "noopener noreferrer" : undefined}
-      className="block rounded-xl p-4 text-left no-underline"
+      className={[
+        "block cursor-pointer rounded-xl px-3.5 py-3 text-left no-underline",
+        "transition-colors duration-150 hover:bg-black/[0.045]",
+        "dark:hover:bg-white/[0.07]",
+      ].join(" ")}
     >
       <div className="flex items-start gap-3">
-        <span className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full bg-ia-blue-2 text-[13px] font-bold text-ia-gray-4">
-          {index + 1}
-        </span>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <p className="m-0 line-clamp-2 text-[15px] font-semibold leading-snug text-ia-text">
+        <SourceFavicon node={node} className="mt-0.5 h-5 w-5" size={32} />
+        <div className="min-w-0">
+          <p className="line-clamp-2 text-[13px] font-semibold leading-[18px] text-[#2C2C29] dark:text-[#FCFCFC]">
             {title || `Source ${index + 1}`}
           </p>
-          <SourceTypeLine node={node} strings={strings} />
           {snippet && (
-            <p className="m-0 line-clamp-3 text-sm leading-[1.45] text-ia-text">
+            <p className="mt-1.5 line-clamp-3 text-[12px] leading-[18px] text-[#5F5E59] dark:text-[#C6C6C2]">
               {snippet}
             </p>
           )}
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[#73726C] dark:text-[#AFAFA9]">
+            <span className="truncate">{domain}</span>
+            {node?.url && <ExternalLink className="h-3 w-3 shrink-0" />}
+          </div>
         </div>
       </div>
     </a>
   );
 }
 
-// The inline citation badge (direction D): Blue 2 with Gray 4 at rest,
-// Blue 4 with white when hovered or focused. 22px, 26px on phones.
+// The inline citation: a small numbered badge. Light blue with a gray number
+// at rest; brand blue #056CB6 with white when hovered or focused.
 const CITE_BADGE =
-  "citation-link mx-[2px] inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full px-[7px] align-[1px] sm:h-[22px] sm:min-w-[22px] " +
-  "bg-ia-blue-2 text-[13px] font-bold leading-none text-ia-gray-4 no-underline sm:text-xs " +
-  "transition-colors duration-150 hover:bg-ia-blue-4 hover:text-white " +
-  "focus-visible:bg-ia-blue-4 focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg";
+  "citation-link mx-[2px] inline-flex h-[24px] min-w-[24px] items-center justify-center rounded-full px-[7px] align-[1px] " +
+  "bg-[#8EBDDE] text-[12px] font-bold leading-none text-[#454540] no-underline " +
+  "transition-colors duration-150 hover:bg-[#056CB6] hover:text-white " +
+  "focus-visible:bg-[#056CB6] focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2";
 
 export function SourceNumberButton({
   index,
@@ -363,7 +390,6 @@ export function SourceNumberButton({
   url?: string;
   groupId?: string;
 }) {
-  const strings = useChromeStrings();
   const sourceNode =
     node ?? (url ? ({ url, metadata: {}, text: "" } as SourceNode) : undefined);
   const sourceUrl = sourceNode?.url || url;
@@ -397,9 +423,9 @@ export function SourceNumberButton({
       <HoverCardContent
         side="top"
         align="start"
-        className="w-[min(360px,calc(100vw-32px))] rounded-xl border-ia-border bg-ia-surface p-0 text-ia-text shadow-ia-pop"
+        className="w-[min(360px,calc(100vw-32px))] rounded-xl border-black/10 bg-white p-0 shadow-[0_18px_45px_rgba(0,0,0,0.18)] dark:border-white/[0.12] dark:bg-[#2F302D] dark:shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
       >
-        <CitationPopoverContent node={sourceNode} index={index} strings={strings} />
+        <CitationPopoverContent node={sourceNode} index={index} />
       </HoverCardContent>
     </HoverCard>
   );
@@ -407,7 +433,7 @@ export function SourceNumberButton({
 
 /**
  * Several citations at one spot. Up to three show as badges side by side;
- * more collapse to the first badge plus a "+N" button that expands them.
+ * more collapse to the first badge plus a "+N" badge that expands them.
  */
 export function CitationGroupPill({
   indices,
@@ -457,7 +483,6 @@ export function CitationGroupPill({
   );
 }
 
-/** The Sources panel (prototype side panel): one card per source. */
 export function SourcesSidebar({
   open,
   nodes,
@@ -472,7 +497,7 @@ export function SourcesSidebar({
   onClose: () => void;
 }) {
   const sortedAll = useMemo(() => getSortedSources(nodes), [nodes]);
-  // Only the cited sources, each keeping its position (= its badge number).
+  // Only the cited sources, each keeping its position (= its citation number).
   const listed = useMemo(() => {
     const entries = sortedAll.map((node, index) => ({ node, index }));
     if (!citedIndices) return entries;
@@ -480,7 +505,16 @@ export function SourcesSidebar({
     return entries.filter((entry) => cited.has(entry.index));
   }, [sortedAll, citedIndices]);
   const asideRef = useRef<HTMLElement>(null);
-  const strings = useChromeStrings();
+  const [uiLang, setUiLang] =
+    useState<ReturnType<typeof resolveUiLanguage>>("en");
+  useEffect(() => {
+    setUiLang(resolveUiLanguage());
+    const handler = () => setUiLang(resolveUiLanguage());
+    window.addEventListener("user-language-pref-changed", handler);
+    return () =>
+      window.removeEventListener("user-language-pref-changed", handler);
+  }, []);
+  const strings = getChromeStrings(uiLang);
   const passagesTemplate =
     listed.length === 1
       ? strings.sourcesCountSingular
@@ -490,9 +524,23 @@ export function SourcesSidebar({
     String(listed.length),
   );
 
-  // Toggle `inert` imperatively (React 18 drops `inert=""`): a closed panel
-  // is off-screen but its links would stay focusable, so Tab would land in
-  // it and scroll the page sideways.
+  // Escape closes the drawer.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  // Toggle the `inert` attribute imperatively. React 18 has no typed `inert`
+  // prop and silently drops `inert=""`, so it must be set on the DOM node.
+  // When the drawer is closed it is off-screen (translate-x-full) but its
+  // links/buttons stay focusable — Tab focus lands inside it, the browser
+  // scrolls it into view, and the chat content shifts left leaving a large
+  // empty gap on the right. `inert` removes the whole closed subtree from
+  // the tab order and from pointer interaction.
   useEffect(() => {
     const node = asideRef.current;
     if (!node) return;
@@ -503,23 +551,14 @@ export function SourcesSidebar({
     }
   }, [open]);
 
-  // Escape closes the panel.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
   return (
     <aside
       ref={asideRef}
       className={cn(
-        "absolute right-0 top-0 z-30 flex h-full w-full flex-col sm:w-[320px] lg:w-[400px]",
-        "border-l border-ia-border bg-ia-surface text-ia-text shadow-ia-panel",
-        "transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        "absolute right-0 top-0 z-30 flex h-full w-[min(432px,calc(100vw-16px))] flex-col",
+        "border-l border-black/10 bg-[#FAF9F5] shadow-[-18px_0_55px_rgba(0,0,0,0.16)]",
+        "transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "dark:border-white/10 dark:bg-[#111210] dark:shadow-[-18px_0_55px_rgba(0,0,0,0.48)]",
         open
           ? "translate-x-0 opacity-100"
           : "pointer-events-none translate-x-full opacity-0",
@@ -527,62 +566,82 @@ export function SourcesSidebar({
       aria-hidden={!open}
       aria-label={strings.sourcesTitle}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-ia-border py-4 pl-6 pr-4">
-        <div className="min-w-0">
-          <h2 className="m-0 text-lg font-bold leading-tight">{strings.sourcesTitle}</h2>
-          <p className="m-0 text-[13px] leading-snug">{passagesLabel}</p>
+      <div className="flex items-center justify-between gap-3 border-b border-black/10 px-5 py-4 dark:border-white/10">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <BookOpen className="h-5 w-5 shrink-0 text-[#3D3D3A] dark:text-[#FCFCFC]" />
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold leading-5 text-[#242421] dark:text-[#FCFCFC]">
+              {strings.sourcesTitle}
+            </h2>
+            <p className="text-[12px] leading-4 text-[#73726C] dark:text-[#A7A6A0]">
+              {passagesLabel}
+            </p>
+          </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-ia-text transition-colors hover:bg-ia-blue-1 hover:text-ia-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
+          className={[
+            "inline-flex h-9 w-9 items-center justify-center rounded-full",
+            "text-[#73726C] transition hover:bg-black/[0.06] hover:text-[#242421]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+            "dark:text-[#A7A6A0] dark:hover:bg-white/[0.08] dark:hover:text-[#FCFCFC]",
+          ].join(" ")}
           aria-label={strings.sourcesCloseAria}
         >
-          <X aria-hidden="true" className="h-5 w-5" />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
-      <ol className="m-0 flex min-h-0 flex-1 list-none flex-col gap-3 overflow-y-auto p-4 sm:px-6 sm:pb-6">
-        {listed.map(({ node, index }) => {
-          const title = getSourceTitle(node);
-          const snippet = getSourceSnippet(node);
-          const external = isExternalSource(node);
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div className="space-y-1">
+          {listed.map(({ node, index }) => {
+            const title = getSourceTitle(node);
+            const domain = getSourceTypeLabel(node, strings);
+            const snippet = getSourceSnippet(node);
 
-          return (
-            <li
-              key={`${node.id}-${index}`}
-              data-citation-group={groupId}
-              data-citation-index={index}
-              className="reference-list-item flex gap-3 rounded-xl border border-ia-border bg-ia-surface p-4 dark:bg-ia-gray-5"
-            >
-              <span className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full bg-ia-blue-2 text-[13px] font-bold text-ia-gray-4">
-                {index + 1}
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <h3 className="m-0 text-[15px] font-semibold leading-snug">
-                  {title || `Source ${index + 1}`}
-                </h3>
-                <SourceTypeLine node={node} strings={strings} />
-                {snippet && (
-                  <p className="m-0 line-clamp-3 text-sm leading-[1.45]">{snippet}</p>
-                )}
-                {node.url && (
-                  <a
-                    href={node.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-0.5 inline-flex min-h-[44px] items-center gap-1.5 self-start text-sm font-semibold text-ia-link underline sm:min-h-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
-                  >
-                    {external ? "Open page" : "Open guide"}
-                    <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
-                    <span className="sr-only">(opens in a new tab)</span>
-                  </a>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+            return (
+              <a
+                key={`${node.id}-${index}`}
+                href={node.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-citation-group={groupId}
+                data-citation-index={index}
+                className={[
+                  "reference-list-item group block rounded-xl px-3 py-3 no-underline",
+                  "transition-colors duration-150 hover:bg-black/[0.045]",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                  "dark:hover:bg-white/[0.07]",
+                ].join(" ")}
+              >
+                <div className="flex gap-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#056CB6]/[0.12] text-[12px] font-bold text-[#0F4B8F] ring-1 ring-[#056CB6]/30 dark:text-[#B5D3E9]">
+                    {index + 1}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start gap-2">
+                      <h3 className="line-clamp-2 flex-1 text-[13px] font-semibold leading-[18px] text-[#242421] group-hover:underline dark:text-[#FCFCFC]">
+                        {title || `Source ${index + 1}`}
+                      </h3>
+                      <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#8B8982] opacity-0 transition-opacity group-hover:opacity-100 dark:text-[#B6B5AF]" />
+                    </div>
+                    {snippet && (
+                      <p className="mt-1.5 line-clamp-3 text-[12.5px] leading-[19px] text-[#55544F] dark:text-[#C7C7C3]">
+                        {snippet}
+                      </p>
+                    )}
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[#73726C] dark:text-[#A7A6A0]">
+                      <SourceFavicon node={node} className="h-3.5 w-3.5" />
+                      <span className="truncate">{domain}</span>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      </div>
     </aside>
   );
 }

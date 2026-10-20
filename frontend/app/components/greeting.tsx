@@ -283,18 +283,22 @@ export default function Greeting() {
 
   // Prevent hydration mismatch by not rendering greeting until component mounts on client-side
   // This ensures server-rendered HTML matches client-rendered HTML
-  const sub = getChromeStrings(resolveUiLanguage()).greetingSub;
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center px-4">
+        <h1 className="font-georgia text-3xl sm:text-4xl md:text-[40px] text-[#3D3D3A] dark:text-[#C2C0B6] text-center leading-tight md:leading-[60px] invisible">
+          Loading...
+        </h1>
+      </div>
+    );
+  }
 
-  // Crimson Pro 600 (direction D). An h2: the header holds the page's h1.
-  // Rendered invisible until mounted so server and client HTML match.
+  // Display the selected greeting with responsive typography
   return (
-    <div className="flex flex-col">
-      <h2
-        className={`m-0 font-display text-[26px] font-semibold leading-[1.2] text-ia-text sm:text-[32px] ${mounted ? "" : "invisible"}`}
-      >
-        {mounted ? greeting : "Loading..."}
-      </h2>
-      <p className="mt-1 text-base leading-normal text-ia-text">{sub}</p>
+    <div className="flex items-center justify-center px-4">
+      <h1 className="font-georgia text-3xl sm:text-4xl md:text-[40px] text-[#3D3D3A] dark:text-[#C2C0B6] text-center leading-tight md:leading-[60px]">
+        {greeting}
+      </h1>
     </div>
   );
 }

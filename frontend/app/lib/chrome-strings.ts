@@ -14,8 +14,8 @@ export interface ChromeStrings {
   headerTitle: string; // "Instructor Assistant"
   // Chat input
   inputPlaceholder: string;
-  inputPlaceholderShort: string; // phones, where the long one would be cut off
   // Notes under the chat input: student privacy (CLAUDE.md §9.2) and the AI note
+  ferpaLabel: string; // "PRIVACY:"
   ferpaNotice: string; // "Don't include student names, IDs, or grades."
   aiNoteShort: string; // mobile, ~5-6 words
   aiNoteLong: string; // sm+ breakpoint, full sentence
@@ -35,7 +35,6 @@ export interface ChromeStrings {
   greetingAfternoon: string; // "Good afternoon!"
   greetingEvening: string; // "Good evening!"
   greetingAfterHours: string; // "Up late? How can I help?"
-  greetingSub: string; // the line under the greeting
   // Casual greeting pool. Non-empty only for es/pt (reviewed-native-quality
   // markets); empty for en (component uses its own WARM_TEXTS) and for
   // fr/it/ja/ko/zh/tl (unreviewed, ~zero traffic — stay time-of-day only).
@@ -89,13 +88,13 @@ export interface ChromeStrings {
 export const CHROME_STRINGS: Partial<Record<LangCode, ChromeStrings>> = {
   en: {
     headerTitle: "Instructor Assistant",
-    inputPlaceholder:
-      "Ask about teaching, policies, pay, Canvas, student support…",
-    inputPlaceholderShort: "Ask a question…",
+    inputPlaceholder: "Ask a question",
+    ferpaLabel: "PRIVACY:",
     ferpaNotice: "Don’t include student names, IDs, or grades.",
-    aiNoteShort: "AI answers can be wrong. Check the linked guide.",
+    aiNoteShort:
+      "Instructor Assistant can make mistakes—check the sources provided.",
     aiNoteLong:
-      "Instructor Assistant is AI and can be wrong. Check the linked guide.",
+      "Instructor Assistant is AI and can make mistakes. Please check the sources provided.",
     settingsTitle: "Settings",
     settingsTheme: "Theme",
     settingsLanguage: "Language",
@@ -109,8 +108,6 @@ export const CHROME_STRINGS: Partial<Record<LangCode, ChromeStrings>> = {
     greetingAfternoon: "Good afternoon!",
     greetingEvening: "Good evening!",
     greetingAfterHours: "Up late? How can I help?",
-    greetingSub:
-      "Ask about teaching, course administration, student support, or instructor policies.",
     casualGreetings: [],
     disclaimerLabel: "Disclaimer:",
     disclaimerBody:
@@ -128,10 +125,10 @@ export const CHROME_STRINGS: Partial<Record<LangCode, ChromeStrings>> = {
     sourcesOpenAria: "Open {n} answer sources",
     sourceTypeGuide: "Instructor guide (PDF)",
     sourceTypeExternal: "External page · {host}",
-    feedbackLoveTitle: "Helpful",
-    feedbackNeedsImprovementTitle: "Not helpful",
+    feedbackLoveTitle: "Love this",
+    feedbackNeedsImprovementTitle: "Needs improvement",
     feedbackPlaceholder:
-      "What would have made this answer more helpful? Please leave out student names and IDs.",
+      "What would have made this response more helpful for you?",
     feedbackCancelButton: "Cancel",
     feedbackSubmitButton: "Submit",
     feedbackThanksToast: "Thanks for your feedback!",

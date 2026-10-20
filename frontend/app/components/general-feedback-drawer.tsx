@@ -392,19 +392,19 @@ export function GeneralFeedbackDrawer({
       >
         <Drawer.Portal>
           <Drawer.Overlay
-            className="fixed inset-0 bg-[var(--ia-scrim)] z-50"
+            className="fixed inset-0 bg-black/40 z-50"
             onClick={(e) => e.stopPropagation()}
           />
           <Drawer.Content className="fixed bottom-0 right-0 top-0 z-50 flex outline-none w-full sm:max-w-[460px]">
-            <div className="flex-1 bg-ia-surface text-ia-text shadow-ia-panel border-l border-ia-border flex flex-col">
+            <div className="flex-1 bg-[#F0EEE6] text-[#3D3D3A] dark:bg-[#111213] dark:text-white shadow-2xl border-l border-black/10 dark:border-white/10 flex flex-col">
               {/* Header */}
-              <div className="px-6 pt-6 pb-5 border-b border-ia-border flex-shrink-0">
+              <div className="px-6 pt-6 pb-5 border-b border-black/10 dark:border-white/10 flex-shrink-0">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <Drawer.Title className="text-[22px] font-semibold leading-7">
                       {strings.gfDrawerTitle}
                     </Drawer.Title>
-                    <Drawer.Description className="mt-1 text-sm text-ia-text">
+                    <Drawer.Description className="mt-1 text-sm text-[#73726C] dark:text-white/70">
                       {strings.gfDrawerDescription}
                     </Drawer.Description>
                   </div>
@@ -415,7 +415,7 @@ export function GeneralFeedbackDrawer({
                     size="icon"
                     onClick={handleClose}
                     aria-label={strings.gfDrawerCloseTitle}
-                    className="h-11 w-11 rounded-full hover:bg-ia-blue-1 hover:text-ia-gray-4 text-ia-text flex-shrink-0 focus-visible:ring-2 focus-visible:ring-ia-focus"
+                    className="h-8 w-8 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-[#3D3D3A] dark:text-white flex-shrink-0"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -428,7 +428,7 @@ export function GeneralFeedbackDrawer({
                 <div>
                   <label
                     htmlFor="general-feedback-text"
-                    className="block text-sm font-medium text-ia-text"
+                    className="block text-sm font-medium text-[#3D3D3A] dark:text-white/90"
                   >
                     {strings.gfDrawerLabel}
                   </label>
@@ -440,14 +440,14 @@ export function GeneralFeedbackDrawer({
                       placeholder={strings.gfDrawerPlaceholder}
                       maxLength={MAX_FEEDBACK_LENGTH}
                       rows={7}
-                      className="w-full rounded-xl bg-ia-bg border border-ia-border px-4 py-3 text-sm leading-6 text-ia-text placeholder:text-ia-text placeholder:opacity-100 focus:outline-none focus:ring-2 focus:ring-ia-focus focus:border-ia-border-strong resize-none dark:bg-ia-gray-5"
+                      className="w-full rounded-xl bg-white border border-black/10 px-4 py-3 text-sm leading-6 text-[#3D3D3A] placeholder:text-[#73726C] focus:outline-none focus:ring-2 focus:ring-[#056CB6]/50 focus:border-[#056CB6]/40 resize-none dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder:text-white/40"
                     />
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-4">
-                    <p className="text-xs text-ia-text">
+                    <p className="text-xs text-[#73726C] dark:text-white/55">
                       {strings.gfDrawerSensitiveInfo}
                     </p>
-                    <p className="text-xs text-ia-text tabular-nums">
+                    <p className="text-xs text-[#73726C] dark:text-white/55 tabular-nums">
                       {feedback.length}/{MAX_FEEDBACK_LENGTH}
                     </p>
                   </div>
@@ -455,13 +455,13 @@ export function GeneralFeedbackDrawer({
 
                 {/* Screenshot/image upload UI intentionally hidden for now */}
                 {false && (
-                  <div className="border-t border-ia-border pt-5">
+                  <div className="border-t border-black/10 dark:border-white/10 pt-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h3 className="text-sm font-medium text-ia-text">
+                        <h3 className="text-sm font-medium text-[#3D3D3A] dark:text-white/90">
                           Screenshot (optional)
                         </h3>
-                        <p className="mt-1 text-xs text-ia-text">
+                        <p className="mt-1 text-xs text-[#73726C] dark:text-white/55">
                           A screenshot helps us understand what you were seeing.
                         </p>
                       </div>
@@ -480,7 +480,7 @@ export function GeneralFeedbackDrawer({
                           variant="outline"
                           onClick={captureTabScreenshot}
                           disabled={isCapturing}
-                          className="h-10 px-4 rounded-full bg-transparent border-ia-border text-ia-text font-semibold hover:bg-transparent hover:border-ia-border-strong hover:text-ia-text"
+                          className="h-9 px-3 rounded-lg bg-transparent border-black/15 text-[#3D3D3A] hover:bg-black/5 hover:text-[#3D3D3A] dark:border-white/15 dark:text-white dark:hover:bg-white/10 dark:hover:text-white"
                         >
                           <Camera className="h-4 w-4 mr-2" />
                           {isCapturing ? "Capturing..." : "Capture screenshot"}
@@ -489,7 +489,7 @@ export function GeneralFeedbackDrawer({
                     </div>
 
                     <div className="mt-2 flex items-center justify-between gap-3">
-                      <p className="text-xs text-ia-text">
+                      <p className="text-xs text-[#73726C] dark:text-white/55">
                         {isCapturing
                           ? "Choose “This tab” in the browser prompt."
                           : "Capture the current tab, or upload an image."}
@@ -497,7 +497,7 @@ export function GeneralFeedbackDrawer({
                       <button
                         type="button"
                         onClick={pickScreenshot}
-                        className="text-[13px] font-semibold text-ia-link underline underline-offset-4"
+                        className="text-xs text-[#056CB6] hover:text-[#0F4B8F] dark:text-[#8EBDDE] dark:hover:text-[#A6CBE6] underline underline-offset-4"
                       >
                         Upload instead
                       </button>
@@ -506,14 +506,14 @@ export function GeneralFeedbackDrawer({
                     {screenshotFile && (
                       <div
                         className={[
-                          "mt-4 mb-6 flex items-center gap-3 rounded-xl border border-ia-border bg-ia-bg p-3",
+                          "mt-4 mb-6 flex items-center gap-3 rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-white/5",
                           "transition-[box-shadow,transform] duration-300 ease-out",
                           justCaptured
-                            ? "ring-2 ring-ia-blue-4"
+                            ? "ring-2 ring-[#056CB6]/60 shadow-[0_0_0_6px_rgba(5,108,182,0.12)]"
                             : "",
                         ].join(" ")}
                       >
-                        <div className="h-12 w-12 rounded-lg overflow-hidden bg-ia-gray-1 border border-ia-border dark:bg-ia-gray-5 flex-shrink-0">
+                        <div className="h-12 w-12 rounded-lg overflow-hidden bg-black/5 border border-black/10 dark:bg-black/20 dark:border-white/10 flex-shrink-0">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={screenshotPreviewUrl}
@@ -522,10 +522,10 @@ export function GeneralFeedbackDrawer({
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm text-ia-text truncate">
+                          <p className="text-sm text-[#3D3D3A] dark:text-white/90 truncate">
                             {screenshotFile!.name}
                           </p>
-                          <p className="text-xs text-ia-text tabular-nums">
+                          <p className="text-xs text-[#73726C] dark:text-white/55 tabular-nums">
                             {(screenshotFile!.size / (1024 * 1024)).toFixed(1)}{" "}
                             MB
                           </p>
@@ -535,7 +535,7 @@ export function GeneralFeedbackDrawer({
                           type="button"
                           variant="ghost"
                           onClick={() => setScreenshotFile(null)}
-                          className="h-10 px-3 rounded-full text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4"
+                          className="h-8 px-2 rounded-lg hover:bg-black/5 text-[#3D3D3A]/80 hover:text-[#3D3D3A] dark:hover:bg-white/10 dark:text-white/80 dark:hover:text-white"
                         >
                           Remove
                         </Button>
@@ -547,13 +547,13 @@ export function GeneralFeedbackDrawer({
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-5 border-t border-ia-border flex items-center gap-3 flex-shrink-0">
+              <div className="px-6 py-5 border-t border-black/10 dark:border-white/10 flex items-center gap-3 flex-shrink-0">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleClose}
                   disabled={isSubmitting}
-                  className="flex-1 h-11 rounded-full bg-transparent border-ia-border text-ia-text font-semibold hover:bg-transparent hover:border-ia-border-strong hover:text-ia-text focus-visible:ring-2 focus-visible:ring-ia-focus"
+                  className="flex-1 h-10 rounded-xl bg-transparent border-black/15 text-[#3D3D3A] hover:bg-black/5 hover:text-[#3D3D3A] dark:border-white/15 dark:text-white dark:hover:bg-white/10 dark:hover:text-white"
                 >
                   {strings.gfDrawerCancel}
                 </Button>
@@ -561,7 +561,7 @@ export function GeneralFeedbackDrawer({
                   type="button"
                   onClick={handleSubmit}
                   disabled={isSubmitting || !feedback.trim()}
-                  className="flex-1 h-11 rounded-full bg-ia-blue-4 hover:bg-ia-navy-4 text-white font-semibold focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2"
+                  className="flex-1 h-10 rounded-xl bg-[#056CB6] hover:bg-[#0F4B8F] text-white font-semibold"
                 >
                   {isSubmitting
                     ? strings.gfDrawerSending

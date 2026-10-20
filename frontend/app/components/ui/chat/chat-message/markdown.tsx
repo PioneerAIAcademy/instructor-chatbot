@@ -1,5 +1,6 @@
 import "katex/dist/katex.min.css";
 import { CSSProperties, FC, memo, ReactNode, useMemo } from "react";
+import { Lock } from "lucide-react";
 import ReactMarkdown, { Options } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
@@ -17,6 +18,7 @@ import {
   SourceNumberButton,
 } from "./chat-sources";
 import styles from "./markdown.module.css";
+import { isLoginLink, rehypeSignInNotes } from "./sign-in-links";
 
 // Sanitization schema: extends the default rehype-sanitize whitelist with
 // the 5 inline semantic tags we let the LLM emit. NO extra attributes are
@@ -37,8 +39,7 @@ const MARKDOWN_SANITIZE_SCHEMA = {
   },
 };
 
-// Drafts read in the app's text face (prototype .draft-body: Mulish 16/1.6).
-const DRAFT_STREAM_FONT_FAMILY = "var(--font-mulish), Mulish, system-ui, sans-serif";
+const DRAFT_STREAM_FONT_FAMILY = "Georgia, 'Times New Roman', Times, serif";
 
 const NON_DRAFT_BLOCK_LANGUAGES = new Set([
   "javascript",
@@ -171,9 +172,9 @@ const stripCitationMarkersForDraft = (text: string): string =>
 
 const renderRawTextBlock = (value: string) => {
   return (
-    <div className="mt-4 mb-4 max-w-full rounded-xl border border-ia-border bg-ia-surface overflow-hidden">
+    <div className="mt-4 mb-4 max-w-full rounded-2xl border border-gray-200/90 dark:border-gray-700/60 bg-white dark:bg-[#1a1f2b] shadow-sm overflow-hidden">
       <pre
-        className="m-0 px-4 py-4 whitespace-pre-wrap break-words text-[16px] leading-[1.6] text-ia-text"
+        className="m-0 px-4 py-4 whitespace-pre-wrap break-words text-[16px] leading-[1.72] text-gray-800 dark:text-gray-200"
         style={{ fontFamily: DRAFT_STREAM_FONT_FAMILY }}
       >
         {value}
@@ -471,17 +472,17 @@ const DATE_PATTERN = new RegExp(
   "giu",
 );
 
-// A date in an answer (date_spans): the prototype's highlight, Blue 1 behind
-// Gray 4 (9.2:1) in both themes.
-const DATE_CHIP_CLASSNAME = "date-chip";
+const DATE_CHIP_CLASSNAME =
+  "date-chip inline-block align-baseline";
 
+// The same pale-blue highlight as <mark> (markdown.css), in the answer's font.
 const DATE_CHIP_STYLE: CSSProperties = {
-  background: "var(--ia-blue-1)",
-  color: "var(--ia-gray-4)",
+  background: "var(--highlight-bg)",
+  color: "var(--highlight-text)",
   borderRadius: "8px",
-  padding: "2px 6px",
-  boxDecorationBreak: "clone",
-  WebkitBoxDecorationBreak: "clone",
+  padding: "1px 6px",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
 };
 
 const escapeRegExp = (value: string): string => {
@@ -860,8 +861,16 @@ export default function Markdown({
           return <></>;
         }
       }
+      // A page behind a sign-in gets a lock before its text; the backend's
+      // "(sign-in required)" note follows it.
       return (
         <a href={href} target="_blank" rel="noopener noreferrer">
+          {isLoginLink(href) && (
+            <Lock
+              className="mr-1 inline-block h-[0.9em] w-[0.9em] align-[-0.1em]"
+              aria-hidden="true"
+            />
+          )}
           {children}
         </a>
       );
@@ -871,7 +880,7 @@ export default function Markdown({
   const loadingClass = isLoading ? "markdown-loading" : "markdown-ready";
   return (
     <div
-      className={`break-words overflow-wrap-anywhere custom-markdown text-ia-text text-base leading-6 tracking-normal max-w-full ${loadingClass}`}
+      className={`prose dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 break-words overflow-wrap-anywhere custom-markdown text-[#454540] dark:text-[#D6D6D6] text-[16px] leading-[1.6] tracking-normal max-w-full ${loadingClass}`}
     >
       {blocks.map((block, i) => (
         <MemoizedReactMarkdown
@@ -882,6 +891,7 @@ export default function Markdown({
             rehypeRaw as any,
             [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA] as any,
             rehypeKatex as any,
+            rehypeSignInNotes as any,
           ]}
           components={mdComponents}
         >

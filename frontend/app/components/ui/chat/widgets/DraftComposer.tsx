@@ -55,8 +55,7 @@ interface DraftEditApiResponse {
 type TextStyleOption = "p" | "h1" | "h2" | "h3";
 type DropdownStyleOption = TextStyleOption | "ul" | "ol";
 
-// Prototype .draft-body: Mulish 16/1.6, the app's text face.
-const RICH_TEXT_FONT_FAMILY = "var(--font-mulish), Mulish, system-ui, sans-serif";
+const RICH_TEXT_FONT_FAMILY = "Georgia, 'Times New Roman', Times, serif";
 const FORMAT_BLOCK_VALUE: Record<TextStyleOption, string> = {
   p: "<p>",
   h1: "<h1>",
@@ -515,7 +514,7 @@ export function DraftComposer({
 
     const marker = document.createElement("span");
     marker.className =
-      "bg-ia-blue-1 text-ia-gray-4 rounded px-0.5 break-words";
+      "bg-sky-100/90 dark:bg-sky-900/40 text-inherit rounded px-0.5 break-words";
 
     try {
       range.surroundContents(marker);
@@ -887,12 +886,12 @@ export function DraftComposer({
 
       const del = document.createElement("del");
       del.className =
-        "text-ia-text bg-ia-gray-1 line-through mx-0.5 px-0.5 rounded";
+        "text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 line-through mx-0.5 px-0.5 rounded";
       del.textContent = selectedText;
 
       const ins = document.createElement("ins");
       ins.className =
-        "text-ia-gray-4 bg-ia-blue-1 underline decoration-ia-blue-4 decoration-2 underline-offset-2 mx-0.5 px-0.5 rounded";
+        "text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/30 no-underline mx-0.5 px-0.5 rounded";
       ins.textContent = updatedText;
 
       fragment.appendChild(del);
@@ -980,11 +979,10 @@ export function DraftComposer({
   const askButtonLabel = "Tweak";
 
   return (
-    <div className="mt-4 mb-4 max-w-full flex flex-col rounded-xl overflow-visible border border-ia-border bg-ia-surface font-sans text-ia-text whitespace-normal">
+    <div className="mt-4 mb-4 max-w-full flex flex-col rounded-2xl overflow-visible border border-gray-200/90 dark:border-gray-700/60 bg-white dark:bg-[#1a1f2b] shadow-sm">
       {/* Header */}
-      {/* Draft strip (direction D): Blue 1 with Gray 4 text in both themes. */}
-      <div className="flex items-center justify-between rounded-t-xl px-4 py-1.5 bg-ia-blue-1 text-ia-gray-4">
-        <div className="text-sm font-bold">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/70 dark:bg-[#1e2430]">
+        <div className="text-sm font-semibold tracking-tight text-gray-700 dark:text-gray-200">
           {isEmail ? localized.emailLabel : localized.messageLabel}
         </div>
         <div className="relative flex items-center gap-1" ref={toolbarRef}>
@@ -992,10 +990,10 @@ export function DraftComposer({
           <button
             onClick={onCopy}
             aria-label={isCopied ? "Copied!" : "Copy"}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-ia-gray-4 hover:bg-ia-blue-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-navy-4"
+            className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
           >
             {isCopied ? (
-              <Check aria-hidden="true" className="w-4 h-4" />
+              <Check className="w-4 h-4 text-green-500" />
             ) : (
               <Copy className="w-4 h-4" />
             )}
@@ -1006,7 +1004,7 @@ export function DraftComposer({
             <Tooltip label={getChromeStrings(resolveUiLanguage()).draftSend} side="bottom" align="end">
             <button
               onClick={() => setSendOpen((v) => !v)}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-ia-gray-4 hover:bg-ia-blue-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-navy-4"
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
               aria-label={getChromeStrings(resolveUiLanguage()).draftSend}
             >
               <Send className="w-4 h-4" />
@@ -1016,9 +1014,9 @@ export function DraftComposer({
 
           {/* Send dropdown */}
           {isEmail && sendOpen && (
-            <div className="absolute right-0 top-full mt-2 z-20 min-w-[240px] rounded-xl border border-ia-border bg-ia-surface text-ia-text shadow-ia-pop p-2 font-sans">
+            <div className="absolute right-0 top-full mt-2 z-20 min-w-[200px] rounded-2xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-[#242628]/95 shadow-[0_18px_40px_rgba(0,0,0,0.2)] backdrop-blur-xl p-1.5 font-sans">
               <button
-                className="flex min-h-[44px] items-center gap-3 w-full rounded-lg px-3 py-2.5 text-left text-sm font-sans font-semibold text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ia-focus"
+                className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-left text-[15px] font-sans font-medium text-[#3D3D3A] dark:text-[#F3F4F6] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 onClick={() => handleSend("gmail")}
               >
                 <span className="inline-flex h-[18px] w-[18px] items-center justify-center shrink-0">
@@ -1034,7 +1032,7 @@ export function DraftComposer({
                 Gmail
               </button>
               <button
-                className="flex min-h-[44px] items-center gap-3 w-full rounded-lg px-3 py-2.5 text-left text-sm font-sans font-semibold text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ia-focus"
+                className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-left text-[15px] font-sans font-medium text-[#3D3D3A] dark:text-[#F3F4F6] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 onClick={() => handleSend("outlookWork")}
               >
                 <span className="inline-flex h-[18px] w-[18px] items-center justify-center shrink-0">
@@ -1050,7 +1048,7 @@ export function DraftComposer({
                 Outlook (Work or School)
               </button>
               <button
-                className="flex min-h-[44px] items-center gap-3 w-full rounded-lg px-3 py-2.5 text-left text-sm font-sans font-semibold text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ia-focus"
+                className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-left text-[15px] font-sans font-medium text-[#3D3D3A] dark:text-[#F3F4F6] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 onClick={() => handleSend("outlookPersonal")}
               >
                 <span className="inline-flex h-[18px] w-[18px] items-center justify-center shrink-0">
@@ -1079,10 +1077,10 @@ export function DraftComposer({
             {isEmail && (
               <div className="px-4 pt-3 pb-2">
                 <div
-                  className={`flex gap-2 rounded-md border border-ia-border bg-ia-gray-1 px-2.5 py-1.5 ${isSubjectWrapped ? "items-start" : "items-center"}`}
+                  className={`flex gap-2 rounded-md border border-gray-200/70 dark:border-gray-700/70 bg-gray-50/70 dark:bg-white/[0.03] px-2.5 py-1.5 ${isSubjectWrapped ? "items-start" : "items-center"}`}
                 >
                   <span
-                    className={`${isSubjectWrapped ? "pt-1" : ""} text-[15px] font-bold text-ia-text shrink-0`}
+                    className={`${isSubjectWrapped ? "pt-1" : ""} text-[15px] font-bold text-gray-700 dark:text-gray-300 shrink-0`}
                   >
                     {localized.subjectLabel}
                   </span>
@@ -1100,7 +1098,7 @@ export function DraftComposer({
                     disabled={Boolean(isLoading)}
                     placeholder={localized.addSubjectPlaceholder}
                     rows={1}
-                    className="flex-1 min-w-0 bg-transparent border-none outline-none text-[16px] leading-[1.4] font-medium text-ia-text placeholder:text-ia-text disabled:opacity-80 resize-none overflow-hidden whitespace-pre-wrap break-words"
+                    className="flex-1 min-w-0 bg-transparent border-none outline-none text-[16px] leading-[1.4] font-medium text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-500 disabled:opacity-80 resize-none overflow-hidden whitespace-pre-wrap break-words"
                     style={{
                       fontFamily: RICH_TEXT_FONT_FAMILY,
                       overflowWrap: "anywhere",
@@ -1108,7 +1106,7 @@ export function DraftComposer({
                     }}
                   />
                 </div>
-                <div className="mt-2 h-px bg-gradient-to-r from-ia-gray-1 via-ia-gray-1 to-transparent" />
+                <div className="mt-2 h-px bg-gradient-to-r from-gray-300/80 via-gray-300/40 to-transparent dark:from-gray-600/90 dark:via-gray-500/30 dark:to-transparent" />
               </div>
             )}
 
@@ -1120,7 +1118,7 @@ export function DraftComposer({
               onKeyUp={handleSelection}
               className={`
                 px-4 ${isEmail ? "pb-4 pt-1" : "py-4"} text-[16px] leading-[1.72] whitespace-pre-wrap
-                break-words text-ia-text
+                break-words text-gray-800 dark:text-gray-200
                 [&_h1]:text-[30px] [&_h1]:leading-[1.2] [&_h1]:font-semibold [&_h1]:my-2
                 [&_h2]:text-[24px] [&_h2]:leading-[1.25] [&_h2]:font-semibold [&_h2]:my-2
                 [&_h3]:text-[20px] [&_h3]:leading-[1.3] [&_h3]:font-semibold [&_h3]:my-2
@@ -1128,7 +1126,7 @@ export function DraftComposer({
                 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-2
                 [&_li]:my-1
                 focus:outline-none
-                ${!isLoading ? "cursor-text caret-ia-blue-4" : ""}
+                ${!isLoading ? "cursor-text caret-sky-500 dark:caret-sky-400" : ""}
               `}
               style={{
                 minHeight: 140,
@@ -1147,7 +1145,7 @@ export function DraftComposer({
         {toolbarState.visible && !showSkeleton && (
           <div
             ref={floatingToolbarRef}
-            className="fixed z-20 max-w-[calc(100vw-16px)] overflow-hidden flex items-center bg-ia-surface shadow-lg border border-ia-border rounded-lg p-1 gap-0.5 text-sm animate-in fade-in duration-150"
+            className="fixed z-20 max-w-[calc(100vw-16px)] overflow-hidden flex items-center bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-600 rounded-lg p-1 gap-0.5 text-sm animate-in fade-in duration-150"
             style={{
               top: Math.max(4, toolbarState.top),
               left: toolbarState.left,
@@ -1162,13 +1160,13 @@ export function DraftComposer({
           >
             {toolbarState.diffMode ? (
               <div className="flex gap-1 items-center px-1">
-                <span className="text-xs text-ia-text mr-1">
+                <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">
                   Accept or Undo?
                 </span>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-9 rounded-full bg-ia-blue-4 px-3 text-xs font-semibold text-white hover:bg-ia-navy-4 hover:text-white"
+                  className="h-7 text-xs text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30"
                   onClick={acceptDiff}
                 >
                   Accept
@@ -1176,7 +1174,7 @@ export function DraftComposer({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-9 rounded-full border border-ia-border bg-transparent px-3 text-xs font-semibold text-ia-text hover:border-ia-border-strong hover:bg-transparent"
+                  className="h-7 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                   onClick={undoDiff}
                 >
                   Undo
@@ -1191,7 +1189,7 @@ export function DraftComposer({
                       onChange={(e) =>
                         applyTextStyle(e.target.value as DropdownStyleOption)
                       }
-                      className="h-7 w-[96px] sm:w-[118px] rounded border border-ia-border bg-ia-surface px-1.5 text-[14px] text-ia-text outline-none cursor-pointer"
+                      className="h-7 w-[96px] sm:w-[118px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-1.5 text-[14px] text-gray-700 dark:text-gray-200 outline-none cursor-pointer"
                       title={`Text style: ${STYLE_LABEL[textStyle]}`}
                     >
                       <option value="p" style={STYLE_PREVIEW_OPTION_STYLE.p}>
@@ -1223,13 +1221,13 @@ export function DraftComposer({
                         </>
                       )}
                     </select>
-                    <div className="w-px h-5 bg-ia-gray-1 mx-0.5" />
+                    <div className="w-px h-5 bg-gray-200 dark:bg-gray-600 mx-0.5" />
                   </>
                 )}
 
                 <Tooltip label="Bold" side="top">
                 <button
-                  className="p-2 rounded-lg text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
+                  className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     applyFormat("bold");
@@ -1241,7 +1239,7 @@ export function DraftComposer({
                 </Tooltip>
                 <Tooltip label="Italic" side="top">
                 <button
-                  className="p-2 rounded-lg text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
+                  className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     applyFormat("italic");
@@ -1253,7 +1251,7 @@ export function DraftComposer({
                 </Tooltip>
                 <Tooltip label="Underline" side="top">
                 <button
-                  className="p-2 rounded-lg text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
+                  className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     applyFormat("underline");
@@ -1268,7 +1266,7 @@ export function DraftComposer({
                   <>
                     <Tooltip label="Bulleted list" side="top">
                     <button
-                      className="p-2 rounded-lg text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
+                      className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         applyTextStyle("ul");
@@ -1281,7 +1279,7 @@ export function DraftComposer({
 
                     <Tooltip label="Numbered list" side="top">
                     <button
-                      className="p-2 rounded-lg text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
+                      className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         applyTextStyle("ol");
@@ -1297,7 +1295,7 @@ export function DraftComposer({
                 {isEmail && (
                   <Tooltip label="Insert link" side="top">
                   <button
-                    className="p-2 rounded-lg text-ia-text hover:bg-ia-blue-1 hover:text-ia-gray-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
+                    className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       openLinkMode();
@@ -1309,9 +1307,9 @@ export function DraftComposer({
                   </Tooltip>
                 )}
 
-                <div className="w-px h-5 bg-ia-gray-1 mx-0.5" />
+                <div className="w-px h-5 bg-gray-200 dark:bg-gray-600 mx-0.5" />
                 <button
-                  className="flex items-center min-w-0 max-w-[68px] sm:max-w-none gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs font-medium text-sky-700 hover:bg-sky-50 transition-colors"
+                  className="flex items-center min-w-0 max-w-[68px] sm:max-w-none gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-950/20 transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     if (!highlightSelectionForAsk()) {
@@ -1332,7 +1330,7 @@ export function DraftComposer({
                   autoFocus
                   type="text"
                   placeholder="Describe the change to apply..."
-                  className="text-sm bg-transparent border-none outline-none w-44 px-1 text-ia-text placeholder:text-ia-text"
+                  className="text-sm bg-transparent border-none outline-none w-44 px-1 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
                   maxLength={ASK_INPUT_MAX_CHARS}
                   value={prompt}
                   onChange={(e) =>
@@ -1348,7 +1346,7 @@ export function DraftComposer({
                   {toolbarState.loading ? "Applying" : "Apply"}
                 </button>
                 {toolbarState.loading && (
-                  <span className="h-3 w-3 rounded-full border-2 border-ia-border border-t-ia-blue-4 animate-spin" />
+                  <span className="h-3 w-3 rounded-full border-2 border-gray-300 border-t-sky-500 animate-spin" />
                 )}
               </div>
             ) : (
@@ -1357,7 +1355,7 @@ export function DraftComposer({
                   autoFocus
                   type="url"
                   placeholder="Paste a link..."
-                  className="text-sm bg-transparent border-none outline-none w-36 sm:w-44 px-1 text-ia-text placeholder:text-ia-text"
+                  className="text-sm bg-transparent border-none outline-none w-36 sm:w-44 px-1 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
                   value={linkInput}
                   onChange={(e) => setLinkInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1407,7 +1405,7 @@ function renderContentWithHighlights(
   return formattedText
     .replace(
       PLACEHOLDER_TOKEN_RE,
-      '<span class="bg-ia-blue-1 text-ia-gray-4 px-[5px] py-px rounded-lg font-semibold">[$1]</span>',
+      '<span class="bg-sky-100 dark:bg-sky-900/30 text-sky-800 dark:text-sky-200 px-1 rounded font-medium">[$1]</span>',
     )
     .replace(/\n/g, "<br />");
 }
@@ -1492,7 +1490,7 @@ function splitTrailingUrlPunctuation(href: string): {
 }
 
 function buildDraftLinkHtml(href: string, label: string): string {
-  return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-sky-700 underline underline-offset-2">${label}</a>`;
+  return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-sky-700 dark:text-sky-300 underline underline-offset-2">${label}</a>`;
 }
 
 function escapeHtml(value: string): string {
@@ -1510,17 +1508,17 @@ function DraftSkeleton({ isEmail }: { isEmail: boolean }) {
       {isEmail && (
         <>
           <div className="flex items-center gap-2 mb-2">
-            <div className="h-4 w-14 rounded bg-ia-gray-1" />
-            <div className="h-4 flex-1 rounded bg-ia-gray-1" />
+            <div className="h-4 w-14 rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="h-4 flex-1 rounded bg-gray-200 dark:bg-gray-700" />
           </div>
-          <div className="mb-3 h-px bg-gradient-to-r from-ia-gray-1 via-ia-gray-1 to-transparent" />
+          <div className="mb-3 h-px bg-gradient-to-r from-gray-200 via-gray-200/40 to-transparent dark:from-gray-700 dark:via-gray-600/30 dark:to-transparent" />
         </>
       )}
       <div className="space-y-2">
-        <div className="h-3.5 w-full rounded bg-ia-gray-1" />
-        <div className="h-3.5 w-11/12 rounded bg-ia-gray-1" />
-        <div className="h-3.5 w-10/12 rounded bg-ia-gray-1" />
-        <div className="h-3.5 w-8/12 rounded bg-ia-gray-1" />
+        <div className="h-3.5 w-full rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-3.5 w-11/12 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-3.5 w-10/12 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-3.5 w-8/12 rounded bg-gray-200 dark:bg-gray-700" />
       </div>
     </div>
   );

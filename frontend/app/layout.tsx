@@ -20,24 +20,17 @@ const resolveMetadataBase = () => {
 
 const metadataBase = resolveMetadataBase();
 
-// Self-hosted from npm (@fontsource-variable, pinned), so neither a build
-// nor a visit contacts Google: next/font/google fetched the fonts at build
-// time, and one flaky response failed the build. Variable fonts (one file
-// each); the "latin" files cover English and the accented letters of
-// Portuguese, Spanish, and French. Other scripts fall back to system fonts.
+// Mulish for all text (owner's choice, matching the answer design). Served
+// from this site, from a pinned npm package, so neither a build nor a visit
+// contacts Google. The "latin" file covers English and the accented letters
+// of Portuguese, Spanish, and French; other scripts fall back to system fonts.
+// The greeting keeps its serif (Georgia), as upstream.
 const mulish = localFont({
   src: "../node_modules/@fontsource-variable/mulish/files/mulish-latin-wght-normal.woff2",
   weight: "200 1000",
   style: "normal",
   display: "swap",
   variable: "--font-mulish",
-});
-const crimsonPro = localFont({
-  src: "../node_modules/@fontsource-variable/crimson-pro/files/crimson-pro-latin-wght-normal.woff2",
-  weight: "200 900",
-  style: "normal",
-  display: "swap",
-  variable: "--font-crimson",
 });
 
 const TITLE = "Instructor Assistant";
@@ -105,8 +98,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
-    { media: "(prefers-color-scheme: dark)", color: "#454540" },
+    { media: "(prefers-color-scheme: light)", color: "#FAF9F5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0A0A0A" },
   ],
 };
 
@@ -116,11 +109,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${mulish.variable} ${crimsonPro.variable}`}
-    >
+    <html lang="en" suppressHydrationWarning className={mulish.variable}>
       <head>
         <script
           dangerouslySetInnerHTML={{

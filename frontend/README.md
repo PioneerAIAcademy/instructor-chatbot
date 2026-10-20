@@ -5,11 +5,49 @@ static export, copied from pathway-chatbot `870cc5b` and trimmed: no ACM mode, c
 tuition, dictation, uploads, or LlamaCloud. It talks only to the backend's documented API
 ([`../backend/API.md`](../backend/API.md)).
 
-Design: **direction D, "light chrome"** from the all-blue prototype. A white header with
-the BYU-Pathway logo as-is, Blue 4 `#056CB6` for things you act on, Mulish for text and
-Crimson Pro for the greeting and headings. The palette is defined once, as CSS variables
-in `app/globals.css` and Tailwind colors `ia-*` in `tailwind.config.ts`; components use
-those, not raw hex.
+Design: **the Missionary Assistant's design, in blue** (owner's decision, 2026-10-20).
+The layout and components are upstream's. Two things change: the brand color, from
+gold `#FFC328` to blue, and the answer format, which follows the owner's prototype (below).
+The font is **Mulish** across the app (owner, 2026-10-20); the greeting keeps Georgia.
+
+The blue is **`#056CB6`** (owner's choice), with navy `#0F4B8F` for hover.
+
+| Missionary (gold) | Instructor (blue) |
+| --- | --- |
+| Header bar `#FFC328`, gray logo and title | `#056CB6`; the logo, title, and gear show in white (gray would be unreadable on it; the logo file is unchanged) |
+| Gold buttons (send, stop, submit, send feedback, save) | `#056CB6` with white, hover `#0F4B8F` |
+| Gold tints (selected items, hovers, selection, highlights) | Light tints of `#056CB6` |
+| Amber focus ring | `#056CB6` |
+| The gold path mark (bot avatar, favicon, home-screen icons) | The same mark in `#056CB6` (`public/BYU-pathway-icon-logo-blue.png`, `favicon.ico`, `apple-touch-icon.png`, `android-chrome-*.png`) |
+
+Dark-mode link text and one field border use a lighter blue (`#8EBDDE`): `#056CB6` text
+on the dark page is about 3.3:1, under the 4.5:1 text needs.
+
+Opening screen: for 1 s on every visit (upstream's loader held 800 ms), the name
+**INSTRUCTOR ASSISTANT** shows in light gray while a `#056CB6` band sweeps through it to
+the right and back to the left, and keeps sweeping until the app is ready (owner,
+2026-10-20). The screen is in the page's HTML, so on a slow connection it shows, still
+moving, until the app has loaded. With reduced motion it is simply blue.
+
+Answers, as in the owner's prototype screenshot:
+- Mulish 16px text in gray `#454540` (`#D6D6D6` dark), line height 1.6.
+- Citations are round numbered badges: light blue `#8EBDDE` with a gray number,
+  `#056CB6` with white on hover or keyboard focus. Hovering one previews the source; up
+  to 3 at one spot show side by side, more collapse to the first plus "+N".
+- Highlights (`mark`) and dates are pale blue `#E7F0FA`, rounded 8px.
+- Links are navy `#0F4B8F`, underlined. A sign-in link gets a lock icon, and the
+  backend's "(sign-in required)" note shows small and gray.
+- Under the answer, one row: an outlined **Sources (N)** pill with a book icon, then
+  round outlined thumbs up, thumbs down, copy, and regenerate (44px on phones, 40px
+  up). The suggested follow-ups below it are pale-blue pills.
+
+Differences from upstream on purpose:
+- Citation pills show a local document or globe icon, not the site's favicon from Google
+  (which sent Google every cited domain).
+- The Sources pill and drawer list only the cited sources, labeled "Instructor guide
+  (PDF)" or "External page · host".
+- Starter questions show on the empty chat (upstream fetched but never showed them).
+- The "PRIVACY:" notice sits where upstream's "IMPORTANT:" note was, and stays.
 
 ## Run it
 
@@ -78,9 +116,9 @@ never carries a role: the backend serves one audience and ignores a client role.
 - **Under the input, always:** "Don't include student names, IDs, or grades." (CLAUDE.md
   §9.2) and the AI note.
 - **Answers:** numbered citation badges (`[^N]`). Hovering one previews the source.
-  **Sources (N)** opens a panel listing each source as "Instructor guide (PDF)" or
-  "External page · host", with a link to it. Sign-in links carry "(sign-in required)",
-  added by the backend.
+  **Sources (N)** opens a panel listing each cited source, numbered like its badge, as
+  "Instructor guide (PDF)" or "External page · host", with a link to it. Sign-in links
+  show a lock and carry "(sign-in required)", added by the backend.
 - **Drafts:** a ```` ```message ```` or ```` ```email ```` answer opens in the draft
   composer (edit, tweak, copy, open in Gmail/Outlook).
 

@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { ChatHandler, SuggestedQuestionsData } from "..";
 
-/**
- * Suggested follow-up chips (direction D): Blue 1 pills with Gray 4 text
- * (9.2:1), 36px tall, 44px on phones. Real buttons, so they work by keyboard.
- */
 export function SuggestedQuestions({
   questions,
   append,
@@ -14,23 +10,27 @@ export function SuggestedQuestions({
 }) {
   const [showQuestions, setShowQuestions] = useState(questions.length > 0);
 
-  if (!showQuestions || append === undefined) return null;
   return (
-    <ul className="m-0 flex list-none flex-wrap gap-2 p-0" aria-label="Suggested follow-up questions">
-      {questions.map((question) => (
-        <li key={question} className="max-w-full">
+    showQuestions &&
+    append !== undefined && (
+      <div className="flex flex-wrap gap-2">
+        {questions.map((question, index) => (
+          // A real button (upstream used an <a> with no href, which the
+          // keyboard can't reach).
           <button
             type="button"
+            key={index}
             onClick={() => {
               append({ role: "user", content: question });
               setShowQuestions(false);
             }}
-            className="inline-flex min-h-[44px] max-w-full items-center rounded-full bg-ia-blue-1 px-3.5 py-2 text-left text-sm font-semibold leading-snug text-ia-gray-4 transition-colors hover:bg-ia-blue-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg sm:min-h-[36px]"
+            // Pale-blue pills; 44px tall on phones for touch, 36px up.
+            className="inline-flex min-h-11 max-w-full items-center rounded-full bg-[#E7F0FA] px-4 py-2 text-left text-[15px] font-medium text-[#454540] transition-colors hover:bg-[#8EBDDE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 dark:bg-[#056CB6]/25 dark:text-[#E7F0FA] dark:hover:bg-[#056CB6]/45 sm:min-h-9"
           >
             <span className="break-words">{question}</span>
           </button>
-        </li>
-      ))}
-    </ul>
+        ))}
+      </div>
+    )
   );
 }

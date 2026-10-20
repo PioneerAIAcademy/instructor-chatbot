@@ -36,7 +36,7 @@ them in this shape.
 | `backend/Dockerfile` | `backend/Dockerfile` | Keep\* | Stale comments (web loader, spacy) removed. Phase 7: an allow-list `.dockerignore` (upstream has none, so `COPY . .` copied a local `.env` into the image); gunicorn binds `0.0.0.0:${PORT:-8000}` (upstream binds 127.0.0.1 unless the host sets `PORT`); Poetry pinned to 2.4.1; `ENV ENVIRONMENT=prod`; `APP_VERSION` build arg. |
 | `backend/pyproject.toml` | `backend/pyproject.toml` | Adapt | `llama-index` meta-package replaced by the four parts the chat path imports (same locked versions). Dropped: spacy, llama-cloud, arize-phoenix, pandas/pyarrow/boto3/apscheduler, docx2txt, jupyterlab, unused security pins. `pyyaml` listed explicitly for the eval set (it was already locked at 6.0.3 as a transitive dependency). `langfuse` is 4.16.0 (Phase 5; upstream's 2.60.10 uses the ingestion API Langfuse Cloud shuts down on 2026-11-16). `llama-index-program-openai` 0.1.7 and `llama-index-agent-openai` 0.2.6 restored in Phase 4 (upstream's versions): suggested questions' `astructured_predict` needs them, and the Phase 0 trim had silently broken it. Pre-deploy: `transformers` pinned to 4.57.1 (5.x needs torch ≥ 2.4; torch stays 2.2.2, the last build for Intel Macs). |
 | `backend/poetry.lock` | `backend/poetry.lock` | Adapt | Re-locked with `poetry lock` (Poetry 2.4.1, which keeps existing versions); 270 → 125 packages. Every remaining package kept its upstream-locked version. Pre-deploy: re-locked for transformers 4.57.1 (huggingface-hub 1.16.1 → 0.36.2; six CLI-only packages dropped). |
-| `backend/main.py` | `backend/main.py` | Adapt | Boot runs `check_index_config()` and refuses a wrong index or host, and refuses a missing `VOYAGE_API_KEY`. Only chat, config, health routers. No calendar/tuition/dictation/upload routers, file server, block-date or tuition schedulers, or S3 monitoring scheduler. The dev root redirect goes to `/api/docs` (upstream pointed at `/docs`, a 404) and is hidden from the API schema. Sentry: no request bodies, no stack locals, `release` = `APP_VERSION`, and `before_send` / `before_breadcrumb` redact exception values, messages, log entries, and breadcrumbs. Shutdown flushes Langfuse. Pre-deploy: preloads the injection model in a background thread at startup. |
+| `backend/main.py` | `backend/main.py` | Adapt | Boot runs `check_index_config()` and refuses a wrong index or host, and refuses a missing `VOYAGE_API_KEY`. Only chat, config, health routers. No calendar/tuition/dictation/upload routers, file server, block-date or tuition schedulers, or S3 monitoring scheduler. The dev root redirect goes to `/api/docs` (upstream pointed at `/docs`, a 404) and is hidden from the API schema. Sentry: no request bodies, no stack locals, `release` = `APP_VERSION`, and `before_send` / `before_breadcrumb` redact exception values, messages, log entries, and breadcrumbs. Shutdown flushes Langfuse. Pre-deploy: preloads the injection model in a background thread at startup. `ALLOWED_ORIGINS` entries are compared without a trailing slash (browsers never send one, so `https://site/` blocked every request). |
 | `backend/app/__init__.py` | `backend/app/__init__.py` | Keep | — |
 | `backend/app/auth.py` | `backend/app/auth.py` | Keep | — |
 | `backend/app/langfuse.py` | `backend/app/langfuse.py` | Adapt | langfuse 4.x client with `mask` (input, output, metadata), `environment`, and `release`. `real_id()` maps disabled-tracing (all-zero) IDs to None. |
@@ -95,71 +95,71 @@ them in this shape.
 | `frontend/.gitignore` | `frontend/.gitignore` | Keep | — |
 | `frontend/Dockerfile` | `frontend/Dockerfile` | Keep\* | Release stage holds only `out/` (built from the `.dockerignore` allow-list); serves on `$PORT`; all `NEXT_PUBLIC_*` as build args. |
 | `frontend/README.md` | `frontend/README.md` | Adapt | Rewritten for the Instructor Assistant (run, settings, API use, deploy). The false "headers set in next.config.json" claim removed. |
-| `frontend/app/components/chat-section.tsx` | `frontend/app/components/chat-section.tsx` | Adapt | No ACM state, `?acm=`, `role`, dictation, correction, or upload data. Starter cards on the empty chat; FERPA notice and AI note under the input; blank input sends nothing; the error banner clears on a new send; no CSS smooth scroll (reduced motion); error banner and scroll button restyled. |
-| `frontend/app/components/disclaimer-message.tsx` | `frontend/app/components/disclaimer-message.tsx` | Keep\* | Restyled as an info notice (Blue 3 bar). |
-| `frontend/app/components/general-feedback-drawer.tsx` | `frontend/app/components/general-feedback-drawer.tsx` | Keep\* | Direction D colors (Blue 4 Send, outlined Cancel, theme focus ring and link). |
-| `frontend/app/components/greeting.tsx` | `frontend/app/components/greeting.tsx` | Keep\* | Crimson Pro `h2` with a subtitle; missionary greetings replaced; greeting version bumped. |
-| `frontend/app/components/header.tsx` | `frontend/app/components/header.tsx` | Adapt | Rewritten for direction D: white header (Gray 4 in dark), logo as-is (lightened by a filter in dark), icon logo on phones. |
-| `frontend/app/components/loading-spinner.tsx` | `frontend/app/components/loading-spinner.tsx` | Keep\* | Blue 4 spinner on the theme background. |
-| `frontend/app/components/settings-menu.tsx` | `frontend/app/components/settings-menu.tsx` | Keep\* | Restyled (segmented theme control, 44px rows). Help link shown only when `NEXT_PUBLIC_HELP_URL` is set: upstream linked the missionary guide. |
+| `frontend/app/components/chat-section.tsx` | `frontend/app/components/chat-section.tsx` | Adapt | Upstream's layout. No ACM state, `?acm=`, `role`, dictation, correction, or upload data; starter cards on the empty chat; the "PRIVACY:" notice where "IMPORTANT:" was, always shown; blank input sends nothing; the error banner clears on a new send; no CSS smooth scroll. |
+| `frontend/app/components/disclaimer-message.tsx` | `frontend/app/components/disclaimer-message.tsx` | Keep | — |
+| `frontend/app/components/general-feedback-drawer.tsx` | `frontend/app/components/general-feedback-drawer.tsx` | Keep\* | Upstream's drawer in blue. |
+| `frontend/app/components/greeting.tsx` | `frontend/app/components/greeting.tsx` | Keep\* | Upstream's greeting; two missionary phrases replaced; greeting version bumped. |
+| `frontend/app/components/header.tsx` | `frontend/app/components/header.tsx` | Keep\* | Upstream's header on brand blue `#056CB6` (was gold); the logo (via a CSS filter), title, and focus ring in white; the Instructor Assistant title. |
+| `frontend/app/components/loading-spinner.tsx` | `frontend/app/components/loading-spinner.tsx` | Adapt | The spinner and "Loading..." are replaced by the name "INSTRUCTOR ASSISTANT" with a blue band sweeping through it to the right and back, looping until the app is ready (`.loader-word` in `globals.css`; plain blue with reduced motion). `AppLoader` holds 1 s instead of 800 ms, the length of the sweep. |
+| `frontend/app/components/settings-menu.tsx` | `frontend/app/components/settings-menu.tsx` | Keep\* | Upstream's menu in blue; the gear shows in white on the blue header; Help link shown only when `NEXT_PUBLIC_HELP_URL` is set (upstream linked the missionary guide). |
 | `frontend/app/components/theme-provider.tsx` | `frontend/app/components/theme-provider.tsx` | Keep | — |
 | `frontend/app/components/ui/button.tsx` | `frontend/app/components/ui/button.tsx` | Keep | — |
-| `frontend/app/components/ui/chat/chat-input.tsx` | `frontend/app/components/ui/chat/chat-input.tsx` | Adapt | Rewritten: no uploads, dictation, ACM pill, or LlamaCloud. Blue 4 send/stop; Enter ignores a blank input; short placeholder on phones; accessible name; no inline style. |
+| `frontend/app/components/ui/chat/chat-input.tsx` | `frontend/app/components/ui/chat/chat-input.tsx` | Adapt | Upstream's input without uploads, dictation, the role pill, or LlamaCloud; send/stop in blue `#056CB6`; Enter ignores a blank input; accessible name. |
 | `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.module.css` | `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.module.css` | Keep | — |
-| `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.tsx` | `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.tsx` | Keep\* | Round outlined thumbs with `aria-pressed` (filled icon when pressed); Blue 4 submit; instructor wording. |
-| `frontend/app/components/ui/chat/chat-message/chat-avatar.tsx` | `frontend/app/components/ui/chat/chat-message/chat-avatar.tsx` | Keep\* | Assistant avatar is a Blue 4 circle with a sparkle (was the gold icon logo). |
-| `frontend/app/components/ui/chat/chat-message/chat-events.tsx` | `frontend/app/components/ui/chat/chat-message/chat-events.tsx` | Keep\* | Status line uses the shared `ChatStatus` (blue dots, `role=status`). |
-| `frontend/app/components/ui/chat/chat-message/chat-sources.tsx` | `frontend/app/components/ui/chat/chat-message/chat-sources.tsx` | Adapt | Numbered Blue 2 citation badges (no Google favicon requests). "Sources (N)" counts only the cited sources, and the panel lists only them, numbered as their badges; no button when nothing is cited. Cards show "Instructor guide (PDF)" / "External page · host" and an open link; Escape closes. |
-| `frontend/app/components/ui/chat/chat-message/chat-suggestedQuestions.tsx` | `frontend/app/components/ui/chat/chat-message/chat-suggestedQuestions.tsx` | Adapt | Rewritten: Blue 1 pill buttons (were `<a>` without `href`, not keyboard-reachable). |
+| `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.tsx` | `frontend/app/components/ui/chat/chat-message/UserFeedbackComponent.tsx` | Keep\* | Upstream's thumbs as round outlined 40px buttons (44px on phones), to match the answer's action row; `aria-pressed` and a textarea label added. |
+| `frontend/app/components/ui/chat/chat-message/chat-avatar.tsx` | `frontend/app/components/ui/chat/chat-message/chat-avatar.tsx` | Keep\* | Uses the blue copy of the path mark (`BYU-pathway-icon-logo-blue.png`). |
+| `frontend/app/components/ui/chat/chat-message/chat-events.tsx` | `frontend/app/components/ui/chat/chat-message/chat-events.tsx` | Keep | — |
+| `frontend/app/components/ui/chat/chat-message/chat-sources.tsx` | `frontend/app/components/ui/chat/chat-message/chat-sources.tsx` | Adapt | Upstream's popover and drawer. Citations are round numbered badges (light blue, `#056CB6` on hover/focus; groups of more than 3 collapse to "+N") in place of title pills; "Sources (N)" is an outlined pill with a book icon, and exports the shared `OUTLINE_PILL` / `ACTION_BUTTON` classes; the pill and drawer count and list only cited sources, each card numbered like its badge; local document/globe icon instead of Google favicons; "Instructor guide (PDF)" / "External page · host" in place of the domain; Escape closes. |
+| `frontend/app/components/ui/chat/chat-message/chat-suggestedQuestions.tsx` | `frontend/app/components/ui/chat/chat-message/chat-suggestedQuestions.tsx` | Adapt | Follow-ups are pale-blue `#E7F0FA` pills (owner's prototype) in place of the italic arrow list; the `<a>` without `href` is a `<button>` (keyboard). |
 | `frontend/app/components/ui/chat/chat-message/copy-utils.ts` | `frontend/app/components/ui/chat/chat-message/copy-utils.ts` | Keep\* | Comment wording only. |
-| `frontend/app/components/ui/chat/chat-message/index.tsx` | `frontend/app/components/ui/chat/chat-message/index.tsx` | Adapt | Only the API.md annotations (calendar, tuition, image, file, tool, correction branches removed); `date_spans` passed to Markdown; sources processed once and passed down; actions row (Sources, copy, thumbs, regenerate) then suggestions; Gray 4 user bubble. |
-| `frontend/app/components/ui/chat/chat-message/markdown.module.css` | `frontend/app/components/ui/chat/chat-message/markdown.module.css` | Adapt | Rewritten with direction D tokens: Crimson Pro headings, prototype table, Blue 3 blockquote. |
-| `frontend/app/components/ui/chat/chat-message/markdown.tsx` | `frontend/app/components/ui/chat/chat-message/markdown.tsx` | Keep\* | Calendar ("Block/Term N") and program-catalog heading promotion removed. Date highlight is Blue 1; drafts use Mulish; answer text 16px in the theme color. |
+| `frontend/app/components/ui/chat/chat-message/index.tsx` | `frontend/app/components/ui/chat/chat-message/index.tsx` | Adapt | Upstream's markup and order; only the API.md annotations (calendar, tuition, image, file, tool, correction branches removed); `date_spans` passed to Markdown; sources processed once; Save button in blue. One action row under the answer (Sources pill, thumbs, copy, regenerate as round outlined buttons), then the follow-ups. |
+| `frontend/app/components/ui/chat/chat-message/markdown.module.css` | `frontend/app/components/ui/chat/chat-message/markdown.module.css` | Keep\* | Upstream's styles; the blockquote bar and background in blue. |
+| `frontend/app/components/ui/chat/chat-message/markdown.tsx` | `frontend/app/components/ui/chat/chat-message/markdown.tsx` | Adapt | Calendar ("Block/Term N") and program-catalog heading promotion removed. Answer text 16px gray `#454540`; dates as the pale-blue highlight; a lock icon on sign-in links, and `rehypeSignInNotes` (new `sign-in-links.ts`) marks the backend's note so it shows small and gray. |
 | `frontend/app/components/ui/chat/chat-message/thumb_request.ts` | `frontend/app/components/ui/chat/chat-message/thumb_request.ts` | Keep | — |
 | `frontend/app/components/ui/chat/chat-messages.tsx` | `frontend/app/components/ui/chat/chat-messages.tsx` | Keep\* | Starter-question fetch and (never-shown) rendering removed; they live on the empty chat now (`use-starter-questions.ts`, `starter-questions.tsx`). |
-| `frontend/app/components/ui/chat/chat-pending-indicator.tsx` | `frontend/app/components/ui/chat/chat-pending-indicator.tsx` | Keep\* | Uses `ChatStatus` and the localized "Thinking…". |
+| `frontend/app/components/ui/chat/chat-pending-indicator.tsx` | `frontend/app/components/ui/chat/chat-pending-indicator.tsx` | Keep | — |
 | `frontend/app/components/ui/chat/chat.interface.ts` | `frontend/app/components/ui/chat/chat.interface.ts` | Keep | — |
 | `frontend/app/components/ui/chat/hooks/use-config.ts` | `frontend/app/components/ui/chat/hooks/use-config.ts` | Keep | — |
 | `frontend/app/components/ui/chat/hooks/use-copy-to-clipboard.tsx` | `frontend/app/components/ui/chat/hooks/use-copy-to-clipboard.tsx` | Keep | — |
 | `frontend/app/components/ui/chat/hooks/use-throttled-value.ts` | `frontend/app/components/ui/chat/hooks/use-throttled-value.ts` | Keep | — |
 | `frontend/app/components/ui/chat/index.ts` | `frontend/app/components/ui/chat/index.ts` | Adapt | Annotation types cut to `events`, `date_spans`, `user_language`, `sources`, `suggested_questions`. `getSourceAnnotationData` is pure and cached per annotation (upstream changed the annotation in place and sorted by score). |
 | `frontend/app/components/ui/chat/utils/localization.ts` | `frontend/app/components/ui/chat/utils/localization.ts` | Keep | — |
-| `frontend/app/components/ui/chat/widgets/DraftComposer.tsx` | `frontend/app/components/ui/chat/widgets/DraftComposer.tsx` | Keep\* | Direction D colors (Blue 1 strip and placeholders); Mulish body; 44px header buttons; Blue 4 Accept, outlined Undo; inserted text underlined, not color alone. |
+| `frontend/app/components/ui/chat/widgets/DraftComposer.tsx` | `frontend/app/components/ui/chat/widgets/DraftComposer.tsx` | Keep\* | Upstream's composer; amber placeholder chips are sky blue. |
 | `frontend/app/components/ui/hover-card.tsx` | `frontend/app/components/ui/hover-card.tsx` | Keep | — |
 | `frontend/app/components/ui/lib/utils.ts` | `frontend/app/components/ui/lib/utils.ts` | Keep | — |
-| `frontend/app/components/ui/toast.tsx` | `frontend/app/components/ui/toast.tsx` | Keep\* | Gray 4 toast with white text; the icon carries the status. |
-| `frontend/app/components/ui/tooltip.tsx` | `frontend/app/components/ui/tooltip.tsx` | Keep\* | Gray 4 tooltip. |
-| `frontend/app/global-error.tsx` | `frontend/app/global-error.tsx` | Keep\* | Direction D colors (it can't use the app stylesheet); instructor copy. |
-| `frontend/app/globals.css` | `frontend/app/globals.css` | Adapt | Direction D palette as `--ia-*` tokens (light and dark); shared component colors and older per-element variables mapped to it; Inter and tuition fonts dropped; blue selection; no automatic hyphenation; date-chip rule removed. |
-| `frontend/app/layout.tsx` | `frontend/app/layout.tsx` | Keep\* | Mulish and Crimson Pro via `next/font/local` from pinned `@fontsource-variable` packages (no Google request at build or visit); Instructor Assistant metadata; theme colors; console easter egg removed. |
-| `frontend/app/lib/chrome-strings.ts` | `frontend/app/lib/chrome-strings.ts` | Adapt | English only (Q12) with instructor copy; ACM, dictation, and "missionaries only" strings removed; FERPA, source-type, and phone-placeholder strings added; other languages fall back to English. |
+| `frontend/app/components/ui/toast.tsx` | `frontend/app/components/ui/toast.tsx` | Keep | — |
+| `frontend/app/components/ui/tooltip.tsx` | `frontend/app/components/ui/tooltip.tsx` | Keep | — |
+| `frontend/app/global-error.tsx` | `frontend/app/global-error.tsx` | Keep\* | Upstream's page in blue; instructor wording. |
+| `frontend/app/globals.css` | `frontend/app/globals.css` | Keep\* | Upstream's stylesheet in blue: header `#056CB6`, blue focus ring, blue selection; `--highlight-bg/-text` for `mark` and dates (the date-chip colors are gone); Mulish in place of Inter, and the Inter and tuition `@font-face` rules removed; no automatic hyphenation. |
+| `frontend/app/layout.tsx` | `frontend/app/layout.tsx` | Keep\* | Instructor Assistant metadata; console easter egg removed. Mulish (pinned `@fontsource-variable/mulish` through `next/font/local`) in place of Inter. |
+| `frontend/app/lib/chrome-strings.ts` | `frontend/app/lib/chrome-strings.ts` | Adapt | English only (Q12): upstream's wording with "Missionary" → "Instructor"; ACM, dictation, and "missionaries only" strings removed; disclaimer, privacy notice, and source-type strings for instructors. |
 | `frontend/app/lib/draft-registry.ts` | `frontend/app/lib/draft-registry.ts` | Keep | — |
 | `frontend/app/lib/i18n.ts` | `frontend/app/lib/i18n.ts` | Keep\* | Comment wording only. |
-| `frontend/app/markdown.css` | `frontend/app/markdown.css` | Keep\* | Direction D links and citation badges; citation hover outlines the panel card in Blue 4; Blue 1 `mark`; Crimson Pro headings. |
-| `frontend/app/not-found.tsx` | `frontend/app/not-found.tsx` | Keep\* | Direction D colors and Mulish. |
-| `frontend/app/page.tsx` | `frontend/app/page.tsx` | Keep\* | Theme background and text color. |
+| `frontend/app/markdown.css` | `frontend/app/markdown.css` | Keep\* | Upstream's styles in blue. Links navy `#0F4B8F` and underlined; the citation-chip rules replaced by a reset for the numbered badges; `mark` uses `--highlight-bg`; `.signin-note` for the sign-in note. |
+| `frontend/app/not-found.tsx` | `frontend/app/not-found.tsx` | Keep | — |
+| `frontend/app/page.tsx` | `frontend/app/page.tsx` | Keep | — |
 | `frontend/app/utils/session.ts` | `frontend/app/utils/session.ts` | Keep\* | Storage keys renamed `pathway-instructor-assistant-*`; comment wording. |
 | `frontend/next.config.json` | `frontend/next.config.json` | Keep\* | `outputFileTracingIncludes` (template server leftovers) removed. |
 | `frontend/next.config.mjs` | `frontend/next.config.mjs` | Keep\* | `withLlamaIndex` wrapper and its config migration removed; Sentry org/project from `SENTRY_ORG`/`SENTRY_PROJECT`. |
 | `frontend/package-lock.json` | `frontend/package-lock.json` | Keep\* | Regenerated after the dependency changes in `package.json`. |
-| `frontend/package.json` | `frontend/package.json` | Keep\* | Renamed `instructor-assistant`; `predev` banner and `generate` scripts removed; 22 unused dependencies dropped (code sandbox, search, LlamaIndex, PDF viewer, …); `@fontsource-variable/mulish` and `crimson-pro` 5.3.0 added (pinned). |
+| `frontend/package.json` | `frontend/package.json` | Keep\* | Renamed `instructor-assistant`; `predev` banner and `generate` scripts removed; 22 unused dependencies dropped (code sandbox, search, LlamaIndex, PDF viewer, …). |
 | `frontend/postcss.config.js` | `frontend/postcss.config.js` | Keep | — |
 | `frontend/prettier.config.js` | `frontend/prettier.config.js` | Keep | — |
 | `frontend/public/BYU-pathway-icon-logo.png` | `frontend/public/BYU-pathway-icon-logo.png` | Keep | — |
-| `frontend/public/android-chrome-192x192.png` | `frontend/public/android-chrome-192x192.png` | Keep | — |
-| `frontend/public/android-chrome-512x512.png` | `frontend/public/android-chrome-512x512.png` | Keep | — |
-| `frontend/public/android-chrome-maskable-192x192.png` | `frontend/public/android-chrome-maskable-192x192.png` | Keep | — |
-| `frontend/public/android-chrome-maskable-512x512.png` | `frontend/public/android-chrome-maskable-512x512.png` | Keep | — |
-| `frontend/public/apple-touch-icon.png` | `frontend/public/apple-touch-icon.png` | Keep | — |
+| `frontend/public/android-chrome-192x192.png` | `frontend/public/android-chrome-192x192.png` | Adapt | The path mark recolored gold → `#056CB6` (same per-pixel blend as `BYU-pathway-icon-logo-blue.png`). |
+| `frontend/public/android-chrome-512x512.png` | `frontend/public/android-chrome-512x512.png` | Adapt | The path mark recolored gold → `#056CB6` (same per-pixel blend as `BYU-pathway-icon-logo-blue.png`). |
+| `frontend/public/android-chrome-maskable-192x192.png` | `frontend/public/android-chrome-maskable-192x192.png` | Adapt | The path mark recolored gold → `#056CB6` (same per-pixel blend as `BYU-pathway-icon-logo-blue.png`). |
+| `frontend/public/android-chrome-maskable-512x512.png` | `frontend/public/android-chrome-maskable-512x512.png` | Adapt | The path mark recolored gold → `#056CB6` (same per-pixel blend as `BYU-pathway-icon-logo-blue.png`). |
+| `frontend/public/apple-touch-icon.png` | `frontend/public/apple-touch-icon.png` | Adapt | The path mark recolored gold → `#056CB6` (same per-pixel blend as `BYU-pathway-icon-logo-blue.png`). |
 | `frontend/public/byu-pathway-og-image.jpg` | `frontend/public/byu-pathway-og-image.jpg` | Keep | — |
-| `frontend/public/favicon.ico` | `frontend/public/favicon.ico` | Keep | — |
+| `frontend/public/favicon.ico` | `frontend/public/favicon.ico` | Adapt | Rebuilt in blue from `BYU-pathway-icon-logo-blue.png`, padded to square, at 16/32/48/64/128 px (upstream's frames were 32×31, 48×47…). |
 | `frontend/public/gmail.png` | `frontend/public/gmail.png` | Keep | — |
 | `frontend/public/ms-outlook.svg` | `frontend/public/ms-outlook.svg` | Keep | — |
 | `frontend/public/pathway-horizontal-logo.png` | `frontend/public/pathway-horizontal-logo.png` | Keep | — |
 | `frontend/public/serve.json` | `frontend/public/serve.json` | Keep\* | The `fonts/**` cache rule removed (no fonts in `public/` any more). |
 | `frontend/public/site.webmanifest` | `frontend/public/site.webmanifest` | Keep\* | Instructor Assistant name and description. |
 | `frontend/sentry.client.config.ts` | `frontend/sentry.client.config.ts` | Keep | — |
-| `frontend/tailwind.config.ts` | `frontend/tailwind.config.ts` | Keep\* | `ia-*` colors, Mulish as `sans`, a Crimson Pro `display` font, `ia-pop`/`ia-panel` shadows. |
+| `frontend/tailwind.config.ts` | `frontend/tailwind.config.ts` | Keep\* | `sans` is Mulish. |
 | `frontend/tsconfig.json` | `frontend/tsconfig.json` | Keep | — |
 | `frontend/webpack.config.mjs` | `frontend/webpack.config.mjs` | Keep | — |
 
@@ -169,12 +169,12 @@ New in this repo, with no upstream source: `backend/app/engine/audience_guard.py
 Phase 5: `backend/app/api/tracing.py`, `backend/app/redaction.py`, `backend/scripts/trace_check.py`, `backend/tests/test_tracing.py`.
 Phase 6: `backend/scripts/eval_answers.py`, `backend/tests/test_eval_answers.py`.
 Phase 7: `backend/.dockerignore`, `DEPLOY.md` (moved to the repo root in Phase 9 prep, now covering both services).
-Frontend (Phase 8): `frontend/.dockerignore`, `frontend/app/components/starter-questions.tsx`, `frontend/app/components/ui/chat/chat-status.tsx`, `frontend/app/components/ui/chat/hooks/use-starter-questions.ts`.
+Frontend (Phase 8): `frontend/public/BYU-pathway-icon-logo-blue.png` (the path mark recolored gold → `#056CB6`), `frontend/.dockerignore`, `frontend/app/components/starter-questions.tsx`, `frontend/app/components/ui/chat/hooks/use-starter-questions.ts`, `frontend/scripts/e2e_check.mjs`, `frontend/app/components/ui/chat/chat-message/sign-in-links.ts` (the lock icon and sign-in note styling). `backend/tests/test_cors_origins.py`.
 `scripts/upstream_diff.sh`, `LICENSE`, this file.
 
 Removed from the upstream frontend (Phase 8): the calendar, tuition, weather, and
 LlamaCloud widgets; dictation; uploads and file previews; the correction UI; the console
-and dev banners; the template `docs/`; the Inter and tuition fonts; unused images, icons,
+and dev banners; the template `docs/`; the tuition fonts; unused images, icons,
 and UI components (`drawer`, `select`, `input`).
 
 ## Intentional matches for `grep -rniE 'tuition|calendar|agenda|ACM' backend/app`

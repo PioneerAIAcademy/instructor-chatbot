@@ -4,7 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 import { useChat } from "ai/react";
 
 import { getEditedDraftSnapshot } from "@/app/lib/draft-registry";
-import { AlertTriangle, ArrowDown, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getChromeStrings } from "../lib/chrome-strings";
 import { getUserLanguagePref, resolveUiLanguage } from "../lib/i18n";
@@ -544,8 +544,8 @@ export default function ChatSection() {
     <div className="w-full h-full flex flex-col relative overflow-hidden">
       {/* Empty state - centered */}
       {!hasStartedChat && !hasMessages && (
-        <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-8">
-          <div className="flex w-full max-w-[760px] flex-col gap-6">
+        <div className="flex flex-1 px-4 items-center justify-center">
+          <div className="w-full max-w-[672px] md:max-w-[720px] lg:max-w-[840px] xl:max-w-[960px] 2xl:max-w-[1120px] flex flex-col items-center gap-8">
             <Greeting />
             <StarterQuestions
               questions={starterQuestions}
@@ -566,7 +566,7 @@ export default function ChatSection() {
           // "smooth" would override.
           className="pathway-chat-scroll-shell flex-1 overflow-y-auto overflow-x-hidden pl-2 pr-4 sm:px-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 pt-8 pb-44 sm:pb-48"
         >
-          <div className="max-w-[760px] mx-auto">
+          <div className="max-w-[640px] md:max-w-[720px] lg:max-w-[840px] xl:max-w-[960px] 2xl:max-w-[1120px] mx-auto">
             <ChatMessages
               messages={displayMessages}
               isLoading={isLoading}
@@ -598,12 +598,14 @@ export default function ChatSection() {
           className={[
             "absolute left-1/2 -translate-x-1/2 z-20",
             "bottom-36 sm:bottom-36",
-            "h-11 w-11 rounded-full border border-ia-border",
-            "bg-ia-surface text-ia-text shadow-ia-pop",
+            "h-11 w-11 rounded-full border",
+            "border-black/10 dark:border-white/10",
+            "bg-white/90 text-[#3D3D3A] shadow-[0_10px_24px_rgba(0,0,0,0.16)] backdrop-blur-md",
+            "dark:bg-[#232421]/90 dark:text-[#FCFCFC] dark:shadow-[0_14px_28px_rgba(0,0,0,0.5)]",
             "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-            "hover:-translate-y-0.5 hover:border-ia-border-strong",
+            "hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(0,0,0,0.2)]",
             "active:translate-y-0 active:scale-[0.97]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2",
             showScrollToBottom
               ? "opacity-100 scale-100 pointer-events-auto"
               : "opacity-0 translate-y-3 scale-95 pointer-events-none",
@@ -616,20 +618,28 @@ export default function ChatSection() {
       {/* Compact centered error banner */}
       {chatError && (
         <div className="flex justify-center mb-2 px-4">
-          {/* Error notice: Red 3 left bar; the message is text, not color alone. */}
           <div
             role="alert"
-            className="flex w-full max-w-[760px] items-center gap-3 rounded-xl border border-l-4 border-ia-border border-l-ia-red-3 bg-ia-surface px-4 py-3 text-ia-text animate-error-slide-in"
+            className={[
+              "relative overflow-hidden",
+              "flex items-center gap-2.5 rounded-xl px-4 py-2.5 border",
+              "bg-red-50/95 backdrop-blur-md border-red-300 text-[#3D3D3A]",
+              "shadow-[0_12px_36px_rgba(0,0,0,0.12)]",
+              "ring-1 ring-red-200/60",
+              "dark:bg-[#242628] dark:border-red-800/60 dark:text-[#FCFCFC]",
+              "dark:shadow-[0_14px_40px_rgba(0,0,0,0.45)]",
+              "dark:ring-red-900/30",
+              "animate-error-slide-in",
+            ].join(" ")}
           >
-            <AlertTriangle aria-hidden="true" className="h-5 w-5 flex-shrink-0 text-ia-red-3" />
-            <p className="flex-1 text-[15px]">{chatError}</p>
+            <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 flex-shrink-0" />
+            <p className="text-xs sm:text-sm font-medium">{chatError}</p>
             <button
-              type="button"
               onClick={() => setChatError(null)}
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-ia-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
+              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors flex-shrink-0"
               aria-label="Dismiss error"
             >
-              <X aria-hidden="true" className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
@@ -638,11 +648,11 @@ export default function ChatSection() {
       {/* Input area - positioned based on chat state */}
       <div
         data-sources-open={isSourcesPanelOpen ? "true" : "false"}
-        className={`w-full border-t border-ia-border bg-ia-bg px-4 pb-5 pt-2 sm:px-6 sm:pb-6 ${
+        className={`w-full pl-2 pr-4 sm:px-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 pb-2 transition-all duration-500 ease-in-out ${
           !hasStartedChat && !hasMessages ? "static" : "sticky bottom-0"
         } pathway-chat-input-shell`}
       >
-        <div className="mx-auto flex max-w-[760px] flex-col gap-3">
+        <div className="max-w-[672px] md:max-w-[720px] lg:max-w-[840px] xl:max-w-[960px] 2xl:max-w-[1120px] mx-auto space-y-2">
           <ChatInput
             input={input}
             handleSubmit={customHandleSubmit}
@@ -655,19 +665,24 @@ export default function ChatSection() {
             inputPlaceholder={chromeStrings.inputPlaceholder}
           />
 
-          {/* Always under the input: the student-privacy notice (CLAUDE.md
-              §9.2) and the AI note. Gray 4 text at 13px (AA). */}
-          <div className="flex flex-col gap-1.5" role="note">
-            <p className="m-0 flex items-center gap-2 text-[13px] leading-[1.45] text-ia-text">
-              <ShieldCheck aria-hidden="true" className="h-4 w-4 flex-shrink-0" />
-              <span>{chromeStrings.ferpaNotice}</span>
-            </p>
-            <p className="m-0 text-[13px] leading-[1.45] text-ia-text">
-              <span className="sm:hidden">{chromeStrings.aiNoteShort}</span>
-              <span className="hidden sm:inline">{chromeStrings.aiNoteLong}</span>
+          {/* The student-privacy notice (CLAUDE.md §9.2), always shown, in the
+              spot and style of upstream's "IMPORTANT:" note. */}
+          <div className="px-2">
+            <p className="text-[10px] sm:text-xs leading-[14px] sm:leading-[16px] text-red-700 dark:text-red-300">
+              <span className="font-bold">{chromeStrings.ferpaLabel}</span>{" "}
+              <span className="font-medium">{chromeStrings.ferpaNotice}</span>
             </p>
           </div>
         </div>
+        {(hasStartedChat || hasMessages) && (
+          <p
+            role="note"
+            className="mt-1 text-center text-[10px] leading-[14px] sm:text-xs sm:leading-[16px] text-[#73726C] dark:text-[#9C9A92]"
+          >
+            <span className="sm:hidden">{chromeStrings.aiNoteShort}</span>
+            <span className="hidden sm:inline">{chromeStrings.aiNoteLong}</span>
+          </p>
+        )}
       </div>
     </div>
   );

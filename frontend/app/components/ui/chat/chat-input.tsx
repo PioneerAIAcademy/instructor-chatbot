@@ -18,12 +18,9 @@ function useChromeStrings() {
   return getChromeStrings(uiLang);
 }
 
-// The send/stop button: 44px, Blue 4 with white (5.5:1), Navy 4 on hover.
-const ROUND_BUTTON =
-  "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full p-0 " +
-  "bg-ia-blue-4 text-white hover:bg-ia-navy-4 " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg";
-
+// Upstream's input, without the controls this app doesn't use (uploads,
+// dictation, the role pill, LlamaCloud). Same look; the send/stop button is
+// blue instead of gold.
 export default function ChatInput(
   props: Pick<
     ChatHandler,
@@ -41,19 +38,7 @@ export default function ChatInput(
 ) {
   const strings = useChromeStrings();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  // Phones get the short placeholder: a textarea placeholder can't end in
-  // "…" (Chrome just cuts it off), and the long one doesn't fit.
-  const [isNarrow, setIsNarrow] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 639px)");
-    const update = () => setIsNarrow(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  const placeholder = isNarrow
-    ? strings.inputPlaceholderShort
-    : (props.inputPlaceholder ?? strings.inputPlaceholder);
+  const placeholder = props.inputPlaceholder ?? strings.inputPlaceholder;
 
   const resizeTextarea = useCallback(() => {
     const textarea = textareaRef.current;
@@ -70,8 +55,8 @@ export default function ChatInput(
     textarea.scrollTop = textarea.scrollHeight;
   }, [props.input]);
 
-  // The value can change without typing (a starter question, a cleared
-  // input), so keep the height in step with it, not only with onInput.
+  // The value can change without typing (a cleared input, a ?prompt= prefill),
+  // so keep the height in step with it, not only with onInput.
   useEffect(() => {
     resizeTextarea();
   }, [props.input, resizeTextarea]);
@@ -85,68 +70,68 @@ export default function ChatInput(
 
   return (
     <form onSubmit={onSubmit} className="w-full">
-      <div className="flex w-full items-end gap-3 rounded-xl border border-ia-border bg-ia-surface py-3 pl-4 pr-3 transition-[border-color,box-shadow] focus-within:border-ia-border-strong focus-within:shadow-[0_0_0_2px_var(--ia-bg),0_0_0_4px_var(--ia-focus)]">
-        <textarea
-          ref={textareaRef}
-          autoFocus
-          name="message"
-          aria-label={placeholder}
-          placeholder={placeholder}
-          // Placeholder at body contrast: Gray 3 fails AA below 18px.
-          className="min-h-[44px] w-full resize-none overflow-y-auto border-none bg-transparent px-0 py-[10px] text-base leading-6 text-ia-text placeholder:text-ia-text placeholder:opacity-100 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 max-h-[150px] md:max-h-[220px] lg:max-h-[260px] [scrollbar-width:thin] [scrollbar-color:var(--ia-gray-3)_transparent]"
-          value={props.input}
-          onChange={(e) => props.handleInputChange(e as any)}
-          rows={1}
-          onInput={resizeTextarea}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              // requestSubmit() ignores the disabled Send button, so check
-              // here too: a blank or spaces-only input sends nothing.
-              if (props.isLoading || !props.input.trim()) return;
-              e.currentTarget.form?.requestSubmit();
-            }
-          }}
-        />
+      <div className="w-full rounded-3xl border border-[rgba(31,30,29,0.15)] bg-white px-4 py-3 transition-[background-color,border-color,box-shadow] dark:border-[rgba(252,252,252,0.06)] dark:bg-[#242628]">
+        <div className="relative mb-3 flex w-full items-center">
+          <textarea
+            ref={textareaRef}
+            autoFocus
+            name="message"
+            aria-label={placeholder}
+            placeholder={placeholder}
+            className="min-h-[24px] w-full resize-none overflow-y-auto border-none bg-transparent px-0 text-sm text-[#141413] placeholder:text-[#73726C] focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 dark:text-white dark:placeholder:text-[#B5B5B5] sm:text-[15.875px] max-h-[150px] md:max-h-[220px] lg:max-h-[260px] [scrollbar-width:thin] [scrollbar-color:#646362_transparent]"
+            value={props.input}
+            onChange={(e) => props.handleInputChange(e as any)}
+            rows={1}
+            onInput={resizeTextarea}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                // requestSubmit() ignores the disabled Send button, so check
+                // here too: a blank or spaces-only input sends nothing.
+                if (props.isLoading || !props.input.trim()) return;
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+          />
+        </div>
 
-        {props.isLoading ? (
-          <Tooltip label={strings.stopButton} side="top" align="end">
-            <Button
-              type="button"
-              onClick={props.stop}
-              aria-label={strings.stopButton}
-              className={ROUND_BUTTON}
-            >
-              <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="3" y="3" width="14" height="14" fill="currentColor" rx="3.5" />
-              </svg>
-            </Button>
-          </Tooltip>
-        ) : (
-          <Tooltip label={strings.sendButton} side="top" align="end">
-            <Button
-              type="submit"
-              disabled={!props.input.trim()}
-              aria-label={strings.sendButton}
-              className={`${ROUND_BUTTON} disabled:cursor-not-allowed disabled:bg-ia-gray-1 disabled:text-ia-gray-3 disabled:opacity-100 dark:disabled:bg-ia-gray-3 dark:disabled:text-ia-gray-1`}
-            >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+        <div className="flex w-full items-center justify-end gap-2">
+          {props.isLoading ? (
+            <Tooltip label={strings.stopButton} side="top" align="end">
+              <Button
+                type="button"
+                onClick={props.stop}
+                aria-label={strings.stopButton}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#056CB6] p-0 text-white hover:bg-[#0F4B8F] dark:bg-white dark:text-black dark:hover:bg-gray-100"
               >
-                <path d="M12 19V5" />
-                <path d="m5 12 7-7 7 7" />
-              </svg>
-            </Button>
-          </Tooltip>
-        )}
+                <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+                  <rect x="3" y="3" width="14" height="14" fill="currentColor" rx="3.5" />
+                </svg>
+                <span className="sr-only">{strings.stopButton}</span>
+              </Button>
+            </Tooltip>
+          ) : (
+            <Tooltip label={strings.sendButton} side="top" align="end">
+              <Button
+                type="submit"
+                disabled={!props.input.trim()}
+                aria-label={strings.sendButton}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#056CB6] p-0 text-white hover:bg-[#0F4B8F] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-100"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="M14 2L7 9M14 2L9.5 14L7 9M14 2L2 6.5L7 9"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="sr-only">{strings.sendButton}</span>
+              </Button>
+            </Tooltip>
+          )}
+        </div>
       </div>
     </form>
   );

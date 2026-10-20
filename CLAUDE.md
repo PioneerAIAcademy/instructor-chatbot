@@ -11,10 +11,10 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-20): Phases 0–6 merged (PRs #1–#7). Phase 7 prep #8, Phase 8 frontend #9,
-> Phase 9 prep #10 (stacked in that order). Pre-deploy fixes on `pre-deploy-fixes`
-> (uncommitted). Hosting will be Render; the owner wants everything else finished before
-> deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-20): Phases 0–6 merged (PRs #1–#7). Open, stacked in order: #8 Phase 7
+> prep, #9 Phase 8 frontend, #10 Phase 9 prep, #11 pre-deploy fixes. The missionary design in
+> blue is on `missionary-design-blue` (uncommitted). Hosting will be Render; the owner wants
+> everything else finished before deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -747,6 +747,101 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-20 (frontend: Mulish and the prototype's answer format, same branch,
+  uncommitted)** — The owner sent a screenshot of the prototype's answer and asked for that
+  format, with **Mulish for the whole app** (the greeting keeps Georgia).
+  - **Font:** Mulish from the pinned `@fontsource-variable/mulish` 5.3.0 through
+    `next/font/local`; Inter and `public/fonts` are gone again.
+  - **Answers:**
+    - 16px gray `#454540` text;
+    - citations as round numbered badges (`#8EBDDE`, `#056CB6` with white on hover or
+      focus; more than 3 at one spot collapse to "+N"), and each drawer card is numbered
+      like its badge;
+    - `mark` and dates as a pale-blue `#E7F0FA` highlight;
+    - navy `#0F4B8F` underlined links;
+    - a lock icon on sign-in links, with the backend's note shown small and gray
+      (`sign-in-links.ts`, a rehype step after sanitizing; host list mirrors
+      `LOGIN_LINK_HOSTS`);
+    - one action row: an outlined "Sources (N)" pill, then round outlined thumbs, copy,
+      and regenerate (44px on phones);
+    - pale-blue follow-up pills.
+  - **Found and fixed:**
+    - **CORS: a trailing slash in `ALLOWED_ORIGINS` blocked every browser request.** The
+      local `.env` has `http://localhost:3000/`; browsers send the origin without the
+      slash. `main.py` now compares without it (same origins allowed, a test checks that
+      another origin is still refused). This would have bitten a pasted Render URL.
+    - Dark mode hid the badge numbers (the dark link color won); fixed in `markdown.css`.
+    - `e2e_check.mjs` wrote `/\s+/` inside a template string, which became `/s+/` and
+      printed "Source  (1)". Fixed.
+  - **Checks:** `pytest tests/` 601 passed; `build`, `tsc`, `lint`, and the term check
+    clean. `e2e_check.mjs` against a local backend with the starters set: **ALL PASSED
+    (7/7)**. Screenshots in light, dark, and phone width.
+  - **Note:** the backend in the owner's terminal has no `CONVERSATION_STARTERS` in its
+    `.env`, so its empty chat shows no starters. One run against it also returned "service
+    hiccup" for every question (its log isn't visible to me); a separate backend with the
+    same code answered normally.
+  - **Owner follow-up: the opening screen.** The loader's spinner and "Loading..." are
+    replaced by "INSTRUCTOR ASSISTANT" (Mulish, extra bold, uppercase) in gray, with a
+    `#056CB6` band sweeping through it to the right and back to the left. The loader now
+    holds **1 s** (was 800 ms), 0.5 s each way, and the sweep **loops** for as long as the
+    screen is up (owner: on slow internet it must not stop). The screen is in the
+    prerendered HTML, so it shows before the JavaScript arrives. Checked with Chrome
+    throttled to ~400 kbit/s: still sweeping at 45 s. Reduced motion shows it plain blue.
+  - **Owner follow-up: the favicon is blue too.** `favicon.ico`, `apple-touch-icon.png`, and
+    the four `android-chrome-*.png` are recolored gold → `#056CB6` with the avatar's blend.
+    The `.ico` is rebuilt from the larger blue mark, square, at 16–128 px. `role="status"` with the label "Loading Instructor Assistant". Checked by
+    stepping the animation in headless Chrome (light 1440px, dark 390px).
+
+- **2026-10-20 (frontend: the missionary design in blue, branch `missionary-design-blue`,
+  uncommitted)** — **Owner decision:** design the instructor app *exactly* like the
+  Missionary Assistant, changing only the main color from gold to blue. This replaces
+  design direction D (the all-blue prototype) from Phase 8. The pre-deploy fixes went in
+  first, as PR #11.
+  - **Owner follow-up, same day: the blue is `#056CB6`.**
+    - The header bar is `#056CB6` (first done as light blue `#8EBDDE`), and every former
+      gold spot uses it: buttons with white text, navy `#0F4B8F` on hover, and light
+      tints of it.
+    - On that bar, the gray logo would be about 2.4:1, so the logo (a CSS filter; the
+      file is unchanged), the title, and the gear show in white.
+    - Dark-mode link text and one field border keep `#8EBDDE`, because `#056CB6` text on
+      the dark page is only about 3.3:1.
+  - **Owner: the bot's avatar is the favicon's path mark in blue.**
+    `public/BYU-pathway-icon-logo-blue.png` was made from the gold PNG by blending white
+    toward `#056CB6` by each pixel's goldness, which keeps the anti-aliased edges. The
+    favicon itself is unchanged.
+  - **How:**
+    - The 19 purely visual files are restored byte-for-byte from upstream `870cc5b`, then
+      color-swapped.
+    - The 5 files with logic (`chat-section`, `chat-input`, `chat-message/index`,
+      `chat-sources`, `markdown.tsx`) got upstream's markup back around the instructor
+      logic.
+    - Inter is back (`public/fonts/inter`); the Mulish/Crimson packages and the `ia-*`
+      tokens are gone.
+  - **Color mapping:** gold `#FFC328` →
+    - the header and tints: `#8EBDDE`;
+    - solid buttons with white icons (send, stop, save): `#056CB6`, navy hover;
+    - buttons with dark text (submit, send feedback): `#8EBDDE`, hover `#A6CBE6`;
+    - the focus ring: navy `#0F4B8F` (light blue in dark mode);
+    - selection, `mark`, the blockquote, and drawer badges: blue;
+    - draft placeholders: amber → sky.
+  - **Kept on purpose (not upstream):**
+    - local icons instead of Google favicons in citation pills;
+    - cited-only Sources (the drawer is numbered 1…n in order, because the pills show
+      titles, not numbers);
+    - "Instructor guide (PDF)" / "External page · host" in place of the domain;
+    - starter questions on the empty chat, styled like the disclaimer card (upstream never
+      showed its starters);
+    - "PRIVACY:" where "IMPORTANT:" was, always shown;
+    - every Phase 8 review fix.
+  - **Strings:** back to upstream's wording with "Missionary" → "Instructor" (placeholder
+    "Ask a question", the AI note, "Love this" / "Needs improvement").
+  - **Checks:**
+    - `build`, `tsc`, and `lint` are clean, and the term check passes.
+    - `e2e_check.mjs` was updated for the pills (title text, a count chip, the drawer's
+      `<a>` cards, the "Love this" thumbs). It ran against the local stack: **ALL
+      PASSED** (7/7).
+    - Screenshots in light, dark, and phone match the missionary layout in blue.
 
 - **2026-10-20 (pre-deploy fixes, branch `pre-deploy-fixes`, uncommitted)** — Hosting will be
   Render. The owner chose to finish everything before deployment, picked three fixes, and

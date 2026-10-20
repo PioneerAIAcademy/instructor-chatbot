@@ -4,6 +4,7 @@ import { getChromeStrings } from "../../../../lib/chrome-strings";
 import { resolveUiLanguage } from "../../../../lib/i18n";
 import { Button } from "../../button";
 import { Tooltip } from "../../tooltip";
+import { ACTION_BUTTON } from "./chat-sources";
 import { cn } from "../../lib/utils";
 import { Toast, useToast } from "../../toast";
 import { useClientConfig } from "../hooks/use-config";
@@ -22,14 +23,6 @@ const CLOSE_ANIMATION_MS = 240;
 const SCROLL_DELAY_MS = 100;
 const MAX_COMMENT_LENGTH = 1000;
 const MOBILE_POPOVER_MARGIN_PX = 16;
-
-// Same round outlined action as the copy and regenerate buttons (40px, 44px
-// on phones). A pressed thumb fills its icon and turns blue; the fill, not
-// the color alone, shows the state.
-const THUMB_BUTTON =
-  "h-11 w-11 sm:h-10 sm:w-10 rounded-full border border-ia-border bg-transparent text-ia-text " +
-  "hover:border-ia-border-strong hover:bg-transparent transition-colors " +
-  "focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg";
 
 export function UserFeedbackComponent({
   traceId,
@@ -330,20 +323,20 @@ export function UserFeedbackComponent({
 
   return (
     <div ref={rootRef} className="flex flex-col items-start">
-      <div ref={buttonRowRef} className="flex items-start gap-1">
+      <div ref={buttonRowRef} className="flex items-center gap-2">
         <Tooltip label={strings.feedbackLoveTitle} side="top" align="start">
         <Button
           size="icon"
           variant="ghost"
-          className={`${THUMB_BUTTON} ${thumbsUpActive ? "border-ia-blue-4 text-ia-blue-4 dark:border-ia-blue-2 dark:text-ia-blue-2" : ""}`}
+          className={ACTION_BUTTON}
           aria-label={strings.feedbackLoveTitle}
           aria-pressed={thumbsUpActive}
           onClick={handleThumbsUp}
         >
           <ThumbsUp
-            aria-hidden="true"
-            fill={thumbsUpActive ? "currentColor" : "none"}
+            fill={thumbsUpActive ? "#22c55e" : "none"}
             className="h-[18px] w-[18px]"
+            strokeWidth={thumbsUpActive ? 0 : 2}
           />
         </Button>
         </Tooltip>
@@ -353,16 +346,16 @@ export function UserFeedbackComponent({
           <Button
             size="icon"
             variant="ghost"
-            className={`${THUMB_BUTTON} ${thumbsDownActive ? "border-ia-blue-4 text-ia-blue-4 dark:border-ia-blue-2 dark:text-ia-blue-2" : ""}`}
+            className={ACTION_BUTTON}
             aria-label={strings.feedbackNeedsImprovementTitle}
             aria-pressed={thumbsDownActive}
             onClick={handleThumbsDown}
             ref={thumbsDownButtonRef}
           >
             <ThumbsDown
-              aria-hidden="true"
-              fill={thumbsDownActive ? "currentColor" : "none"}
+              fill={thumbsDownActive ? "#E18158" : "none"}
               className="h-[18px] w-[18px]"
+              strokeWidth={thumbsDownActive ? 0 : 2}
             />
           </Button>
           </Tooltip>
@@ -395,7 +388,7 @@ export function UserFeedbackComponent({
                   <div
                     className={cn(
                       styles.field,
-                      "relative rounded-xl overflow-hidden text-ia-blue-4",
+                      "relative rounded-2xl overflow-hidden text-[#056CB6] dark:text-[#8EBDDE]",
                     )}
                     data-animating={isAnimating ? "true" : "false"}
                     data-closing={isClosing ? "true" : "false"}
@@ -421,7 +414,7 @@ export function UserFeedbackComponent({
                     <div
                       className={cn(
                         styles.fieldInner,
-                        "bg-ia-surface px-4 py-3.5",
+                        "bg-[#F0EEE6] dark:bg-[#242628] px-4 py-3.5",
                       )}
                     >
                       <textarea
@@ -432,7 +425,7 @@ export function UserFeedbackComponent({
                         aria-label={strings.feedbackPlaceholder}
                         maxLength={MAX_COMMENT_LENGTH}
                         rows={2}
-                        className="w-full min-h-[72px] bg-transparent border-none text-ia-text placeholder:text-ia-text placeholder:opacity-100 focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none text-sm resize-none max-h-[160px] leading-6"
+                        className="w-full min-h-[72px] bg-transparent border-none text-[#141413] dark:text-white placeholder:text-[#73726C] dark:placeholder:text-[#B5B5B5] focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none text-sm resize-none max-h-[160px] leading-6"
                       />
                     </div>
                   </div>
@@ -445,24 +438,24 @@ export function UserFeedbackComponent({
                         "flex items-center justify-end gap-3 mt-2",
                       )}
                     >
-                      <span className="text-[13px] text-ia-text tabular-nums mr-1">
+                      <span className="text-xs text-[#73726C] dark:text-[#B5B5B5] tabular-nums mr-1">
                         {MAX_COMMENT_LENGTH - comment.length}
                       </span>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={handleCancel}
-                        className="h-10 rounded-full border border-ia-border bg-transparent px-4 text-sm font-semibold text-ia-text hover:border-ia-border-strong hover:bg-transparent focus-visible:ring-2 focus-visible:ring-ia-focus"
+                        className="h-8 px-3 bg-transparent hover:bg-transparent text-[#73726C] dark:text-[#B5B5B5] hover:text-[#141413] dark:hover:text-white"
                       >
                         {strings.feedbackCancelButton}
                       </Button>
                       <Button
                         size="sm"
                         onClick={handleSubmit}
-                        className="h-10 rounded-full bg-ia-blue-4 px-4 text-sm font-semibold text-white hover:bg-ia-navy-4 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2"
+                        className="h-8 px-3 rounded-xl bg-[#056CB6] hover:bg-[#0F4B8F] text-white dark:text-white flex items-center gap-2"
                       >
                         {strings.feedbackSubmitButton}
-                        <ArrowUp aria-hidden="true" className="h-4 w-4" />
+                        <ArrowUp className="h-4 w-4" />
                       </Button>
                     </div>
                   )}

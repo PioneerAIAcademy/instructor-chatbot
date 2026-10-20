@@ -24,11 +24,6 @@ import {
 import { GeneralFeedbackDrawer } from "./general-feedback-drawer";
 import { Button } from "./ui/button";
 
-// A menu row (prototype .menu-row): 44px minimum, Gray 4 text, Blue 1 hover.
-const MENU_ROW =
-  "flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-sm font-semibold text-ia-text transition-colors " +
-  "hover:bg-ia-blue-1 hover:text-ia-gray-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ia-focus";
-
 export function SettingsMenu() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = React.useState(false);
@@ -184,17 +179,15 @@ export function SettingsMenu() {
           aria-expanded={isOpen}
           aria-label={strings.settingsTitle}
           className={[
-            "p-0 h-11 w-11 rounded-full text-ia-header-text",
-            "hover:bg-ia-blue-1 dark:hover:bg-ia-gray-3",
+            "p-0 h-9 w-9 rounded-full",
+            "hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white",
             "transition-colors",
-            "focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-header-bg",
-            isOpen ? "bg-ia-blue-1 dark:bg-ia-gray-3" : "",
+            isOpen ? "bg-white/15" : "",
           ].join(" ")}
         >
           <Settings
-            aria-hidden="true"
             className={[
-              "h-[22px] w-[22px]",
+              "h-5 w-5 text-white",
               "transition-transform duration-200 ease-out",
               isOpen ? "rotate-90" : "rotate-0",
             ].join(" ")}
@@ -205,12 +198,14 @@ export function SettingsMenu() {
         {isOpen && (
           <div
             className={[
-              "absolute right-0 top-12",
-              "w-[308px] max-w-[calc(100vw-32px)]",
-              "rounded-xl",
-              "border border-ia-border",
-              "bg-ia-surface text-ia-text shadow-ia-pop",
-              "p-2",
+              "absolute right-0 top-11",
+              "w-[248px]",
+              "rounded-2xl",
+              "border border-black/10 dark:border-white/10",
+              "ring-1 ring-black/5 dark:ring-white/5",
+              "bg-[#FFFEFA]/95 dark:bg-[#0E0F10]/95 backdrop-blur-md",
+              "shadow-[0_18px_48px_rgba(0,0,0,0.16)] dark:shadow-[0_18px_60px_rgba(0,0,0,0.62)]",
+              "p-2.5",
               "z-[9999] pointer-events-auto origin-top-right",
               "animate-in fade-in zoom-in-95 duration-150",
             ].join(" ")}
@@ -219,10 +214,10 @@ export function SettingsMenu() {
           >
             {/* Theme */}
             <div className="px-1 pb-2.5">
-              <h3 className="mb-1.5 px-1 pt-1 text-[13px] font-semibold text-ia-text">
+              <h3 className="text-[10px] font-semibold tracking-wide text-[#454540] dark:text-white/80 mb-1.5">
                 {strings.settingsTheme}
               </h3>
-              <div className="grid grid-cols-3 overflow-hidden rounded-full border border-ia-border">
+              <div className="grid grid-cols-3 gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.035] dark:bg-white/5 p-1">
                 <Tooltip label={strings.themeLight} side="bottom" align="start" className="w-full">
                 <button
                   onClick={(e) => {
@@ -232,15 +227,16 @@ export function SettingsMenu() {
                   }}
                   aria-label={strings.themeLight}
                   className={[
-                    "h-11 w-full flex items-center justify-center",
-                    "transition-colors text-ia-text",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ia-focus",
+                    "h-9 w-full rounded-lg flex items-center justify-center",
+                    "transition-colors",
+                    "text-[#646362] dark:text-white/70",
+                    "hover:bg-black/5 dark:hover:bg-white/10",
                     theme === "light"
-                      ? "bg-ia-blue-4 text-white"
-                      : "hover:bg-ia-blue-1 hover:text-ia-gray-4",
+                      ? "bg-[#056CB6]/20 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
+                      : "",
                   ].join(" ")}
                 >
-                  <Sun aria-hidden="true" className="h-4 w-4" />
+                  <Sun className="h-4 w-4" />
                 </button>
                 </Tooltip>
                 <Tooltip label={strings.themeDark} side="bottom" align="center" className="w-full">
@@ -252,15 +248,16 @@ export function SettingsMenu() {
                   }}
                   aria-label={strings.themeDark}
                   className={[
-                    "h-11 w-full flex items-center justify-center",
-                    "transition-colors text-ia-text",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ia-focus",
+                    "h-9 w-full rounded-lg flex items-center justify-center",
+                    "transition-colors",
+                    "text-[#646362] dark:text-white/70",
+                    "hover:bg-black/5 dark:hover:bg-white/10",
                     theme === "dark"
-                      ? "bg-ia-blue-4 text-white"
-                      : "hover:bg-ia-blue-1 hover:text-ia-gray-4",
+                      ? "bg-[#056CB6]/20 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
+                      : "",
                   ].join(" ")}
                 >
-                  <Moon aria-hidden="true" className="h-4 w-4" />
+                  <Moon className="h-4 w-4" />
                 </button>
                 </Tooltip>
                 <Tooltip label={strings.themeSystem} side="bottom" align="end" className="w-full">
@@ -272,34 +269,35 @@ export function SettingsMenu() {
                   }}
                   aria-label={strings.themeSystem}
                   className={[
-                    "h-11 w-full flex items-center justify-center",
-                    "transition-colors text-ia-text",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ia-focus",
+                    "h-9 w-full rounded-lg flex items-center justify-center",
+                    "transition-colors",
+                    "text-[#646362] dark:text-white/70",
+                    "hover:bg-black/5 dark:hover:bg-white/10",
                     theme === "system"
-                      ? "bg-ia-blue-4 text-white"
-                      : "hover:bg-ia-blue-1 hover:text-ia-gray-4",
+                      ? "bg-[#056CB6]/20 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
+                      : "",
                   ].join(" ")}
                 >
-                  <Monitor aria-hidden="true" className="h-4 w-4" />
+                  <Monitor className="h-4 w-4" />
                 </button>
                 </Tooltip>
               </div>
             </div>
 
-            <div className="mx-1 my-1.5 h-px bg-ia-border" />
+            <div className="my-2 h-px bg-black/10 dark:bg-white/10" />
 
             {/* Language */}
             <div className="px-1 pb-2.5">
               <div className="flex items-center gap-2 mb-1.5">
-                <Globe aria-hidden="true" className="h-4 w-4 text-ia-text" />
-                <h3 className="text-[13px] font-semibold text-ia-text">
+                <Globe className="h-3.5 w-3.5 text-[#646362] dark:text-white/70" />
+                <h3 className="text-[10px] font-semibold tracking-wide text-[#454540] dark:text-white/80">
                   {strings.settingsLanguage}
                 </h3>
               </div>
               <div
                 role="listbox"
                 aria-label={strings.settingsLanguage}
-                className="max-h-[208px] overflow-y-auto rounded-lg border border-ia-border p-1 [scrollbar-width:thin] [scrollbar-color:var(--ia-gray-3)_transparent]"
+                className="max-h-[208px] overflow-y-auto rounded-xl border border-black/10 bg-black/[0.035] p-1 [scrollbar-color:rgba(61,61,58,0.28)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/25 hover:[&::-webkit-scrollbar-thumb]:bg-black/35 dark:border-white/10 dark:bg-white/5 dark:[scrollbar-color:rgba(255,255,255,0.38)_transparent] dark:[&::-webkit-scrollbar-thumb]:bg-white/40 dark:hover:[&::-webkit-scrollbar-thumb]:bg-white/55"
               >
                 {/* "Auto" row hidden per Claude.ai pattern — when no
                     pref is set, the cascade (navigator.language +
@@ -321,12 +319,13 @@ export function SettingsMenu() {
                         handleLanguageChange(code);
                       }}
                       className={[
-                        "w-full min-h-[40px] text-left rounded-lg px-3 py-2 text-sm",
-                        "transition-colors text-ia-text",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ia-focus",
+                        "w-full text-left rounded-lg px-2 py-1.5 text-sm",
+                        "transition-colors",
+                        "text-[#3D3D3A] dark:text-white/85",
+                        "hover:bg-black/5 dark:hover:bg-white/10",
                         isSelected
-                          ? "bg-ia-blue-1 text-ia-gray-4 font-semibold"
-                          : "hover:bg-ia-blue-1 hover:text-ia-gray-4",
+                          ? "bg-[#056CB6]/20 dark:bg-white/10 font-medium"
+                          : "",
                       ].join(" ")}
                     >
                       {label}
@@ -336,24 +335,26 @@ export function SettingsMenu() {
               </div>
             </div>
 
-            <div className="mx-1 my-1.5 h-px bg-ia-border" />
+            <div className="my-2 h-px bg-black/10 dark:bg-white/10" />
 
             {/* Help (only when NEXT_PUBLIC_HELP_URL is set) */}
             {helpUrl && (
               <>
-                <a
-                  href={helpUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={MENU_ROW}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                >
-                  <HelpCircle aria-hidden="true" className="h-[18px] w-[18px]" />
-                  <span>{strings.settingsHelp}</span>
-                </a>
-                <div className="mx-1 my-1.5 h-px bg-ia-border" />
+              <a
+                href={helpUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium text-[#3D3D3A] dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 group-hover:bg-[#056CB6]/15 dark:group-hover:bg-[#056CB6]/30 transition-colors">
+                  <HelpCircle className="h-4 w-4 text-[#646362] dark:text-white/70 group-hover:text-[#3D3D3A] dark:group-hover:text-white transition-colors" />
+                </span>
+                <span>{strings.settingsHelp}</span>
+              </a>
+              <div className="my-2 h-px bg-black/10 dark:bg-white/10" />
               </>
             )}
 
@@ -365,9 +366,11 @@ export function SettingsMenu() {
                 e.stopPropagation();
                 openFeedback();
               }}
-              className={`${MENU_ROW} w-full`}
+              className="group w-full flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium text-[#3D3D3A] dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
             >
-              <MessageSquare aria-hidden="true" className="h-[18px] w-[18px]" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 group-hover:bg-[#056CB6]/15 dark:group-hover:bg-[#056CB6]/30 transition-colors">
+                <MessageSquare className="h-4 w-4 text-[#E18158]" />
+              </span>
               <span>{strings.settingsFeedback}</span>
             </button>
           </div>

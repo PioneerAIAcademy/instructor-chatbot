@@ -1,8 +1,10 @@
 "use client";
 
 /**
- * Starter question cards on the empty chat (direction D): a 4px Blue 4 bar,
- * two columns on wider screens, one on phones. Clicking a card asks it.
+ * Starter question cards on the empty chat. Upstream fetched starters but
+ * never showed them, so this borrows the look of upstream's disclaimer card
+ * (white, hairline border, rounded-2xl), with a light-blue hover. Two columns
+ * on wider screens, one on phones. Clicking a card asks it.
  */
 export default function StarterQuestions({
   questions,
@@ -14,7 +16,7 @@ export default function StarterQuestions({
   if (!questions.length) return null;
   return (
     <ul
-      className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4"
+      className="grid w-full grid-cols-1 gap-2 md:grid-cols-2"
       aria-label="Suggested questions"
     >
       {questions.map((question) => (
@@ -22,12 +24,9 @@ export default function StarterQuestions({
           <button
             type="button"
             onClick={() => onAsk(question)}
-            className="flex min-h-[76px] w-full overflow-hidden rounded-xl border border-ia-border bg-ia-surface text-left transition-colors hover:border-ia-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg"
+            className="w-full rounded-2xl border border-[rgba(31,30,29,0.12)] bg-white px-4 py-3 text-left text-sm font-medium text-[#3D3D3A] transition-colors hover:bg-[#056CB6]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 dark:border-[rgba(252,252,252,0.06)] dark:bg-[#242628] dark:text-[#FCFCFC] dark:hover:bg-[#056CB6]/25 sm:text-[15px]"
           >
-            <span aria-hidden="true" className="w-1 flex-shrink-0 bg-ia-blue-4" />
-            <span className="flex items-center p-4 text-[15px] font-semibold leading-snug text-ia-text">
-              {question}
-            </span>
+            {question}
           </button>
         </li>
       ))}
