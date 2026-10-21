@@ -11,10 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-20): Phases 0–6 merged (PRs #1–#7). Open, stacked in order: #8 Phase 7
-> prep, #9 Phase 8 frontend, #10 Phase 9 prep, #11 pre-deploy fixes. The missionary design in
-> blue is committed locally on `missionary-design-blue` (`7b01f20`, not pushed); the gold
-> redesign is on `instructor-gold-ui` (uncommitted). Hosting will be Render; the owner wants
+> **Status (2026-10-21): Phases 0–6 and PRs #8–#10 merged. Open, stacked: #11 pre-deploy
+> fixes, then #12 (`instructor-gold-ui`): the gold design and the language setting, with the
+> blue version as its first commit (`7b01f20`). Hosting will be Render; the owner wants
 > everything else finished before deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
@@ -749,7 +748,7 @@ Why Q4 and Q5 land where they do:
 
 Newest first. Record status, decisions, and things that failed. No secrets.
 
-- **2026-10-20 (language setting: English, Spanish, Portuguese; same branch, uncommitted)** —
+- **2026-10-20 (language setting: English, Spanish, Portuguese; PR #12)** —
   The setting looked like it worked but didn't: it listed 9 languages, the interface had
   only English strings, and the pick never reached the model (the prompt said "answer in
   the question's language"). Tagalog wasn't even a backend language. **Owner chose:** three
@@ -774,8 +773,8 @@ Newest first. Record status, decisions, and things that failed. No secrets.
     privacy line, menu), "Canvas?" answered in Portuguese, an English question answered in
     English; Spanish interface and cards. Backend tests pass.
 
-- **2026-10-20 (frontend: gold, in a layout of its own; branch `instructor-gold-ui`,
-  uncommitted)** — **Owner, from the instructor team:** use BYU gold everywhere, keep
+- **2026-10-20 (frontend: gold, in a layout of its own; PR #12, branch
+  `instructor-gold-ui`)** — **Owner, from the instructor team:** use BYU gold everywhere, keep
   Mulish, and make the app look different from the Missionary Assistant. The layout follows
   a chat-UI mockup a staff member on the instructor team shared, with the settings gear in
   place of the mockup's user initials (there are no accounts). The blue version is saved as
