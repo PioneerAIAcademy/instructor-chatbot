@@ -4,13 +4,18 @@ import * as Sentry from "@sentry/nextjs";
 import { useChat } from "ai/react";
 
 import { getEditedDraftSnapshot } from "@/app/lib/draft-registry";
-import { AlertTriangle, ArrowDown, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ArrowDown, ShieldCheck, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getChromeStrings } from "../lib/chrome-strings";
 import { getUserLanguagePref, resolveUiLanguage } from "../lib/i18n";
-import { getDeviceId, getSessionId, getTimezone } from "../utils/session";
-import DisclaimerMessage from "./disclaimer-message";
+import {
+  getDeviceId,
+  getSessionId,
+  getTimezone,
+  newSession,
+} from "../utils/session";
 import Greeting from "./greeting";
+import Header from "./header";
 import StarterQuestions from "./starter-questions";
 import { ChatInput, ChatMessages, type SourceNode } from "./ui/chat";
 import {
@@ -46,7 +51,9 @@ export default function ChatSection() {
   const { backend } = useClientConfig();
   const [hasStartedChat, setHasStartedChat] = useState(false);
   const starterQuestions = useStarterQuestions();
-  const [chatError, setChatError] = useState<string | null>(null);
+  // Whether the error banner shows; its text is always the friendly,
+  // translated chromeStrings.chatErrorFriendly, never the raw error.
+  const [chatError, setChatError] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [uiLang, setUiLang] =
     useState<ReturnType<typeof resolveUiLanguage>>("en");
@@ -95,9 +102,15 @@ export default function ChatSection() {
   }, []);
 
   const chromeStrings = getChromeStrings(uiLang);
+
+  // Screen readers and the browser's own translation read the page's lang.
+  useEffect(() => {
+    document.documentElement.lang = uiLang;
+  }, [uiLang]);
   const isSourcesPanelOpen = Boolean(sourcesPanel?.nodes.length);
 
-  const baseChatHeaders = useMemo(
+  // Read at send time, not memoized: New chat replaces the session ID.
+  const baseChatHeaders = useCallback(
     () => ({
       "Content-Type": "application/json",
       "X-Session-ID": sessionIdRef.current,
@@ -109,8 +122,6 @@ export default function ChatSection() {
 
   const handleChatError = useCallback((error: unknown) => {
     if (!(error instanceof Error)) throw error;
-    // Always show a friendly message — never expose raw errors to the user
-    const friendlyMessage = "Something went wrong. Please try again.";
     // Extract raw detail for Sentry diagnostics only
     let rawDetail = error.message;
     try {
@@ -122,7 +133,7 @@ export default function ChatSection() {
     Sentry.captureException(error, {
       extra: { rawDetail },
     });
-    setChatError(friendlyMessage);
+    setChatError(true);
   }, []);
 
   const {
@@ -138,7 +149,8 @@ export default function ChatSection() {
     setMessages,
   } = useChat({
     api: `${backend}/api/v1/chat`,
-    headers: baseChatHeaders,
+    // Headers go with each request (chatRequestHeaders), so a new session
+    // ID from New chat takes effect at once.
     onError: handleChatError,
   });
 
@@ -204,7 +216,7 @@ export default function ChatSection() {
 
   const chatRequestHeaders = useCallback(
     (extra?: Record<string, string>) => ({
-      ...baseChatHeaders,
+      ...baseChatHeaders(),
       "X-Device-ID": deviceIdRef.current,
       ...(extra ?? {}),
     }),
@@ -224,7 +236,7 @@ export default function ChatSection() {
         typeof message?.content === "string" ? message.content : "";
       pendingUserScrollRef.current = true;
       setHasStartedChat(true);
-      setChatError(null);
+      setChatError(false);
       return append(message, {
         ...options,
         body: { ...(options?.body ?? {}), data: buildRequestData(content) },
@@ -244,7 +256,7 @@ export default function ChatSection() {
         .find((m) => m.role === "user");
       const content =
         typeof lastUser?.content === "string" ? lastUser.content : "";
-      setChatError(null);
+      setChatError(false);
       return reload({
         ...options,
         body: { ...(options?.body ?? {}), data: buildRequestData(content) },
@@ -383,7 +395,7 @@ export default function ChatSection() {
       e.preventDefault();
       return;
     }
-    setChatError(null);
+    setChatError(false);
     const data = buildRequestData(input);
 
     // Mark chat as started on first message
@@ -396,12 +408,21 @@ export default function ChatSection() {
       body: {
         data: data,
       },
-      headers: {
-        ...baseChatHeaders,
-        "X-Device-ID": deviceIdRef.current,
-      },
+      headers: chatRequestHeaders(),
     });
   };
+
+  // New chat: stop any answer, clear the conversation, and start a new
+  // session, so the next question is traced separately (CLAUDE.md §9.1).
+  const handleNewChat = useCallback(() => {
+    stop();
+    setMessages([]);
+    setInput("");
+    setChatError(false);
+    setSourcesPanel(null);
+    setHasStartedChat(false);
+    sessionIdRef.current = newSession();
+  }, [stop, setMessages, setInput]);
 
   // Check if there are any messages
   const hasMessages = messages.length > 0;
@@ -540,33 +561,78 @@ export default function ChatSection() {
     return () => cancelAnimationFrame(id);
   }, [isLoading, resizeBottomSpacer]);
 
+  const isEmpty = !hasStartedChat && !hasMessages;
+  const chatInput = (
+    <ChatInput
+      input={input}
+      handleSubmit={customHandleSubmit}
+      handleInputChange={handleInputChange}
+      isLoading={isLoading}
+      messages={messages}
+      append={appendMessage}
+      setInput={setInput}
+      stop={stop}
+      inputPlaceholder={
+        isEmpty ? chromeStrings.inputPlaceholder : chromeStrings.replyPlaceholder
+      }
+    />
+  );
+
+  // The student-privacy notice (CLAUDE.md §9.2), always right under the box.
+  const privacyNote = (
+    <p className="flex items-start gap-1.5 px-1 text-xs leading-4 text-ia-muted">
+      <ShieldCheck
+        className="mt-px h-3.5 w-3.5 shrink-0 text-ia-gold-ink"
+        aria-hidden="true"
+      />
+      <span>
+        <span className="font-bold text-ia-text">{chromeStrings.ferpaLabel}</span>{" "}
+        {chromeStrings.ferpaNotice}
+      </span>
+    </p>
+  );
+
+  const sourcesNote = (
+    <p
+      role="note"
+      className="px-2 text-center text-[11px] leading-4 text-ia-muted sm:text-xs"
+    >
+      <span className="sm:hidden">{chromeStrings.aiNoteShort}</span>
+      <span className="hidden sm:inline">{chromeStrings.aiNoteLong}</span>
+    </p>
+  );
+
   return (
-    <div className="w-full h-full flex flex-col relative overflow-hidden">
-      {/* Empty state - centered */}
-      {!hasStartedChat && !hasMessages && (
-        <div className="flex flex-1 px-4 items-center justify-center">
-          <div className="w-full max-w-[672px] md:max-w-[720px] lg:max-w-[840px] xl:max-w-[960px] 2xl:max-w-[1120px] flex flex-col items-center gap-8">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-ia-page">
+      <Header
+        onNewChat={isEmpty ? undefined : handleNewChat}
+      />
+
+      {/* Welcome: the greeting and the starter cards, centered above the
+          question box, which stays at the bottom on every screen. */}
+      {isEmpty && (
+        <div className="flex flex-1 overflow-y-auto px-4">
+          <div className="m-auto flex w-full max-w-[760px] flex-col items-center gap-6 py-8 sm:gap-8">
             <Greeting />
             <StarterQuestions
               questions={starterQuestions}
               onAsk={(question) => appendMessage({ role: "user", content: question })}
             />
-            <DisclaimerMessage />
           </div>
         </div>
       )}
 
       {/* Chat messages - takes remaining space */}
-      {(hasStartedChat || hasMessages) && (
+      {!isEmpty && (
         <div
           ref={scrollContainerRef}
           data-sources-open={isSourcesPanelOpen ? "true" : "false"}
           // No CSS scroll-behavior here: each scrollTo() passes its own
           // behavior, "auto" under prefers-reduced-motion, which a CSS
           // "smooth" would override.
-          className="pathway-chat-scroll-shell flex-1 overflow-y-auto overflow-x-hidden pl-2 pr-4 sm:px-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 pt-8 pb-44 sm:pb-48"
+          className="pathway-chat-scroll-shell flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-6 pb-44 sm:pb-48"
         >
-          <div className="max-w-[640px] md:max-w-[720px] lg:max-w-[840px] xl:max-w-[960px] 2xl:max-w-[1120px] mx-auto">
+          <div className="mx-auto max-w-[760px]">
             <ChatMessages
               messages={displayMessages}
               isLoading={isLoading}
@@ -590,11 +656,11 @@ export default function ChatSection() {
         onClose={() => setSourcesPanel(null)}
       />
 
-      {(hasStartedChat || hasMessages) && (
+      {!isEmpty && (
         <button
           type="button"
           onClick={handleScrollToLatest}
-          aria-label="Scroll to latest messages"
+          aria-label={chromeStrings.scrollToLatestAria}
           className={[
             "absolute left-1/2 -translate-x-1/2 z-20",
             "bottom-36 sm:bottom-36",
@@ -633,11 +699,13 @@ export default function ChatSection() {
             ].join(" ")}
           >
             <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 flex-shrink-0" />
-            <p className="text-xs sm:text-sm font-medium">{chatError}</p>
+            <p className="text-xs sm:text-sm font-medium">
+              {chromeStrings.chatErrorFriendly}
+            </p>
             <button
-              onClick={() => setChatError(null)}
+              onClick={() => setChatError(false)}
               className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors flex-shrink-0"
-              aria-label="Dismiss error"
+              aria-label={chromeStrings.dismissErrorAria}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -645,44 +713,17 @@ export default function ChatSection() {
         </div>
       )}
 
-      {/* Input area - positioned based on chat state */}
+      {/* Bottom, on every screen: the question box, the privacy line, and the
+          note on where answers come from. */}
       <div
         data-sources-open={isSourcesPanelOpen ? "true" : "false"}
-        className={`w-full pl-2 pr-4 sm:px-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 pb-2 transition-all duration-500 ease-in-out ${
-          !hasStartedChat && !hasMessages ? "static" : "sticky bottom-0"
-        } pathway-chat-input-shell`}
+        className="pathway-chat-input-shell sticky bottom-0 w-full bg-ia-page px-4 pb-2 pt-1 sm:px-6"
       >
-        <div className="max-w-[672px] md:max-w-[720px] lg:max-w-[840px] xl:max-w-[960px] 2xl:max-w-[1120px] mx-auto space-y-2">
-          <ChatInput
-            input={input}
-            handleSubmit={customHandleSubmit}
-            handleInputChange={handleInputChange}
-            isLoading={isLoading}
-            messages={messages}
-            append={appendMessage}
-            setInput={setInput}
-            stop={stop}
-            inputPlaceholder={chromeStrings.inputPlaceholder}
-          />
-
-          {/* The student-privacy notice (CLAUDE.md §9.2), always shown, in the
-              spot and style of upstream's "IMPORTANT:" note. */}
-          <div className="px-2">
-            <p className="text-[10px] sm:text-xs leading-[14px] sm:leading-[16px] text-red-700 dark:text-red-300">
-              <span className="font-bold">{chromeStrings.ferpaLabel}</span>{" "}
-              <span className="font-medium">{chromeStrings.ferpaNotice}</span>
-            </p>
-          </div>
+        <div className="mx-auto max-w-[760px] space-y-2">
+          {chatInput}
+          {privacyNote}
+          {sourcesNote}
         </div>
-        {(hasStartedChat || hasMessages) && (
-          <p
-            role="note"
-            className="mt-1 text-center text-[10px] leading-[14px] sm:text-xs sm:leading-[16px] text-[#73726C] dark:text-[#9C9A92]"
-          >
-            <span className="sm:hidden">{chromeStrings.aiNoteShort}</span>
-            <span className="hidden sm:inline">{chromeStrings.aiNoteLong}</span>
-          </p>
-        )}
       </div>
     </div>
   );

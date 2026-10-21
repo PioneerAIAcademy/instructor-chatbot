@@ -79,3 +79,19 @@ def test_missing_data_field_is_safe():
 def test_non_dict_data_is_safe():
     with _conf("en", False):
         assert _resolve_user_language(SimpleNamespace(data="x"), "ok") == "en"
+
+
+# ----- Whether the settings pick decided (the prompt then names the language) -----
+
+
+def test_pick_decides_only_when_the_prompt_is_undetectable():
+    from app.api.routers.chat import _resolve_language
+
+    with _conf("en", False):
+        assert _resolve_language(_data("pt"), "ok") == ("pt", True)
+    with _conf("en", True):
+        # A clearly English question keeps English, even with Portuguese picked.
+        assert _resolve_language(_data("pt"), "How do I get paid?") == ("en", False)
+    with _conf("en", False):
+        # No pick: the detected fallback, and the prompt keeps its default rule.
+        assert _resolve_language(_data("auto"), "ok") == ("en", False)

@@ -323,7 +323,7 @@ export function UserFeedbackComponent({
 
   return (
     <div ref={rootRef} className="flex flex-col items-start">
-      <div ref={buttonRowRef} className="flex items-center gap-2">
+      <div ref={buttonRowRef} className="flex items-center gap-0.5">
         <Tooltip label={strings.feedbackLoveTitle} side="top" align="start">
         <Button
           size="icon"
@@ -334,8 +334,8 @@ export function UserFeedbackComponent({
           onClick={handleThumbsUp}
         >
           <ThumbsUp
-            fill={thumbsUpActive ? "#22c55e" : "none"}
-            className="h-[18px] w-[18px]"
+            fill={thumbsUpActive ? "currentColor" : "none"}
+            className={`h-4 w-4 ${thumbsUpActive ? "text-ia-gold-ink" : ""}`}
             strokeWidth={thumbsUpActive ? 0 : 2}
           />
         </Button>
@@ -353,8 +353,8 @@ export function UserFeedbackComponent({
             ref={thumbsDownButtonRef}
           >
             <ThumbsDown
-              fill={thumbsDownActive ? "#E18158" : "none"}
-              className="h-[18px] w-[18px]"
+              fill={thumbsDownActive ? "currentColor" : "none"}
+              className={`h-4 w-4 ${thumbsDownActive ? "text-ia-gold-ink" : ""}`}
               strokeWidth={thumbsDownActive ? 0 : 2}
             />
           </Button>
@@ -362,7 +362,7 @@ export function UserFeedbackComponent({
 
           {showInput && (
             <div
-              className="absolute top-12 left-0 z-10"
+              className="absolute top-10 left-0 z-10"
               style={{
                 transform:
                   mobilePopoverOffsetX !== 0
@@ -388,7 +388,7 @@ export function UserFeedbackComponent({
                   <div
                     className={cn(
                       styles.field,
-                      "relative rounded-2xl overflow-hidden text-[#056CB6] dark:text-[#8EBDDE]",
+                      "relative rounded-2xl overflow-hidden text-[#7A5600] dark:text-[#FFC328]",
                     )}
                     data-animating={isAnimating ? "true" : "false"}
                     data-closing={isClosing ? "true" : "false"}
@@ -452,7 +452,7 @@ export function UserFeedbackComponent({
                       <Button
                         size="sm"
                         onClick={handleSubmit}
-                        className="h-8 px-3 rounded-xl bg-[#056CB6] hover:bg-[#0F4B8F] text-white dark:text-white flex items-center gap-2"
+                        className="h-8 px-3 rounded-xl bg-[#FFC328] hover:bg-[#F5B400] text-[#1F1E1D] dark:text-[#1F1E1D] flex items-center gap-2"
                       >
                         {strings.feedbackSubmitButton}
                         <ArrowUp className="h-4 w-4" />

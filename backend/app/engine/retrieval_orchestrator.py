@@ -175,6 +175,7 @@ class RetrievalOrchestrator:
         event_handler,
         emit_stage: Callable[[str], None] | None = None,
         user_language: str | None = "en",
+        answer_language: str | None = None,
     ):
         """Return a streaming-compatible response for `message`. A guard
         failure degrades to the unguarded draft; a synthesis failure raises
@@ -199,7 +200,14 @@ class RetrievalOrchestrator:
                     logger.warning("[orch] emit_stage(%s) failed: %s", name, exc)
 
         _stage("retrieving")
-        engine = get_chat_engine(filters=filters, params=params, timezone=timezone)
+        # answer_language: set only when the settings pick decided the
+        # language (chat._resolve_language); the prompt then names it.
+        engine = get_chat_engine(
+            filters=filters,
+            params=params,
+            timezone=timezone,
+            answer_language=answer_language,
+        )
         guard = getattr(engine, "audience_guard", None)
         if not isinstance(guard, AudienceGuardPostprocessor):
             # Fail closed: an engine without its post-retrieval guard must not

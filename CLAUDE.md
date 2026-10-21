@@ -13,7 +13,8 @@ This repo is a **copied-and-trimmed** successor to
 
 > **Status (2026-10-20): Phases 0–6 merged (PRs #1–#7). Open, stacked in order: #8 Phase 7
 > prep, #9 Phase 8 frontend, #10 Phase 9 prep, #11 pre-deploy fixes. The missionary design in
-> blue is on `missionary-design-blue` (uncommitted). Hosting will be Render; the owner wants
+> blue is committed locally on `missionary-design-blue` (`7b01f20`, not pushed); the gold
+> redesign is on `instructor-gold-ui` (uncommitted). Hosting will be Render; the owner wants
 > everything else finished before deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
@@ -654,7 +655,7 @@ Backend (`backend/.env`):
 | `API_KEYS` | yes in prod | — | `X-API-Key`. Not a secret from users (it ships in the frontend). |
 | `ALLOWED_ORIGINS`, `CORS_ALLOW_ALL` | yes | —, `false` | The instructor frontend only |
 | `APP_HOST`, `APP_PORT` | no | `0.0.0.0`, `8000` | uvicorn |
-| `CONVERSATION_STARTERS` | no | unset | Newline-separated starter questions |
+| `CONVERSATION_STARTERS`, `CONVERSATION_STARTERS_ES`, `CONVERSATION_STARTERS_PT` | no | unset (built-in cards) | Welcome cards per interface language, newline-separated, `Title \| question`. Unset: the 4 built-in cards in that language; blank: none. |
 | `CLOUDINARY_URL` (or `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET`) | no | unset | Feedback screenshots, if kept |
 | `RUN_LIVE_TESTS`, `RUN_LLM_JUDGE` | no | unset | Opt-in billable tests and eval judge |
 
@@ -734,7 +735,7 @@ Why Q4 and Q5 land where they do:
 | Q9 | Keep the draft composer (announcements, welcome messages)? | Yes. |
 | Q10 | Dictation? | No in v1. |
 | Q11 | Suggested follow-up questions? | Yes, with the instructor prompt. |
-| Q12 | Languages? | English UI. Answers in the question's language (upstream behavior). Portuguese is likely needed (Brazil-based instructors, per *Pay Dates*). |
+| Q12 | Languages? | **Changed by the owner, 2026-10-20:** the interface is in English, Spanish, and Portuguese (Settings → Language, else the browser's language). Answers follow the question's language, and the picked language when the question doesn't make one clear. |
 | Q13 | Include linked external pages in retrieval? | Yes, labeled external. The instructor guide wins on conflict. |
 | Q14 | Who supplies real instructor questions? | The instructor support team, via the owner. Until then the §10 set stays DRAFT, and thumbs-down traces get triaged weekly once live. |
 | Q15 | Is Voyage's 0.21 rerank cutoff right for this corpus? | Unchanged until Phase 2/6 data shows misses caused by it. |
@@ -747,6 +748,91 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-20 (language setting: English, Spanish, Portuguese; same branch, uncommitted)** —
+  The setting looked like it worked but didn't: it listed 9 languages, the interface had
+  only English strings, and the pick never reached the model (the prompt said "answer in
+  the question's language"). Tagalog wasn't even a backend language. **Owner chose:** three
+  languages (the instructor countries: US, Mexico, Brazil; Philippines-based instructors
+  work in English), and picking one translates the app and steers answers. Q12 updated.
+  - **Interface:** every string in `chrome-strings.ts` in en/es/pt (Spanish "tú",
+    Portuguese "você", as upstream's reviewed translations; shared wording is upstream's).
+    About 45 hard-coded strings moved there (draft composer toolbar, source badges, Edit /
+    Cancel / Save, error banner, screen-reader labels). `useChromeStrings()` /
+    `useUiLanguage()` in `app/lib/use-chrome-strings.ts`. `<html lang>` follows the pick.
+    Not translated: the opening screen's name (it's in the prerendered HTML), and the
+    feedback drawer's screenshot section, which upstream switches off (`{false && …}`).
+  - **Welcome cards:** `/api/v1/chat/config?lang=es|pt` serves built-in Spanish and
+    Portuguese cards; `CONVERSATION_STARTERS_ES` / `_PT` override them. The first request
+    already uses the picked language (no English flash).
+  - **Answers:** `chat._resolve_language` also says whether the pick decided (the question's
+    language wasn't confidently detected); only then the system prompt says "Answer in
+    <language>: it's the language the instructor chose in settings…". A clearly English
+    question still gets English.
+  - **Draft composer:** its leftover blue (`sky-*`) accents are gold now.
+  - **Checked live on :3001:** Portuguese interface (greeting, title, placeholder, 4 cards,
+    privacy line, menu), "Canvas?" answered in Portuguese, an English question answered in
+    English; Spanish interface and cards. Backend tests pass.
+
+- **2026-10-20 (frontend: gold, in a layout of its own; branch `instructor-gold-ui`,
+  uncommitted)** — **Owner, from the instructor team:** use BYU gold everywhere, keep
+  Mulish, and make the app look different from the Missionary Assistant. The layout follows
+  a chat-UI mockup a staff member on the instructor team shared, with the settings gear in
+  place of the mockup's user initials (there are no accounts). The blue version is saved as
+  `7b01f20` on `missionary-design-blue` (local commit, not pushed).
+  - **Layout:**
+    - a BYU-gold top bar with the BYU-Pathway logo and "Instructor Assistant", and New
+      chat and the gear (owner follow-up: gold bar and logo instead of the mockup's white
+      bar; the first question no longer shows in the bar). It fits at 360px wide in a
+      chat (349px used);
+    - the welcome screen "Good morning. What can I help with?" and 4 cards in the middle,
+      above the question box (owner follow-up);
+    - answers with gold badges, the cited guides as chips, and small gray action icons;
+    - the question box at the bottom on every screen, the welcome screen included (owner
+      follow-up; the mockup had it in the middle).
+    - Not taken from the mockup: the paperclip, the "All sources" picker, and Share (no
+      such features).
+  - **Gold rules:** `#FFC328` is only a fill, with near-black text (10.4:1). Links and the
+    focus ring use deep gold `#7A5600` (6.7:1 on white); highlights pale gold `#FFF4D6`; in
+    dark mode gold itself is the link/focus color (~10:1). Defined once as `--ia-*` and
+    Tailwind `ia-*` colors.
+  - **New chat** clears the conversation and starts a new session ID (checked live: two
+    questions around it went out with 2 distinct `X-Session-ID`s). Headers are now built
+    per request, because the old memoized headers would have kept the old session.
+  - **Starter cards:** a `CONVERSATION_STARTERS` line `Title | question` shows as a card
+    with that title (API.md, `.env.example`). The backend passes lines through unchanged.
+    **When the variable is unset, the backend now serves the 4 instructor cards**
+    (`DEFAULT_STARTERS`); blank means none. Found when the owner saw no cards: the local
+    `backend/.env` has no `CONVERSATION_STARTERS`, and Render would have had the same gap.
+  - **Found: a second frontend on :3001 got no cards and no answers.** `next dev` moves to
+    :3001 when :3000 is taken, and the backend's CORS (`ALLOWED_ORIGINS=http://localhost:3000`)
+    refused it, so the page couldn't load `/config` or ask anything ("Something went
+    wrong"). Fix: with `ENVIRONMENT=dev` set explicitly, the backend also allows any
+    localhost port (`allow_origin_regex`); prod, and an unset `ENVIRONMENT`, still allow
+    only `ALLOWED_ORIGINS` (`tests/test_cors_origins.py`). Checked live on :3001: 4 cards,
+    two answers with follow-ups. Two `next dev` servers in `frontend/` also share `.next`,
+    so one serves the other's build: run one.
+  - **Answer finding (not fixed):** asked for the pay schedule, the bot said to "refer to
+    the picture of the pay schedule provided in the instructor guide". The PDF has no
+    picture (§1 known gap), so the answer points at something that doesn't exist. A case
+    for the prompt or the eval set.
+  - **Icons:** back to upstream's gold files; the blue PNG is removed.
+  - **Checks:** `tsc`, lint, build, and the term check clean. `e2e_check.mjs`, updated for
+    the source chips, against a local backend with the 4 cards: **ALL PASSED (7/7)**.
+    Screenshots in light, dark, and phone width.
+  - **Real instructor questions arrived (Q14).** A staff member on the instructor team sent
+    questions with ideal answers. 46 are condensed in
+    `backend/tests/eval/team/2026-10-20-instructor-team-questions.md`, which is
+    **gitignored** until the owner approves publishing them (the repo is public).
+    - The paste was cut off at 50,000 characters, inside question 46; the rest is still to
+      come.
+    - Patterns the ideal answers share: ask a clarifying question when the answer depends
+      on instructor type or location, or on the block; say when the guides don't cover
+      something, and route to the right contact; keep instructor problems and student
+      problems on their different forms; never promise outcomes.
+    - Many rely on SharePoint pages that may not be in the index (IMS provisioning, the
+      System Access Request Form, contracts, payslips). Next: turn them into eval cases
+      and run the retrieval eval to see which the index can answer.
 
 - **2026-10-20 (frontend: Mulish and the prototype's answer format, same branch,
   uncommitted)** — The owner sent a screenshot of the prototype's answer and asked for that

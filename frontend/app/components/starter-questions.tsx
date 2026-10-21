@@ -1,11 +1,26 @@
 "use client";
 
-/**
- * Starter question cards on the empty chat. Upstream fetched starters but
- * never showed them, so this borrows the look of upstream's disclaimer card
- * (white, hairline border, rounded-2xl), with a light-blue hover. Two columns
- * on wider screens, one on phones. Clicking a card asks it.
- */
+import { useChromeStrings } from "../lib/use-chrome-strings";
+
+// The welcome screen's cards, two columns on wider screens, one on phones.
+// Each starter from the backend (CONVERSATION_STARTERS) is either a plain
+// question or "Title | question": the card shows the title in bold and the
+// question under it, and clicking it asks the question.
+export function parseStarter(starter: string): {
+  title: string;
+  question: string;
+} {
+  const split = starter.indexOf("|");
+  if (split === -1) return { title: starter.trim(), question: starter.trim() };
+  const title = starter.slice(0, split).trim();
+  const question = starter.slice(split + 1).trim();
+  if (!title || !question) {
+    const only = title || question;
+    return { title: only, question: only };
+  }
+  return { title, question };
+}
+
 export default function StarterQuestions({
   questions,
   onAsk,
@@ -13,20 +28,27 @@ export default function StarterQuestions({
   questions: string[];
   onAsk: (question: string) => void;
 }) {
-  if (!questions.length) return null;
+  const strings = useChromeStrings();
+  const starters = questions.map(parseStarter).filter((s) => s.question);
+  if (!starters.length) return null;
   return (
     <ul
-      className="grid w-full grid-cols-1 gap-2 md:grid-cols-2"
-      aria-label="Suggested questions"
+      className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3"
+      aria-label={strings.startersAria}
     >
-      {questions.map((question) => (
+      {starters.map(({ title, question }) => (
         <li key={question} className="flex">
           <button
             type="button"
             onClick={() => onAsk(question)}
-            className="w-full rounded-2xl border border-[rgba(31,30,29,0.12)] bg-white px-4 py-3 text-left text-sm font-medium text-[#3D3D3A] transition-colors hover:bg-[#056CB6]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 dark:border-[rgba(252,252,252,0.06)] dark:bg-[#242628] dark:text-[#FCFCFC] dark:hover:bg-[#056CB6]/25 sm:text-[15px]"
+            className="flex w-full flex-col gap-1 rounded-xl bg-ia-surface px-4 py-3 text-left transition-colors hover:bg-ia-gold-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
           >
-            {question}
+            <span className="text-sm font-bold text-ia-text">{title}</span>
+            {question !== title && (
+              <span className="text-[13px] leading-snug text-ia-muted">
+                {question}
+              </span>
+            )}
           </button>
         </li>
       ))}

@@ -1,36 +1,35 @@
-import { useState } from "react";
-import { ChatHandler, SuggestedQuestionsData } from "..";
+import { useChromeStrings } from "../../../../lib/use-chrome-strings";
+import { SuggestedQuestionsData } from "..";
 
+// An answer's suggested follow-ups, as outlined pills under it. Clicking one
+// asks it. Real buttons (upstream used an <a> with no href, which the
+// keyboard can't reach).
 export function SuggestedQuestions({
   questions,
-  append,
+  onAsk,
 }: {
   questions: SuggestedQuestionsData;
-  append: Pick<ChatHandler, "append">["append"];
+  onAsk: (question: string) => void;
 }) {
-  const [showQuestions, setShowQuestions] = useState(questions.length > 0);
-
+  const strings = useChromeStrings();
+  if (!questions.length) return null;
   return (
-    showQuestions &&
-    append !== undefined && (
-      <div className="flex flex-wrap gap-2">
-        {questions.map((question, index) => (
-          // A real button (upstream used an <a> with no href, which the
-          // keyboard can't reach).
-          <button
-            type="button"
-            key={index}
-            onClick={() => {
-              append({ role: "user", content: question });
-              setShowQuestions(false);
-            }}
-            // Pale-blue pills; 44px tall on phones for touch, 36px up.
-            className="inline-flex min-h-11 max-w-full items-center rounded-full bg-[#E7F0FA] px-4 py-2 text-left text-[15px] font-medium text-[#454540] transition-colors hover:bg-[#8EBDDE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 dark:bg-[#056CB6]/25 dark:text-[#E7F0FA] dark:hover:bg-[#056CB6]/45 sm:min-h-9"
-          >
-            <span className="break-words">{question}</span>
-          </button>
-        ))}
-      </div>
-    )
+    <div
+      role="group"
+      aria-label={strings.followUpsAria}
+      className="flex flex-wrap gap-2"
+    >
+      {questions.map((question) => (
+        <button
+          type="button"
+          key={question}
+          onClick={() => onAsk(question)}
+          // 44px tall on phones for touch, 36px up.
+          className="inline-flex min-h-11 max-w-full items-center rounded-full border border-ia-line bg-ia-page px-4 py-2 text-left text-[14px] font-semibold text-ia-body transition-colors hover:border-ia-gold hover:bg-ia-gold-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 sm:min-h-9"
+        >
+          {question}
+        </button>
+      ))}
+    </div>
   );
 }

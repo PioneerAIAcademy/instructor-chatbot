@@ -22,38 +22,25 @@
   margin-left: 20px;
 }
 
-/* External links and email links in chat messages: navy, underlined. */
+/* External links and email links in chat messages: deep gold #7A5600 and
+   underlined (6.7:1 on white; BYU gold itself is too light for text). In
+   dark mode the links are BYU gold, about 10:1 on the dark page. */
 .custom-markdown a[href^="http"],
-.custom-markdown a[href^="mailto"] {
-  color: #0f4b8f;
+.custom-markdown a[href^="mailto"],
+.custom-markdown a[href^="http"]:visited,
+.custom-markdown a[href^="mailto"]:visited {
+  color: var(--ia-gold-ink);
   font-weight: 600;
   text-decoration: underline;
+  text-decoration-color: var(--ia-gold);
   text-underline-offset: 3px;
-  text-decoration-thickness: 1px;
+  text-decoration-thickness: 2px;
   transition: color 150ms ease;
 }
 
 .custom-markdown a[href^="http"]:hover,
-.custom-markdown a[href^="mailto"]:hover,
-.custom-markdown a[href^="http"]:visited:hover {
-  color: #056cb6;
-  text-decoration-thickness: 2px;
-}
-
-.custom-markdown a[href^="http"]:visited,
-.custom-markdown a[href^="mailto"]:visited {
-  color: #0f4b8f;
-}
-
-.dark .custom-markdown a[href^="http"],
-.dark .custom-markdown a[href^="mailto"],
-.dark .custom-markdown a[href^="http"]:visited {
-  color: #8ebdde;
-}
-
-.dark .custom-markdown a[href^="http"]:hover,
-.dark .custom-markdown a[href^="mailto"]:hover {
-  color: #e7f0fa;
+.custom-markdown a[href^="mailto"]:hover {
+  color: var(--ia-text);
 }
 
 /* The backend's "(sign-in required)" after a sign-in link: a small gray note. */
@@ -68,30 +55,26 @@
   color: #b5b5b5;
 }
 
-/* Citation badges — the round numbered badge is owned by the component's
-   Tailwind classes (chat-sources.tsx); this only stops the generic link rules
-   above from recoloring or underlining it. */
+/* Citation badges: the gold numbered badge is owned by the component's
+   Tailwind classes (chat-sources.tsx); this only stops the link rules above
+   from recoloring or underlining it. */
 .custom-markdown a.citation-link,
 .custom-markdown a.citation-link:visited,
-.dark .custom-markdown a.citation-link,
-.dark .custom-markdown a.citation-link:visited {
-  color: #454540;
-  font-weight: 700;
-  text-decoration: none;
-}
-
 .custom-markdown a.citation-link:hover,
 .custom-markdown a.citation-link:focus-visible,
+.dark .custom-markdown a.citation-link,
+.dark .custom-markdown a.citation-link:visited,
 .dark .custom-markdown a.citation-link:hover,
 .dark .custom-markdown a.citation-link:focus-visible {
-  color: #fff;
+  color: var(--ia-on-gold);
+  font-weight: 700;
   text-decoration: none;
 }
 
 /* Reference list item styling.
    `.citation-hovered` is toggled when the user hovers the matching inline
    citation chip in the answer, so the corresponding source row in the open
-   Sources drawer lights up with a light-blue tint. Dark mode is keyed
+   Sources drawer lights up with a pale-gold tint. Dark mode is keyed
    off the `.dark` class (the app uses class-based theming, not
    prefers-color-scheme). */
 .reference-list-item {
@@ -99,11 +82,11 @@
 }
 
 .reference-list-item.citation-hovered {
-  background-color: rgba(5, 108, 182, 0.1);
+  background-color: rgba(255, 195, 40, 0.18);
 }
 
 .dark .reference-list-item.citation-hovered {
-  background-color: rgba(5, 108, 182, 0.25);
+  background-color: rgba(255, 195, 40, 0.14);
 }
 
 /* Mark + kbd + dfn — bare HTML elements emitted by the LLM

@@ -475,7 +475,7 @@ const DATE_PATTERN = new RegExp(
 const DATE_CHIP_CLASSNAME =
   "date-chip inline-block align-baseline";
 
-// The same pale-blue highlight as <mark> (markdown.css), in the answer's font.
+// The same pale-gold highlight as <mark> (markdown.css), in the answer's font.
 const DATE_CHIP_STYLE: CSSProperties = {
   background: "var(--highlight-bg)",
   color: "var(--highlight-text)",
@@ -880,7 +880,7 @@ export default function Markdown({
   const loadingClass = isLoading ? "markdown-loading" : "markdown-ready";
   return (
     <div
-      className={`prose dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 break-words overflow-wrap-anywhere custom-markdown text-[#454540] dark:text-[#D6D6D6] text-[16px] leading-[1.6] tracking-normal max-w-full ${loadingClass}`}
+      className={`prose dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 break-words overflow-wrap-anywhere custom-markdown text-ia-body text-[16px] leading-[1.6] tracking-normal max-w-full ${loadingClass}`}
     >
       {blocks.map((block, i) => (
         <MemoizedReactMarkdown

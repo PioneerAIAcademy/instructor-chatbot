@@ -49,8 +49,9 @@ chat_router = r = APIRouter()
 logger = logging.getLogger("uvicorn")
 
 
-def _resolve_user_language(data: "ChatData", text: str) -> str:
-    """Resolve the user's UI language for this request.
+def _resolve_language(data: "ChatData", text: str) -> tuple[str, bool]:
+    """Resolve the user's language for this request, and whether the
+    settings pick decided it.
 
     Precedence (upstream directive 2026-06-01 — the PROMPT's language wins;
     the gear-menu pick is only a BACKUP for when the prompt can't be detected):
@@ -62,6 +63,10 @@ def _resolve_user_language(data: "ChatData", text: str) -> str:
     Upstream also used a geo-IP tiebreaker between 2 and 3; it is not ported.
     The 'auto' pref value means "no manual pick". Unknown / unsupported pref
     codes are dropped silently.
+
+    The second value is True only in case 2: then the model is told to
+    answer in that language (its default rule is "the question's language",
+    which can't be read from a prompt like "ok").
     """
     pref: str | None = None
     if data.data and isinstance(data.data, dict):
@@ -75,13 +80,18 @@ def _resolve_user_language(data: "ChatData", text: str) -> str:
     detected, confident = LocalizationManager.detect_language_confident(text)
 
     if confident:
-        return detected
+        return detected, False
 
     if pref:
         logger.info("language: prompt undetectable, using gear pref %s", pref)
-        return pref
+        return pref, True
 
-    return detected
+    return detected, False
+
+
+def _resolve_user_language(data: "ChatData", text: str) -> str:
+    """The resolved language code alone (see _resolve_language)."""
+    return _resolve_language(data, text)[0]
 
 
 def _warn_on_client_role(params: dict) -> None:
@@ -199,7 +209,7 @@ async def chat(
         # Resolve languages from what the user TYPED, before the English
         # edited-draft scaffolding below is appended to the turn.
         typed_message = last_message_content
-        user_language = _resolve_user_language(data, typed_message)
+        user_language, language_from_settings = _resolve_language(data, typed_message)
 
         # The user can type straight into the rendered draft, and those edits
         # live only in the browser DOM — the history below still holds the draft
@@ -323,6 +333,7 @@ async def chat(
                     timezone=user_timezone,
                     event_handler=event_handler,
                     user_language=user_language,
+                    answer_language=user_language if language_from_settings else None,
                     **trace.child_kwargs(),
                 )
             answer_nodes.extend(getattr(response, "source_nodes", None) or [])

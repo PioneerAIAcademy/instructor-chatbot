@@ -17,8 +17,23 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        // Keyboard-focus ring: amber, theme-aware (see --focus-ring in globals.css).
+        // Keyboard-focus ring: deep gold / gold, theme-aware (--focus-ring in globals.css).
         "focus-ring": "var(--focus-ring)",
+        // The Instructor Assistant palette; each is theme-aware (globals.css).
+        // Solid colors only: Tailwind 3 can't apply /opacity to var() colors.
+        ia: {
+          page: "var(--ia-page)",
+          surface: "var(--ia-surface)",
+          line: "var(--ia-line)",
+          text: "var(--ia-text)",
+          body: "var(--ia-body)",
+          muted: "var(--ia-muted)",
+          gold: "var(--ia-gold)",
+          "gold-hover": "var(--ia-gold-hover)",
+          "gold-soft": "var(--ia-gold-soft)",
+          "gold-ink": "var(--ia-gold-ink)",
+          "on-gold": "var(--ia-on-gold)",
+        },
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {

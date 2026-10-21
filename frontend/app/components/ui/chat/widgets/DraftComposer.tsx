@@ -21,7 +21,7 @@ import {
   getDraftEdit,
   type DraftSnapshot,
 } from "@/app/lib/draft-registry";
-import { getChromeStrings } from "../../../../lib/chrome-strings";
+import { getChromeStrings, type ChromeStrings } from "../../../../lib/chrome-strings";
 import { resolveUiLanguage } from "../../../../lib/i18n";
 import {
   getDeviceId,
@@ -62,14 +62,19 @@ const FORMAT_BLOCK_VALUE: Record<TextStyleOption, string> = {
   h2: "<h2>",
   h3: "<h3>",
 };
-const STYLE_LABEL: Record<DropdownStyleOption, string> = {
-  p: "Text",
-  h1: "Heading 1",
-  h2: "Heading 2",
-  h3: "Heading 3",
-  ol: "Numbered list",
-  ul: "Bulleted list",
-};
+// The style names, in the interface language.
+const styleLabel = (
+  strings: ChromeStrings,
+  option: DropdownStyleOption,
+): string =>
+  ({
+    p: strings.draftStyleText,
+    h1: strings.draftStyleH1,
+    h2: strings.draftStyleH2,
+    h3: strings.draftStyleH3,
+    ol: strings.draftNumberedList,
+    ul: strings.draftBulletedList,
+  })[option];
 const STYLE_PREVIEW_OPTION_STYLE: Record<
   DropdownStyleOption,
   React.CSSProperties
@@ -514,7 +519,7 @@ export function DraftComposer({
 
     const marker = document.createElement("span");
     marker.className =
-      "bg-sky-100/90 dark:bg-sky-900/40 text-inherit rounded px-0.5 break-words";
+      "bg-[#FFE8A3]/90 dark:bg-[#5C4A1A]/60 text-inherit rounded px-0.5 break-words";
 
     try {
       range.surroundContents(marker);
@@ -891,7 +896,7 @@ export function DraftComposer({
 
       const ins = document.createElement("ins");
       ins.className =
-        "text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/30 no-underline mx-0.5 px-0.5 rounded";
+        "text-[#7A5600] dark:text-[#FFC328] bg-[#FFF4D6] dark:bg-[#3A3120] no-underline mx-0.5 px-0.5 rounded";
       ins.textContent = updatedText;
 
       fragment.appendChild(del);
@@ -976,7 +981,7 @@ export function DraftComposer({
     !isCompactToolbar && (textStyle === "ul" || textStyle === "ol")
       ? "p"
       : textStyle;
-  const askButtonLabel = "Tweak";
+  const askButtonLabel = chromeStrings.draftTweak;
 
   return (
     <div className="mt-4 mb-4 max-w-full flex flex-col rounded-2xl overflow-visible border border-gray-200/90 dark:border-gray-700/60 bg-white dark:bg-[#1a1f2b] shadow-sm">
@@ -986,10 +991,10 @@ export function DraftComposer({
           {isEmail ? localized.emailLabel : localized.messageLabel}
         </div>
         <div className="relative flex items-center gap-1" ref={toolbarRef}>
-          <Tooltip label={isCopied ? "Copied!" : "Copy"} side="bottom" align="end">
+          <Tooltip label={isCopied ? chromeStrings.draftCopied : chromeStrings.draftCopy} side="bottom" align="end">
           <button
             onClick={onCopy}
-            aria-label={isCopied ? "Copied!" : "Copy"}
+            aria-label={isCopied ? chromeStrings.draftCopied : chromeStrings.draftCopy}
             className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
           >
             {isCopied ? (
@@ -1001,11 +1006,11 @@ export function DraftComposer({
           </Tooltip>
 
           {isEmail && (
-            <Tooltip label={getChromeStrings(resolveUiLanguage()).draftSend} side="bottom" align="end">
+            <Tooltip label={chromeStrings.draftSend} side="bottom" align="end">
             <button
               onClick={() => setSendOpen((v) => !v)}
               className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
-              aria-label={getChromeStrings(resolveUiLanguage()).draftSend}
+              aria-label={chromeStrings.draftSend}
             >
               <Send className="w-4 h-4" />
             </button>
@@ -1045,7 +1050,7 @@ export function DraftComposer({
                     className="h-full w-full object-contain"
                   />
                 </span>
-                Outlook (Work or School)
+                {chromeStrings.draftOutlookWork}
               </button>
               <button
                 className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-left text-[15px] font-sans font-medium text-[#3D3D3A] dark:text-[#F3F4F6] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
@@ -1061,7 +1066,7 @@ export function DraftComposer({
                     className="h-full w-full object-contain"
                   />
                 </span>
-                Outlook.com (Personal)
+                {chromeStrings.draftOutlookPersonal}
               </button>
             </div>
           )}
@@ -1126,7 +1131,7 @@ export function DraftComposer({
                 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-2
                 [&_li]:my-1
                 focus:outline-none
-                ${!isLoading ? "cursor-text caret-sky-500 dark:caret-sky-400" : ""}
+                ${!isLoading ? "cursor-text caret-[#B07D00] dark:caret-[#FFC328]" : ""}
               `}
               style={{
                 minHeight: 140,
@@ -1161,7 +1166,7 @@ export function DraftComposer({
             {toolbarState.diffMode ? (
               <div className="flex gap-1 items-center px-1">
                 <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">
-                  Accept or Undo?
+                  {chromeStrings.draftAcceptOrUndo}
                 </span>
                 <Button
                   size="sm"
@@ -1169,7 +1174,7 @@ export function DraftComposer({
                   className="h-7 text-xs text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30"
                   onClick={acceptDiff}
                 >
-                  Accept
+                  {chromeStrings.draftAccept}
                 </Button>
                 <Button
                   size="sm"
@@ -1177,7 +1182,7 @@ export function DraftComposer({
                   className="h-7 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                   onClick={undoDiff}
                 >
-                  Undo
+                  {chromeStrings.draftUndo}
                 </Button>
               </div>
             ) : toolbarState.mode === "format" ? (
@@ -1190,19 +1195,19 @@ export function DraftComposer({
                         applyTextStyle(e.target.value as DropdownStyleOption)
                       }
                       className="h-7 w-[96px] sm:w-[118px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-1.5 text-[14px] text-gray-700 dark:text-gray-200 outline-none cursor-pointer"
-                      title={`Text style: ${STYLE_LABEL[textStyle]}`}
+                      title={chromeStrings.draftTextStyle.replace("{style}", styleLabel(chromeStrings, textStyle))}
                     >
                       <option value="p" style={STYLE_PREVIEW_OPTION_STYLE.p}>
-                        Text
+                        {chromeStrings.draftStyleText}
                       </option>
                       <option value="h1" style={STYLE_PREVIEW_OPTION_STYLE.h1}>
-                        Heading 1
+                        {chromeStrings.draftStyleH1}
                       </option>
                       <option value="h2" style={STYLE_PREVIEW_OPTION_STYLE.h2}>
-                        Heading 2
+                        {chromeStrings.draftStyleH2}
                       </option>
                       <option value="h3" style={STYLE_PREVIEW_OPTION_STYLE.h3}>
-                        Heading 3
+                        {chromeStrings.draftStyleH3}
                       </option>
                       {isCompactToolbar && (
                         <>
@@ -1210,13 +1215,13 @@ export function DraftComposer({
                             value="ol"
                             style={STYLE_PREVIEW_OPTION_STYLE.ol}
                           >
-                            Numbered list
+                            {chromeStrings.draftNumberedList}
                           </option>
                           <option
                             value="ul"
                             style={STYLE_PREVIEW_OPTION_STYLE.ul}
                           >
-                            Bulleted list
+                            {chromeStrings.draftBulletedList}
                           </option>
                         </>
                       )}
@@ -1225,38 +1230,38 @@ export function DraftComposer({
                   </>
                 )}
 
-                <Tooltip label="Bold" side="top">
+                <Tooltip label={chromeStrings.draftBold} side="top">
                 <button
                   className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     applyFormat("bold");
                   }}
-                  aria-label="Bold"
+                  aria-label={chromeStrings.draftBold}
                 >
                   <Bold className="w-4 h-4" />
                 </button>
                 </Tooltip>
-                <Tooltip label="Italic" side="top">
+                <Tooltip label={chromeStrings.draftItalic} side="top">
                 <button
                   className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     applyFormat("italic");
                   }}
-                  aria-label="Italic"
+                  aria-label={chromeStrings.draftItalic}
                 >
                   <Italic className="w-4 h-4" />
                 </button>
                 </Tooltip>
-                <Tooltip label="Underline" side="top">
+                <Tooltip label={chromeStrings.draftUnderline} side="top">
                 <button
                   className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     applyFormat("underline");
                   }}
-                  aria-label="Underline"
+                  aria-label={chromeStrings.draftUnderline}
                 >
                   <Underline className="w-4 h-4" />
                 </button>
@@ -1264,27 +1269,27 @@ export function DraftComposer({
 
                 {!isCompactToolbar && (
                   <>
-                    <Tooltip label="Bulleted list" side="top">
+                    <Tooltip label={chromeStrings.draftBulletedList} side="top">
                     <button
                       className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         applyTextStyle("ul");
                       }}
-                      aria-label="Bulleted list"
+                      aria-label={chromeStrings.draftBulletedList}
                     >
                       <List className="w-4 h-4" />
                     </button>
                     </Tooltip>
 
-                    <Tooltip label="Numbered list" side="top">
+                    <Tooltip label={chromeStrings.draftNumberedList} side="top">
                     <button
                       className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         applyTextStyle("ol");
                       }}
-                      aria-label="Numbered list"
+                      aria-label={chromeStrings.draftNumberedList}
                     >
                       <ListOrdered className="w-4 h-4" />
                     </button>
@@ -1293,14 +1298,14 @@ export function DraftComposer({
                 )}
 
                 {isEmail && (
-                  <Tooltip label="Insert link" side="top">
+                  <Tooltip label={chromeStrings.draftInsertLink} side="top">
                   <button
                     className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       openLinkMode();
                     }}
-                    aria-label="Insert link"
+                    aria-label={chromeStrings.draftInsertLink}
                   >
                     <Link2 className="w-4 h-4" />
                   </button>
@@ -1309,7 +1314,7 @@ export function DraftComposer({
 
                 <div className="w-px h-5 bg-gray-200 dark:bg-gray-600 mx-0.5" />
                 <button
-                  className="flex items-center min-w-0 max-w-[68px] sm:max-w-none gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-950/20 transition-colors"
+                  className="flex items-center min-w-0 max-w-[68px] sm:max-w-none gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs font-medium text-[#7A5600] dark:text-[#FFC328] hover:bg-[#FFF4D6] dark:hover:bg-[#3A3120] transition-colors"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     if (!highlightSelectionForAsk()) {
@@ -1318,7 +1323,7 @@ export function DraftComposer({
                     }
                     setToolbarState((s) => ({ ...s, mode: "ask" }));
                   }}
-                  title="Tweak"
+                  title={chromeStrings.draftTweak}
                 >
                   <Sparkles className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">{askButtonLabel}</span>
@@ -1329,7 +1334,7 @@ export function DraftComposer({
                 <input
                   autoFocus
                   type="text"
-                  placeholder="Describe the change to apply..."
+                  placeholder={chromeStrings.draftTweakPlaceholder}
                   className="text-sm bg-transparent border-none outline-none w-44 px-1 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
                   maxLength={ASK_INPUT_MAX_CHARS}
                   value={prompt}
@@ -1339,14 +1344,14 @@ export function DraftComposer({
                   onKeyDown={(e) => e.key === "Enter" && askForChange()}
                 />
                 <button
-                  className="px-2 py-1 rounded text-xs font-medium bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-40 transition-colors"
+                  className="px-2 py-1 rounded text-xs font-medium bg-[#FFC328] hover:bg-[#F5B400] text-[#1F1E1D] disabled:opacity-40 transition-colors"
                   disabled={toolbarState.loading || !prompt.trim()}
                   onClick={askForChange}
                 >
-                  {toolbarState.loading ? "Applying" : "Apply"}
+                  {toolbarState.loading ? chromeStrings.draftApplying : chromeStrings.draftApply}
                 </button>
                 {toolbarState.loading && (
-                  <span className="h-3 w-3 rounded-full border-2 border-gray-300 border-t-sky-500 animate-spin" />
+                  <span className="h-3 w-3 rounded-full border-2 border-gray-300 border-t-[#E0A400] animate-spin" />
                 )}
               </div>
             ) : (
@@ -1354,7 +1359,7 @@ export function DraftComposer({
                 <input
                   autoFocus
                   type="url"
-                  placeholder="Paste a link..."
+                  placeholder={chromeStrings.draftLinkPlaceholder}
                   className="text-sm bg-transparent border-none outline-none w-36 sm:w-44 px-1 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
                   value={linkInput}
                   onChange={(e) => setLinkInput(e.target.value)}
@@ -1367,11 +1372,11 @@ export function DraftComposer({
                   }}
                 />
                 <button
-                  className="px-2 py-1 rounded text-xs font-medium bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-40 transition-colors"
+                  className="px-2 py-1 rounded text-xs font-medium bg-[#FFC328] hover:bg-[#F5B400] text-[#1F1E1D] disabled:opacity-40 transition-colors"
                   disabled={!linkInput.trim()}
                   onClick={applyLink}
                 >
-                  Insert
+                  {chromeStrings.draftInsert}
                 </button>
               </div>
             )}
@@ -1405,7 +1410,7 @@ function renderContentWithHighlights(
   return formattedText
     .replace(
       PLACEHOLDER_TOKEN_RE,
-      '<span class="bg-sky-100 dark:bg-sky-900/30 text-sky-800 dark:text-sky-200 px-1 rounded font-medium">[$1]</span>',
+      '<span class="bg-[#FFF4D6] dark:bg-[#3A3120] text-[#5C4100] dark:text-[#FFE8A3] px-1 rounded font-medium">[$1]</span>',
     )
     .replace(/\n/g, "<br />");
 }
@@ -1490,7 +1495,7 @@ function splitTrailingUrlPunctuation(href: string): {
 }
 
 function buildDraftLinkHtml(href: string, label: string): string {
-  return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-sky-700 dark:text-sky-300 underline underline-offset-2">${label}</a>`;
+  return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-[#7A5600] dark:text-[#FFC328] underline underline-offset-2">${label}</a>`;
 }
 
 function escapeHtml(value: string): string {

@@ -1,73 +1,50 @@
+"use client";
+
+import { Plus } from "lucide-react";
 import Image from "next/image";
+import { useChromeStrings } from "../lib/use-chrome-strings";
 import { SettingsMenu } from "./settings-menu";
 
-// Upstream's header on brand blue #056CB6 (was gold). The gray logo artwork
-// would be unreadable on it (about 2.4:1), so the logo, title, and gear show
-// in white; the logo file itself is unchanged.
-
-export default function Header() {
+// The top bar on BYU gold #FFC328, in light and dark mode: the BYU-Pathway
+// logo (its dark-gray artwork is about 6:1 on gold) and "Instructor
+// Assistant" on the left; New chat (in a chat) and the settings gear on the
+// right. Everything on the bar is near-black, and so is its focus ring.
+export default function Header({ onNewChat }: { onNewChat?: () => void }) {
+  const strings = useChromeStrings();
   return (
-    <header className="relative z-50 w-full bg-[#056CB6] px-4 sm:px-6 pb-2 pt-0 min-[480px]:pt-2 min-[480px]:pb-2 flex-shrink-0">
-      {/* Container for screens >= 480px - single row layout */}
-      <div className="hidden min-[480px]:flex items-center justify-between w-full relative min-h-[40px]">
-        {/* Logo */}
-        <div className="flex items-center z-10">
-          <a
-            href="/"
-            aria-label="BYU-Pathway Instructor Assistant home"
-            className="cursor-pointer inline-flex rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-[6px] focus-visible:ring-offset-[#056CB6]"
-          >
-            <Image
-              src="/pathway-horizontal-logo.png"
-              alt="BYU Pathway Logo"
-              width={140}
-              height={18}
-              className="h-[15px] sm:h-[24px] min-[570px]:h-[20px] w-auto [filter:brightness(0)_invert(1)]"
-            />
-          </a>
-        </div>
-        
-        {/* Title - centered */}
-        <div className="absolute left-1/2 transform -translate-x-1/2">
-          <h1 className="font-semibold text-[18px] md:text-xl text-white whitespace-nowrap">
-            Instructor Assistant
-          </h1>
-        </div>
-        
-        {/* Right side - Settings menu (all screens) */}
-        <div className="flex items-center gap-1 sm:gap-2 z-10">
-          <SettingsMenu />
-        </div>
-      </div>
+    <header className="relative z-50 flex h-14 w-full flex-shrink-0 items-center justify-between gap-2 bg-ia-gold px-3 text-ia-on-gold sm:px-5">
+      <a
+        href="/"
+        aria-label={strings.homeAria}
+        className="flex min-w-0 items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ia-on-gold focus-visible:ring-offset-4 focus-visible:ring-offset-ia-gold min-[400px]:gap-2.5 sm:gap-3"
+      >
+        <Image
+          src="/pathway-horizontal-logo.png"
+          alt="BYU-Pathway Worldwide"
+          width={178}
+          height={23}
+          priority
+          className="h-[11px] w-auto shrink-0 min-[400px]:h-[15px] sm:h-[20px]"
+        />
+        <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[#1F1E1D]/30 sm:h-6" />
+        <span className="truncate text-[14px] font-bold min-[400px]:text-[15px] sm:text-[17px]">
+          {strings.headerTitle}
+        </span>
+      </a>
 
-      {/* Container for screens < 480px - wrapped layout */}
-      <div className="min-[480px]:hidden relative -ml-2">
-        {/* Logo - top left */}
-        <a
-          href="/"
-          aria-label="BYU-Pathway Instructor Assistant home"
-          className="cursor-pointer inline-flex rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-[6px] focus-visible:ring-offset-[#056CB6]"
-        >
-          <Image
-            src="/pathway-horizontal-logo.png"
-            alt="BYU Pathway Logo"
-            width={140}
-            height={18}
-            className="h-[14px] w-auto [filter:brightness(0)_invert(1)]"
-          />
-        </a>
-        
-        {/* Settings Icon - absolute positioned, vertically centered */}
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 z-50">
-          <SettingsMenu />
-        </div>
-        
-        {/* Title - below logo */}
-        <div className="w-full mt-1.5">
-          <h1 className="font-semibold text-[18px] text-white -mt-2 text-center leading-tight">
-            Instructor Assistant
-          </h1>
-        </div>
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        {onNewChat && (
+          <button
+            type="button"
+            onClick={onNewChat}
+            aria-label={strings.newChat}
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[#1F1E1D]/25 px-2.5 text-sm font-semibold transition-colors hover:bg-[#1F1E1D]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-on-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ia-gold sm:h-9 sm:px-3"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">{strings.newChat}</span>
+          </button>
+        )}
+        <SettingsMenu />
       </div>
     </header>
   );

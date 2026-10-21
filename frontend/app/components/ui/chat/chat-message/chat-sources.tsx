@@ -3,6 +3,7 @@ import { MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { getChromeStrings, type ChromeStrings } from "../../../../lib/chrome-strings";
 import { resolveUiLanguage } from "../../../../lib/i18n";
+import { useChromeStrings } from "../../../../lib/use-chrome-strings";
 import {
   HoverCard,
   HoverCardContent,
@@ -33,7 +34,6 @@ const METADATA_TITLE_KEYS = [
   "name",
 ];
 
-const MAX_CITATION_LABEL_LENGTH = 34;
 const MAX_SNIPPET_LENGTH = 230;
 
 const getCitationNumber = (node: SourceNode) =>
@@ -152,15 +152,6 @@ const isChromeSourceTitle = (value: string) => {
   return false;
 };
 
-const labelFromTitle = (value: string) => {
-  const cleanValue = normalizeSourceTitle(value).replace(
-    /^About\s+(BYU-Pathway\b.*)$/i,
-    "$1",
-  );
-
-  return cleanValue;
-};
-
 export const getSourceTitle = (node?: SourceNode) => {
   if (!node) return "Source";
 
@@ -189,15 +180,6 @@ const truncateText = (value: string, maxLength: number) => {
   return `${value.slice(0, maxLength - 1).trimEnd()}...`;
 };
 
-const getCitationLabel = (node: SourceNode | undefined, index: number) => {
-  const title = getSourceTitle(node);
-  const domain = getSourceDomain(node?.url);
-  const label =
-    title && title !== "Source"
-      ? labelFromTitle(title)
-      : prettifyDomain(domain) || `Source ${index + 1}`;
-  return truncateText(label, MAX_CITATION_LABEL_LENGTH);
-};
 
 export const getSourceSnippet = (
   node?: SourceNode,
@@ -256,15 +238,18 @@ function SourceFavicon({
   );
 }
 
-// The outlined pill shared by "Sources (N)" and the round action buttons.
-export const OUTLINE_PILL =
-  "inline-flex h-11 items-center justify-center rounded-full border border-[rgba(31,30,29,0.15)] bg-transparent text-[15px] font-medium text-[#454540] " +
-  "transition-colors hover:border-[#454540] dark:border-[rgba(252,252,252,0.18)] dark:text-[#D6D6D6] dark:hover:border-[#D6D6D6] " +
+// A small gray icon button in the answer's action row (copy, thumbs,
+// regenerate): 40px on phones for touch, 32px up.
+export const ACTION_BUTTON =
+  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg p-0 text-ia-muted transition-colors " +
+  "hover:bg-ia-surface hover:text-ia-text sm:h-8 sm:w-8 " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2";
 
-// A round outlined icon button in the action row: 44px on phones, 40px up.
-export const ACTION_BUTTON = `${OUTLINE_PILL} h-11 w-11 shrink-0 p-0 hover:bg-transparent sm:h-10 sm:w-10`;
-
+/**
+ * The guides an answer cites, as chips under its text (one per document,
+ * in citation order). Clicking one opens the sources panel. An answer that
+ * cites nothing (a refusal, "not in the guides") gets no chips.
+ */
 export function ChatSources({ data, answer }: { data: SourceData; answer: string }) {
   const [uiLang, setUiLang] =
     useState<ReturnType<typeof resolveUiLanguage>>("en");
@@ -284,15 +269,23 @@ export function ChatSources({ data, answer }: { data: SourceData; answer: string
     () => buildSourcesGroupId(sortedSources),
     [sortedSources],
   );
-  // Count and list only what the answer cites; an answer that cites nothing
-  // (a refusal, "not in the guides") gets no Sources pill.
   const citedIndices = useMemo(
     () => getCitedIndices(answer, sortedSources),
     [answer, sortedSources],
   );
-  const citedSources = citedIndices.map((index) => sortedSources[index]);
+  // Several cited passages can come from one guide: one chip per document.
+  const documents = useMemo(() => {
+    const seen = new Map<string, { node: SourceNode; title: string }>();
+    for (const index of citedIndices) {
+      const node = sortedSources[index];
+      const title = getSourceTitle(node);
+      const key = node.url || title;
+      if (!seen.has(key)) seen.set(key, { node, title });
+    }
+    return Array.from(seen.values());
+  }, [citedIndices, sortedSources]);
 
-  if (citedIndices.length === 0) return null;
+  if (documents.length === 0) return null;
 
   const openSourcesPanel = () => {
     window.dispatchEvent(
@@ -307,22 +300,32 @@ export function ChatSources({ data, answer }: { data: SourceData; answer: string
     );
   };
 
-  // An outlined pill in the answer's action row: book icon, "Sources (N)".
   return (
-    <button
-      type="button"
-      onClick={openSourcesPanel}
-      className={`${OUTLINE_PILL} gap-2 px-4 sm:h-10`}
+    <ul
+      className="flex flex-wrap gap-2"
       aria-label={strings.sourcesOpenAria.replace(
         "{n}",
         String(citedIndices.length),
       )}
+      data-cited-count={citedIndices.length}
     >
-      <BookOpen className="h-[18px] w-[18px]" aria-hidden="true" />
-      <span>
-        {strings.sourcesTitle} ({citedIndices.length})
-      </span>
-    </button>
+      {documents.map(({ node, title }) => {
+        const Icon = isExternalSource(node) ? Globe : FileText;
+        return (
+          <li key={node.url || title} className="flex max-w-full">
+            <button
+              type="button"
+              onClick={openSourcesPanel}
+              title={`${title} · ${getSourceTypeLabel(node, strings)}`}
+              className="inline-flex h-10 max-w-full items-center gap-1.5 rounded-lg border border-ia-line bg-ia-page px-2.5 text-[13px] font-semibold text-ia-body transition-colors hover:border-ia-gold hover:bg-ia-gold-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 sm:h-8"
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0 text-ia-gold-ink" aria-hidden="true" />
+              <span className="truncate">{title}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -352,7 +355,7 @@ function CitationPopoverContent({
         <SourceFavicon node={node} className="mt-0.5 h-5 w-5" size={32} />
         <div className="min-w-0">
           <p className="line-clamp-2 text-[13px] font-semibold leading-[18px] text-[#2C2C29] dark:text-[#FCFCFC]">
-            {title || `Source ${index + 1}`}
+            {title || `${getChromeStrings(resolveUiLanguage()).sourceFallbackTitle} ${index + 1}`}
           </p>
           {snippet && (
             <p className="mt-1.5 line-clamp-3 text-[12px] leading-[18px] text-[#5F5E59] dark:text-[#C6C6C2]">
@@ -369,13 +372,13 @@ function CitationPopoverContent({
   );
 }
 
-// The inline citation: a small numbered badge. Light blue with a gray number
-// at rest; brand blue #056CB6 with white when hovered or focused.
+// The inline citation: a small numbered badge in BYU gold with a near-black
+// number (10.4:1); a deeper gold when hovered or focused.
 const CITE_BADGE =
-  "citation-link mx-[2px] inline-flex h-[24px] min-w-[24px] items-center justify-center rounded-full px-[7px] align-[1px] " +
-  "bg-[#8EBDDE] text-[12px] font-bold leading-none text-[#454540] no-underline " +
-  "transition-colors duration-150 hover:bg-[#056CB6] hover:text-white " +
-  "focus-visible:bg-[#056CB6] focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2";
+  "citation-link mx-[2px] inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-[6px] align-[1px] " +
+  "bg-ia-gold text-[11.5px] font-bold leading-none text-ia-on-gold no-underline " +
+  "transition-colors duration-150 hover:bg-[#E0A400] " +
+  "focus-visible:bg-[#E0A400] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2";
 
 export function SourceNumberButton({
   index,
@@ -394,6 +397,11 @@ export function SourceNumberButton({
     node ?? (url ? ({ url, metadata: {}, text: "" } as SourceNode) : undefined);
   const sourceUrl = sourceNode?.url || url;
   const title = getSourceTitle(sourceNode);
+  const strings = useChromeStrings();
+  const badgeLabel =
+    strings.sourceNumberAria
+      .replace("{n}", String(index + 1))
+      .replace("{title}", title) + (sourceUrl ? ` ${strings.opensInNewTab}` : "");
 
   const handleMouseEnter = () =>
     highlightReferenceListItem(groupId, index, true);
@@ -406,7 +414,7 @@ export function SourceNumberButton({
       target={sourceUrl ? "_blank" : undefined}
       rel={sourceUrl ? "noopener noreferrer" : undefined}
       className={cn(CITE_BADGE, className)}
-      aria-label={`Source ${index + 1}: ${title}${sourceUrl ? " (opens in a new tab)" : ""}`}
+      aria-label={badgeLabel}
       data-citation-index={index}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -445,6 +453,7 @@ export function CitationGroupPill({
   groupId?: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const strings = useChromeStrings();
   const validIndices = indices.filter((index) => sources[index]);
 
   if (validIndices.length === 0) return null;
@@ -473,7 +482,11 @@ export function CitationGroupPill({
           type="button"
           onClick={expandGroup}
           className={CITE_BADGE}
-          aria-label={`Show ${hidden} more citation${hidden === 1 ? "" : "s"}`}
+          aria-label={
+            hidden === 1
+              ? strings.showMoreCitationOne
+              : strings.showMoreCitations.replace("{n}", String(hidden))
+          }
           aria-expanded={false}
         >
           +{hidden}
@@ -616,13 +629,13 @@ export function SourcesSidebar({
                 ].join(" ")}
               >
                 <div className="flex gap-3">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#056CB6]/[0.12] text-[12px] font-bold text-[#0F4B8F] ring-1 ring-[#056CB6]/30 dark:text-[#B5D3E9]">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ia-gold text-[12px] font-bold text-ia-on-gold">
                     {index + 1}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-2">
                       <h3 className="line-clamp-2 flex-1 text-[13px] font-semibold leading-[18px] text-[#242421] group-hover:underline dark:text-[#FCFCFC]">
-                        {title || `Source ${index + 1}`}
+                        {title || `${getChromeStrings(resolveUiLanguage()).sourceFallbackTitle} ${index + 1}`}
                       </h3>
                       <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#8B8982] opacity-0 transition-opacity group-hover:opacity-100 dark:text-[#B6B5AF]" />
                     </div>

@@ -183,13 +183,13 @@ def test_language_comes_from_typed_text_not_draft_scaffolding(client, monkeypatc
 
     monkeypatch.setattr(chat_module.InputValidator, "validate_input_security_async", _clean)
     seen: list[str] = []
-    real = chat_module._resolve_user_language
+    real = chat_module._resolve_language
 
     def _spy(data, text):
         seen.append(text)
         return real(data, text)
 
-    monkeypatch.setattr(chat_module, "_resolve_user_language", _spy)
+    monkeypatch.setattr(chat_module, "_resolve_language", _spy)
     body = _body(
         [{"role": "user", "content": "Deixe mais curto"}],
         edited_draft={"body": "Olá [Student Name], bem-vindo!", "draft_type": "message"},

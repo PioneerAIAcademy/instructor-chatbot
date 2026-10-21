@@ -171,15 +171,15 @@
 .blockquote {
   margin: 12px 0;
   padding: 10px 14px;
-  border-left: 3px solid #056cb6;
-  background: #f3f8fc;
+  border-left: 3px solid #ffc328;
+  background: #fffaeb;
   color: inherit;
   border-radius: 0 6px 6px 0;
 }
 
 :global(.dark) .blockquote {
-  background: #16222c;
-  border-left-color: #4a90c8;
+  background: #2a2519;
+  border-left-color: #ffc328;
 }
 
 .blockquote > :first-child {

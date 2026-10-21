@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-// The opening screen: the app's name, with a blue band sweeping through the
-// letters to the right and back to the left until the app is ready
-// (globals.css, .loader-word). With reduced motion the name is simply blue.
+// The opening screen: the app's name, with a BYU-gold band sweeping through
+// the letters to the right and back to the left until the app is ready
+// (globals.css, .loader-word). With reduced motion the name is simply gold.
 export default function LoadingSpinner() {
   return (
     <div
       role="status"
       aria-label="Loading Instructor Assistant"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#FAF9F5] px-4 dark:bg-[#262624]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ia-page px-4"
     >
       <p
         aria-hidden="true"

@@ -207,8 +207,19 @@ def test_config_serves_the_starters(client, monkeypatch):
     monkeypatch.setenv("CONVERSATION_STARTERS", r"When do I get paid?\nWrite a welcome message for my students.")
     body = client.get("/api/v1/chat/config").json()
     assert body == {"starterQuestions": ["When do I get paid?", "Write a welcome message for my students."]}
+    # Unset: the 4 built-in instructor cards. Set but blank: none.
     monkeypatch.delenv("CONVERSATION_STARTERS")
+    defaults = client.get("/api/v1/chat/config").json()["starterQuestions"]
+    assert len(defaults) == 4 and all(" | " in d for d in defaults)
+    monkeypatch.setenv("CONVERSATION_STARTERS", "  ")
     assert client.get("/api/v1/chat/config").json() == {"starterQuestions": None}
+    monkeypatch.delenv("CONVERSATION_STARTERS")
+    # ?lang= serves the cards in that language; an unknown one gets English.
+    for lang, word in (("es", "Fechas de pago"), ("pt-BR", "Datas de pagamento"), ("fr", "Pay dates")):
+        cards = client.get(f"/api/v1/chat/config?lang={lang}").json()["starterQuestions"]
+        assert len(cards) == 4 and cards[0].startswith(word), (lang, cards)
+    monkeypatch.setenv("CONVERSATION_STARTERS_ES", "Uno | ¿Una?")
+    assert client.get("/api/v1/chat/config?lang=es").json() == {"starterQuestions": ["Uno | ¿Una?"]}
 
 
 def test_thumbs_request_returns_the_normalized_value(client, monkeypatch):

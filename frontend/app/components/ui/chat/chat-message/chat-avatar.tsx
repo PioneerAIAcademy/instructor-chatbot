@@ -14,7 +14,7 @@ export default function ChatAvatar({ role }: { role: string }) {
     <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center">
       <Image
         className="h-6 w-6 object-contain"
-        src="/BYU-pathway-icon-logo-blue.png"
+        src="/BYU-pathway-icon-logo.png"
         alt="Pathway Logo"
         width={24}
         height={24}

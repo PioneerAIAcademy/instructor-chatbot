@@ -32,8 +32,8 @@ type ContentDisplayConfig = {
   component: JSX.Element | null;
 };
 
-// The answer: status line, text, the action row (Sources pill, thumbs, copy),
-// then the suggested follow-ups. Only the annotation types the backend sends (backend/API.md):
+// The answer: status line, text, the cited guides as chips with the action
+// icons under them, then the suggested follow-ups. Only the annotation types the backend sends (backend/API.md):
 // events, date_spans, user_language, sources, suggested_questions. The
 // calendar, tuition, image, file, tool, and correction branches are gone.
 function ChatMessageContent({
@@ -117,12 +117,13 @@ function ChatMessageContent({
     },
     {
       order: 4,
-      component: suggestedQuestionsData[0] ? (
-        <SuggestedQuestions
-          questions={suggestedQuestionsData[0]}
-          append={append}
-        />
-      ) : null,
+      component:
+        !isLoading && suggestedQuestionsData[0] ? (
+          <SuggestedQuestions
+            questions={suggestedQuestionsData[0]}
+            onAsk={(question) => append?.({ role: "user", content: question })}
+          />
+        ) : null,
     },
   ];
 
@@ -219,7 +220,7 @@ function ChatMessage({
         >
           {isEditing ? (
             /* Edit mode - inline textarea with full width */
-            <div className="w-full bg-[#F0EEE6] dark:bg-[#2a2a2a] border border-[rgba(31,30,29,0.15)] dark:border-[rgba(252,252,252,0.1)] rounded-2xl p-4">
+            <div className="w-full rounded-2xl border border-ia-line bg-ia-surface p-4">
               <textarea
                 value={editedContent}
                 onChange={(e) => setEditedContent(e.target.value)}
@@ -238,34 +239,34 @@ function ChatMessage({
                   variant="ghost"
                   className="text-[#73726C] dark:text-[#B5B5B5] bg-[#D1CFC2] hover:bg-[#B3B1A0] hover:text-[#3D3D3A] dark:text-[#3E3C33] dark:hover:text-white text-sm"
                 >
-                  Cancel
+                  {chromeStrings.editCancel}
                 </Button>
                 <Button
                   onClick={handleSaveEdit}
-                  className="bg-[#056CB6] dark:bg-white text-white dark:text-black hover:bg-[#0F4B8F] dark:hover:bg-gray-200 text-sm px-6"
+                  className="bg-[#FFC328] dark:bg-white text-[#1F1E1D] dark:text-black hover:bg-[#F5B400] dark:hover:bg-gray-200 text-sm px-6"
                 >
-                  Save
+                  {chromeStrings.editSave}
                 </Button>
               </div>
             </div>
           ) : (
             /* Normal message display - hugs content */
             <>
-              <div className="bg-[#E9E7E1] dark:bg-[#242628] text-[#3D3D3A] dark:text-[#FCFCFC] px-4 sm:px-[17px] py-3 sm:py-[11px] rounded-[24px] rounded-br-[8px] border border-[rgba(31,30,29,0.12)] dark:border-[rgba(252,252,252,0.06)]">
-                <p className="text-sm sm:text-[15.75px] leading-[24px] sm:leading-[28px] tracking-[-0.1px] break-words">
+              <div className="rounded-2xl rounded-br-md bg-ia-surface px-4 py-2.5 text-ia-text">
+                <p className="break-words text-[15px] leading-6">
                   {chatMessage.content}
                 </p>
               </div>
 
               {/* Action buttons for user message - only visible on hover */}
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Tooltip label="Edit" side="top">
+                <Tooltip label={chromeStrings.editButton} side="top">
                   <Button
                     onClick={handleEditClick}
                     size="icon"
                     variant="ghost"
                     className="h-6 w-6 rounded-full hover:bg-[rgba(181,181,181,0.15)] transition-colors focus-visible:ring-focus-ring focus-visible:ring-offset-2"
-                    aria-label="Edit"
+                    aria-label={chromeStrings.editButton}
                   >
                     <Pencil className="h-3.5 w-3.5 text-[#3D3D3A] dark:text-[#FCFCFC] hover:text-[#1F1E1D] dark:hover:text-white transition-colors" />
                   </Button>
@@ -313,47 +314,51 @@ function ChatMessage({
                 sourceData={sourceData}
                 actionRow={
                   isLoading ? null : (
-                    <div className="flex flex-wrap items-center gap-2">
+                    // The cited guides as chips, then small gray icons:
+                    // copy, thumbs up and down, regenerate.
+                    <div className="flex flex-col gap-2">
                       {sourceData && (
                         <ChatSources
                           data={sourceData}
                           answer={chatMessage.content}
                         />
                       )}
-                      <UserFeedbackComponent
-                        traceId={traceId}
-                        isLastMessage={isLastMessage}
-                      />
-                      <Tooltip
-                        label={chromeStrings.copyButton}
-                        side="top"
-                        align="start"
-                      >
-                        <Button
-                          onClick={() => copyToClipboard(copyContent)}
-                          variant="ghost"
-                          className={`${ACTION_BUTTON} ${isCopied ? "pointer-events-none" : ""}`}
-                          aria-label={chromeStrings.copyButton}
+                      <div className="-ml-2 flex items-center gap-0.5">
+                        <Tooltip
+                          label={chromeStrings.copyButton}
+                          side="top"
+                          align="start"
                         >
-                          {isCopied ? (
-                            <Check className="h-[18px] w-[18px]" aria-hidden="true" />
-                          ) : (
-                            <Copy className="h-[18px] w-[18px]" aria-hidden="true" />
-                          )}
-                        </Button>
-                      </Tooltip>
-                      {showReload && reload && (
-                        <Tooltip label={chromeStrings.regenerateButton} side="top">
                           <Button
-                            onClick={reload}
+                            onClick={() => copyToClipboard(copyContent)}
                             variant="ghost"
-                            className={ACTION_BUTTON}
-                            aria-label={chromeStrings.regenerateButton}
+                            className={`${ACTION_BUTTON} ${isCopied ? "pointer-events-none" : ""}`}
+                            aria-label={chromeStrings.copyButton}
                           >
-                            <RefreshCw className="h-[18px] w-[18px]" aria-hidden="true" />
+                            {isCopied ? (
+                              <Check className="h-4 w-4" aria-hidden="true" />
+                            ) : (
+                              <Copy className="h-4 w-4" aria-hidden="true" />
+                            )}
                           </Button>
                         </Tooltip>
-                      )}
+                        <UserFeedbackComponent
+                          traceId={traceId}
+                          isLastMessage={isLastMessage}
+                        />
+                        {showReload && reload && (
+                          <Tooltip label={chromeStrings.regenerateButton} side="top">
+                            <Button
+                              onClick={reload}
+                              variant="ghost"
+                              className={ACTION_BUTTON}
+                              aria-label={chromeStrings.regenerateButton}
+                            >
+                              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          </Tooltip>
+                        )}
+                      </div>
                     </div>
                   )
                 }

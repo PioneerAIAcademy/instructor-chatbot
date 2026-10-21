@@ -1,3 +1,4 @@
+import { ArrowUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getChromeStrings } from "../../../lib/chrome-strings";
 import { resolveUiLanguage } from "../../../lib/i18n";
@@ -18,9 +19,9 @@ function useChromeStrings() {
   return getChromeStrings(uiLang);
 }
 
-// Upstream's input, without the controls this app doesn't use (uploads,
-// dictation, the role pill, LlamaCloud). Same look; the send/stop button is
-// blue instead of gold.
+// The question box, without the controls this app doesn't use (uploads,
+// dictation, the role pill, LlamaCloud): a white box with a soft border, a
+// gold send button, and a dark stop button while an answer streams.
 export default function ChatInput(
   props: Pick<
     ChatHandler,
@@ -70,68 +71,57 @@ export default function ChatInput(
 
   return (
     <form onSubmit={onSubmit} className="w-full">
-      <div className="w-full rounded-3xl border border-[rgba(31,30,29,0.15)] bg-white px-4 py-3 transition-[background-color,border-color,box-shadow] dark:border-[rgba(252,252,252,0.06)] dark:bg-[#242628]">
-        <div className="relative mb-3 flex w-full items-center">
-          <textarea
-            ref={textareaRef}
-            autoFocus
-            name="message"
-            aria-label={placeholder}
-            placeholder={placeholder}
-            className="min-h-[24px] w-full resize-none overflow-y-auto border-none bg-transparent px-0 text-sm text-[#141413] placeholder:text-[#73726C] focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 dark:text-white dark:placeholder:text-[#B5B5B5] sm:text-[15.875px] max-h-[150px] md:max-h-[220px] lg:max-h-[260px] [scrollbar-width:thin] [scrollbar-color:#646362_transparent]"
-            value={props.input}
-            onChange={(e) => props.handleInputChange(e as any)}
-            rows={1}
-            onInput={resizeTextarea}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                // requestSubmit() ignores the disabled Send button, so check
-                // here too: a blank or spaces-only input sends nothing.
-                if (props.isLoading || !props.input.trim()) return;
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
-        </div>
+      <div className="flex w-full items-end gap-2 rounded-2xl border border-ia-line bg-ia-page py-2 pl-4 pr-2 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.06)] transition-[border-color,box-shadow] focus-within:border-ia-gold dark:shadow-none">
+        <textarea
+          ref={textareaRef}
+          autoFocus
+          name="message"
+          aria-label={placeholder}
+          placeholder={placeholder}
+          className="max-h-[150px] min-h-[40px] w-full resize-none overflow-y-auto border-none bg-transparent px-0 py-[9px] text-[15px] leading-[22px] text-ia-text placeholder:text-ia-muted focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 md:max-h-[220px] lg:max-h-[260px] [scrollbar-width:thin] [scrollbar-color:#646362_transparent]"
+          value={props.input}
+          onChange={(e) => props.handleInputChange(e as any)}
+          rows={1}
+          onInput={resizeTextarea}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              // requestSubmit() ignores the disabled Send button, so check
+              // here too: a blank or spaces-only input sends nothing.
+              if (props.isLoading || !props.input.trim()) return;
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
 
-        <div className="flex w-full items-center justify-end gap-2">
-          {props.isLoading ? (
-            <Tooltip label={strings.stopButton} side="top" align="end">
-              <Button
-                type="button"
-                onClick={props.stop}
-                aria-label={strings.stopButton}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#056CB6] p-0 text-white hover:bg-[#0F4B8F] dark:bg-white dark:text-black dark:hover:bg-gray-100"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-                  <rect x="3" y="3" width="14" height="14" fill="currentColor" rx="3.5" />
-                </svg>
-                <span className="sr-only">{strings.stopButton}</span>
-              </Button>
-            </Tooltip>
-          ) : (
-            <Tooltip label={strings.sendButton} side="top" align="end">
-              <Button
-                type="submit"
-                disabled={!props.input.trim()}
-                aria-label={strings.sendButton}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#056CB6] p-0 text-white hover:bg-[#0F4B8F] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-gray-100"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path
-                    d="M14 2L7 9M14 2L9.5 14L7 9M14 2L2 6.5L7 9"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span className="sr-only">{strings.sendButton}</span>
-              </Button>
-            </Tooltip>
-          )}
-        </div>
+        {props.isLoading ? (
+          <Tooltip label={strings.stopButton} side="top" align="end">
+            <Button
+              type="button"
+              onClick={props.stop}
+              aria-label={strings.stopButton}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ia-text p-0 text-ia-page hover:opacity-85"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                <rect x="1" y="1" width="12" height="12" fill="currentColor" rx="2.5" />
+              </svg>
+              <span className="sr-only">{strings.stopButton}</span>
+            </Button>
+          </Tooltip>
+        ) : (
+          <Tooltip label={strings.sendButton} side="top" align="end">
+            <Button
+              type="submit"
+              disabled={!props.input.trim()}
+              aria-label={strings.sendButton}
+              // BYU gold with a near-black arrow (10.4:1); white would be 1.6:1.
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ia-gold p-0 text-ia-on-gold hover:bg-ia-gold-hover disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ArrowUp className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />
+              <span className="sr-only">{strings.sendButton}</span>
+            </Button>
+          </Tooltip>
+        )}
       </div>
     </form>
   );

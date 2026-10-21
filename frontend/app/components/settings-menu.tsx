@@ -179,15 +179,15 @@ export function SettingsMenu() {
           aria-expanded={isOpen}
           aria-label={strings.settingsTitle}
           className={[
-            "p-0 h-9 w-9 rounded-full",
-            "hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white",
+            "p-0 h-10 w-10 sm:h-9 sm:w-9 rounded-full",
+            "hover:bg-[#1F1E1D]/10 focus-visible:ring-2 focus-visible:ring-ia-on-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ia-gold",
             "transition-colors",
-            isOpen ? "bg-white/15" : "",
+            isOpen ? "bg-[#1F1E1D]/10" : "",
           ].join(" ")}
         >
           <Settings
             className={[
-              "h-5 w-5 text-white",
+              "h-5 w-5 text-ia-on-gold",
               "transition-transform duration-200 ease-out",
               isOpen ? "rotate-90" : "rotate-0",
             ].join(" ")}
@@ -232,7 +232,7 @@ export function SettingsMenu() {
                     "text-[#646362] dark:text-white/70",
                     "hover:bg-black/5 dark:hover:bg-white/10",
                     theme === "light"
-                      ? "bg-[#056CB6]/20 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
+                      ? "bg-[#FFC328]/35 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
                       : "",
                   ].join(" ")}
                 >
@@ -253,7 +253,7 @@ export function SettingsMenu() {
                     "text-[#646362] dark:text-white/70",
                     "hover:bg-black/5 dark:hover:bg-white/10",
                     theme === "dark"
-                      ? "bg-[#056CB6]/20 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
+                      ? "bg-[#FFC328]/35 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
                       : "",
                   ].join(" ")}
                 >
@@ -274,7 +274,7 @@ export function SettingsMenu() {
                     "text-[#646362] dark:text-white/70",
                     "hover:bg-black/5 dark:hover:bg-white/10",
                     theme === "system"
-                      ? "bg-[#056CB6]/20 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
+                      ? "bg-[#FFC328]/35 text-[#3D3D3A] dark:bg-white/10 dark:text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]"
                       : "",
                   ].join(" ")}
                 >
@@ -324,7 +324,7 @@ export function SettingsMenu() {
                         "text-[#3D3D3A] dark:text-white/85",
                         "hover:bg-black/5 dark:hover:bg-white/10",
                         isSelected
-                          ? "bg-[#056CB6]/20 dark:bg-white/10 font-medium"
+                          ? "bg-[#FFC328]/35 dark:bg-white/10 font-medium"
                           : "",
                       ].join(" ")}
                     >
@@ -349,7 +349,7 @@ export function SettingsMenu() {
                   e.stopPropagation();
                 }}
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 group-hover:bg-[#056CB6]/15 dark:group-hover:bg-[#056CB6]/30 transition-colors">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 group-hover:bg-[#FFC328]/30 dark:group-hover:bg-[#FFC328]/20 transition-colors">
                   <HelpCircle className="h-4 w-4 text-[#646362] dark:text-white/70 group-hover:text-[#3D3D3A] dark:group-hover:text-white transition-colors" />
                 </span>
                 <span>{strings.settingsHelp}</span>
@@ -368,7 +368,7 @@ export function SettingsMenu() {
               }}
               className="group w-full flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium text-[#3D3D3A] dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 group-hover:bg-[#056CB6]/15 dark:group-hover:bg-[#056CB6]/30 transition-colors">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 group-hover:bg-[#FFC328]/30 dark:group-hover:bg-[#FFC328]/20 transition-colors">
                 <MessageSquare className="h-4 w-4 text-[#E18158]" />
               </span>
               <span>{strings.settingsFeedback}</span>

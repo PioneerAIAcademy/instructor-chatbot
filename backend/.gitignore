@@ -8,3 +8,7 @@ output
 data/
 # Eval output (Phase 2 / 6)
 tests/eval/results/
+
+# Real instructor questions from the instructor team (internal; not for the public repo
+# until the owner says so). See team/README.md.
+tests/eval/team/

@@ -440,7 +440,7 @@ export function GeneralFeedbackDrawer({
                       placeholder={strings.gfDrawerPlaceholder}
                       maxLength={MAX_FEEDBACK_LENGTH}
                       rows={7}
-                      className="w-full rounded-xl bg-white border border-black/10 px-4 py-3 text-sm leading-6 text-[#3D3D3A] placeholder:text-[#73726C] focus:outline-none focus:ring-2 focus:ring-[#056CB6]/50 focus:border-[#056CB6]/40 resize-none dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder:text-white/40"
+                      className="w-full rounded-xl bg-white border border-black/10 px-4 py-3 text-sm leading-6 text-[#3D3D3A] placeholder:text-[#73726C] focus:outline-none focus:ring-2 focus:ring-[#7A5600]/50 focus:border-[#7A5600]/40 resize-none dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder:text-white/40"
                     />
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-4">
@@ -497,7 +497,7 @@ export function GeneralFeedbackDrawer({
                       <button
                         type="button"
                         onClick={pickScreenshot}
-                        className="text-xs text-[#056CB6] hover:text-[#0F4B8F] dark:text-[#8EBDDE] dark:hover:text-[#A6CBE6] underline underline-offset-4"
+                        className="text-xs text-[#7A5600] hover:text-[#5C4100] dark:text-[#FFC328] dark:hover:text-[#FFD35C] underline underline-offset-4"
                       >
                         Upload instead
                       </button>
@@ -509,7 +509,7 @@ export function GeneralFeedbackDrawer({
                           "mt-4 mb-6 flex items-center gap-3 rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-white/5",
                           "transition-[box-shadow,transform] duration-300 ease-out",
                           justCaptured
-                            ? "ring-2 ring-[#056CB6]/60 shadow-[0_0_0_6px_rgba(5,108,182,0.12)]"
+                            ? "ring-2 ring-[#FFC328] shadow-[0_0_0_6px_rgba(5,108,182,0.12)]"
                             : "",
                         ].join(" ")}
                       >
@@ -561,7 +561,7 @@ export function GeneralFeedbackDrawer({
                   type="button"
                   onClick={handleSubmit}
                   disabled={isSubmitting || !feedback.trim()}
-                  className="flex-1 h-10 rounded-xl bg-[#056CB6] hover:bg-[#0F4B8F] text-white font-semibold"
+                  className="flex-1 h-10 rounded-xl bg-[#FFC328] hover:bg-[#F5B400] text-[#1F1E1D] font-semibold"
                 >
                   {isSubmitting
                     ? strings.gfDrawerSending

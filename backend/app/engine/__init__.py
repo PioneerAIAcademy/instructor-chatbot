@@ -12,7 +12,12 @@ from llama_index.core.memory import ChatMemoryBuffer
 from app.engine.custom_condense_plus_context import CustomCondensePlusContextChatEngine
 
 
-def get_chat_engine(filters=None, params=None, timezone: str = "UTC") -> CustomCondensePlusContextChatEngine:
+def get_chat_engine(
+    filters=None,
+    params=None,
+    timezone: str = "UTC",
+    answer_language: str | None = None,
+) -> CustomCondensePlusContextChatEngine:
     # The audience guard runs first, so a wrong-audience node never reaches
     # rerank, the context, or the sources annotation.
     audience_guard = AudienceGuardPostprocessor()
@@ -60,7 +65,7 @@ def get_chat_engine(filters=None, params=None, timezone: str = "UTC") -> CustomC
     memory = ChatMemoryBuffer.from_defaults(token_limit=24000)
 
     engine = CustomCondensePlusContextChatEngine.from_defaults(
-        system_prompt=build_system_prompt(current_datetime),
+        system_prompt=build_system_prompt(current_datetime, answer_language),
         context_prompt=CONTEXT_PROMPT,
         condense_prompt=CONDENSE_PROMPT_TEMPLATE,
         skip_condense=False,  # Enable question condensation with conversation history

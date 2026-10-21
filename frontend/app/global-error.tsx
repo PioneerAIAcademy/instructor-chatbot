@@ -114,6 +114,8 @@ export default function GlobalError({
                 --error-button-text: #FFFFFF;
                 --error-button-hover: #2D2D2A;
                 --error-header-shadow: rgba(0, 0, 0, 0.18);
+                --error-header-bg: #FFFFFF;
+                --error-header-line: #E8E6E0;
               }
 
               :root.dark {
@@ -121,10 +123,12 @@ export default function GlobalError({
                 --error-bg: #222320;
                 --error-text: #E6E4DA;
                 --error-muted: #C2C0B6;
-                --error-button-bg: #056CB6;
-                --error-button-text: #FFFFFF;
-                --error-button-hover: #0F4B8F;
+                --error-button-bg: #FFC328;
+                --error-button-text: #1F1E1D;
+                --error-button-hover: #FFD35C;
                 --error-header-shadow: rgba(0, 0, 0, 0.55);
+                --error-header-bg: #1C1C1B;
+                --error-header-line: #34332F;
               }
 
               * {
@@ -160,8 +164,8 @@ export default function GlobalError({
                 justify-content: center;
                 position: relative;
                 padding: 10px 24px;
-                background: #056CB6;
-                box-shadow: 0 1px 3px var(--error-header-shadow);
+                background: var(--error-header-bg);
+                border-bottom: 1px solid var(--error-header-line);
               }
 
               .global-error-logo-link {
@@ -176,6 +180,11 @@ export default function GlobalError({
                 max-width: 38vw;
                 height: auto;
                 display: block;
+              }
+
+              /* The gray logo artwork, lightened to read on the dark top bar. */
+              :root.dark .global-error-logo {
+                filter: brightness(0) invert(0.9);
               }
 
               .global-error-title {
