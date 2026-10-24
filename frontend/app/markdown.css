@@ -1,27 +1,4 @@
 /* Custom CSS for chat message markdown */
-.custom-markdown p {
-  margin: 0 0 16px;
-}
-
-/* Answer headings: Crimson Pro 600 (direction D). */
-.custom-markdown h1,
-.custom-markdown h2,
-.custom-markdown h3,
-.custom-markdown h4 {
-  font-family: var(--font-crimson), Georgia, serif;
-  font-weight: 600;
-  color: var(--ia-text);
-  margin: 20px 0 8px;
-  line-height: 1.3;
-}
-.custom-markdown h1,
-.custom-markdown h2 {
-  font-size: 24px;
-}
-.custom-markdown h3,
-.custom-markdown h4 {
-  font-size: 22px;
-}
 .custom-markdown ul {
   list-style-type: disc;
   margin-left: 20px;
@@ -45,79 +22,101 @@
   margin-left: 20px;
 }
 
-/* Links in answers: Navy 4 on white, Blue 2 on black (app/globals.css). */
+/* External links and email links in chat messages: deep gold #7A5600 and
+   underlined (6.7:1 on white; BYU gold itself is too light for text). In
+   dark mode the links are BYU gold, about 10:1 on the dark page. */
 .custom-markdown a[href^="http"],
-.custom-markdown a[href^="mailto"] {
-  color: hsl(var(--link));
+.custom-markdown a[href^="mailto"],
+.custom-markdown a[href^="http"]:visited,
+.custom-markdown a[href^="mailto"]:visited {
+  color: var(--ia-gold-ink);
+  font-weight: 600;
   text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-thickness: 1px;
+  text-decoration-color: var(--ia-gold);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
   transition: color 150ms ease;
 }
 
 .custom-markdown a[href^="http"]:hover,
 .custom-markdown a[href^="mailto"]:hover {
-  color: hsl(var(--link-hover));
-  text-decoration-thickness: 2px;
+  color: var(--ia-text);
 }
 
-.custom-markdown a[href^="http"]:visited,
-.custom-markdown a[href^="mailto"]:visited {
-  color: hsl(var(--link-visited));
+/* The backend's "(sign-in required)" after a sign-in link: a small gray note. */
+.custom-markdown .signin-note {
+  font-size: 0.8125em;
+  font-weight: 600;
+  color: #73726c;
+  white-space: nowrap;
 }
 
-/* Citation badges own their look (chat-sources.tsx); undo the generic link
-   color and underline for them. */
+.dark .custom-markdown .signin-note {
+  color: #b5b5b5;
+}
+
+/* Citation badges: the gold numbered badge is owned by the component's
+   Tailwind classes (chat-sources.tsx); this only stops the link rules above
+   from recoloring or underlining it. */
 .custom-markdown a.citation-link,
-.custom-markdown a.citation-link:visited {
-  color: var(--ia-gray-4);
-  text-decoration: none;
-}
+.custom-markdown a.citation-link:visited,
 .custom-markdown a.citation-link:hover,
-.custom-markdown a.citation-link:focus-visible {
-  color: var(--ia-white);
+.custom-markdown a.citation-link:focus-visible,
+.dark .custom-markdown a.citation-link,
+.dark .custom-markdown a.citation-link:visited,
+.dark .custom-markdown a.citation-link:hover,
+.dark .custom-markdown a.citation-link:focus-visible {
+  color: var(--ia-on-gold);
+  font-weight: 700;
   text-decoration: none;
 }
 
-/* Hovering or focusing a citation outlines its card in the open Sources
-   panel (prototype .src-card.is-active: 2px Blue 4). */
+/* Reference list item styling.
+   `.citation-hovered` is toggled when the user hovers the matching inline
+   citation chip in the answer, so the corresponding source row in the open
+   Sources drawer lights up with a pale-gold tint. Dark mode is keyed
+   off the `.dark` class (the app uses class-based theming, not
+   prefers-color-scheme). */
 .reference-list-item {
-  transition: border-color 150ms ease;
+  transition: background-color 200ms ease-in-out;
 }
 
 .reference-list-item.citation-hovered {
-  border: 2px solid var(--ia-blue-4);
-  padding: 15px;
+  background-color: rgba(255, 195, 40, 0.18);
+}
+
+.dark .reference-list-item.citation-hovered {
+  background-color: rgba(255, 195, 40, 0.14);
 }
 
 /* Mark + kbd + dfn — bare HTML elements emitted by the LLM
    (whitelisted via rehype-sanitize in markdown.tsx). Scoped to
-   .custom-markdown so they don't affect other UI. */
+   .custom-markdown to avoid affecting other UI (e.g. tuition card). */
 
-/* Highlight (prototype .hl): Blue 1 behind Gray 4 text, in both themes. */
 .custom-markdown mark {
-  background: var(--ia-blue-1);
-  color: var(--ia-gray-4);
-  padding: 2px 6px;
+  background: var(--highlight-bg);
+  color: var(--highlight-text);
+  padding: 1px 4px;
   border-radius: 8px;
-  box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .custom-markdown kbd {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family:
+    "Tuition IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.85em;
   padding: 1px 6px;
-  background: var(--ia-gray-1);
-  border: 1px solid var(--ia-gray-2);
+  background: #f0eee6;
+  border: 1px solid #d6d4cb;
   border-bottom-width: 2px;
   border-radius: 4px;
   color: inherit;
 }
 
 .dark .custom-markdown kbd {
-  background: var(--ia-gray-4);
-  border-color: var(--ia-gray-3);
+  background: #2e2d2a;
+  border-color: #4a4944;
 }
 
 .custom-markdown dfn {

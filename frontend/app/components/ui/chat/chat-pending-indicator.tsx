@@ -1,7 +1,4 @@
-import { getChromeStrings } from "../../../lib/chrome-strings";
-import { resolveUiLanguage } from "../../../lib/i18n";
 import ChatAvatar from "./chat-message/chat-avatar";
-import { ChatStatus } from "./chat-status";
 
 export default function ChatPendingIndicator() {
   return (
@@ -10,10 +7,13 @@ export default function ChatPendingIndicator() {
         <div className="mt-0.5">
           <ChatAvatar role="assistant" />
         </div>
-        <div className="flex min-h-8 min-w-0 max-w-full flex-1 items-center">
-          <ChatStatus text={getChromeStrings(resolveUiLanguage()).thinkingDefault} />
+        <div className="flex-1 min-w-0 max-w-full">
+          <div className="text-xs text-[#73726C] dark:text-[#C2C0B6] animate-pulse">
+            Thinking...
+          </div>
         </div>
       </div>
     </div>
   );
 }
+

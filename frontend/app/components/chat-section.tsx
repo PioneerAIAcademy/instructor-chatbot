@@ -5,12 +5,17 @@ import { useChat } from "ai/react";
 
 import { getEditedDraftSnapshot } from "@/app/lib/draft-registry";
 import { AlertTriangle, ArrowDown, ShieldCheck, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getChromeStrings } from "../lib/chrome-strings";
 import { getUserLanguagePref, resolveUiLanguage } from "../lib/i18n";
-import { getDeviceId, getSessionId, getTimezone } from "../utils/session";
-import DisclaimerMessage from "./disclaimer-message";
+import {
+  getDeviceId,
+  getSessionId,
+  getTimezone,
+  newSession,
+} from "../utils/session";
 import Greeting from "./greeting";
+import Header from "./header";
 import StarterQuestions from "./starter-questions";
 import { ChatInput, ChatMessages, type SourceNode } from "./ui/chat";
 import {
@@ -46,7 +51,9 @@ export default function ChatSection() {
   const { backend } = useClientConfig();
   const [hasStartedChat, setHasStartedChat] = useState(false);
   const starterQuestions = useStarterQuestions();
-  const [chatError, setChatError] = useState<string | null>(null);
+  // Whether the error banner shows; its text is always the friendly,
+  // translated chromeStrings.chatErrorFriendly, never the raw error.
+  const [chatError, setChatError] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [uiLang, setUiLang] =
     useState<ReturnType<typeof resolveUiLanguage>>("en");
@@ -95,9 +102,15 @@ export default function ChatSection() {
   }, []);
 
   const chromeStrings = getChromeStrings(uiLang);
+
+  // Screen readers and the browser's own translation read the page's lang.
+  useEffect(() => {
+    document.documentElement.lang = uiLang;
+  }, [uiLang]);
   const isSourcesPanelOpen = Boolean(sourcesPanel?.nodes.length);
 
-  const baseChatHeaders = useMemo(
+  // Read at send time, not memoized: New chat replaces the session ID.
+  const baseChatHeaders = useCallback(
     () => ({
       "Content-Type": "application/json",
       "X-Session-ID": sessionIdRef.current,
@@ -109,8 +122,6 @@ export default function ChatSection() {
 
   const handleChatError = useCallback((error: unknown) => {
     if (!(error instanceof Error)) throw error;
-    // Always show a friendly message — never expose raw errors to the user
-    const friendlyMessage = "Something went wrong. Please try again.";
     // Extract raw detail for Sentry diagnostics only
     let rawDetail = error.message;
     try {
@@ -122,7 +133,7 @@ export default function ChatSection() {
     Sentry.captureException(error, {
       extra: { rawDetail },
     });
-    setChatError(friendlyMessage);
+    setChatError(true);
   }, []);
 
   const {
@@ -138,7 +149,8 @@ export default function ChatSection() {
     setMessages,
   } = useChat({
     api: `${backend}/api/v1/chat`,
-    headers: baseChatHeaders,
+    // Headers go with each request (chatRequestHeaders), so a new session
+    // ID from New chat takes effect at once.
     onError: handleChatError,
   });
 
@@ -204,7 +216,7 @@ export default function ChatSection() {
 
   const chatRequestHeaders = useCallback(
     (extra?: Record<string, string>) => ({
-      ...baseChatHeaders,
+      ...baseChatHeaders(),
       "X-Device-ID": deviceIdRef.current,
       ...(extra ?? {}),
     }),
@@ -224,7 +236,7 @@ export default function ChatSection() {
         typeof message?.content === "string" ? message.content : "";
       pendingUserScrollRef.current = true;
       setHasStartedChat(true);
-      setChatError(null);
+      setChatError(false);
       return append(message, {
         ...options,
         body: { ...(options?.body ?? {}), data: buildRequestData(content) },
@@ -244,7 +256,7 @@ export default function ChatSection() {
         .find((m) => m.role === "user");
       const content =
         typeof lastUser?.content === "string" ? lastUser.content : "";
-      setChatError(null);
+      setChatError(false);
       return reload({
         ...options,
         body: { ...(options?.body ?? {}), data: buildRequestData(content) },
@@ -383,7 +395,7 @@ export default function ChatSection() {
       e.preventDefault();
       return;
     }
-    setChatError(null);
+    setChatError(false);
     const data = buildRequestData(input);
 
     // Mark chat as started on first message
@@ -396,12 +408,21 @@ export default function ChatSection() {
       body: {
         data: data,
       },
-      headers: {
-        ...baseChatHeaders,
-        "X-Device-ID": deviceIdRef.current,
-      },
+      headers: chatRequestHeaders(),
     });
   };
+
+  // New chat: stop any answer, clear the conversation, and start a new
+  // session, so the next question is traced separately (CLAUDE.md §9.1).
+  const handleNewChat = useCallback(() => {
+    stop();
+    setMessages([]);
+    setInput("");
+    setChatError(false);
+    setSourcesPanel(null);
+    setHasStartedChat(false);
+    sessionIdRef.current = newSession();
+  }, [stop, setMessages, setInput]);
 
   // Check if there are any messages
   const hasMessages = messages.length > 0;
@@ -540,33 +561,78 @@ export default function ChatSection() {
     return () => cancelAnimationFrame(id);
   }, [isLoading, resizeBottomSpacer]);
 
+  const isEmpty = !hasStartedChat && !hasMessages;
+  const chatInput = (
+    <ChatInput
+      input={input}
+      handleSubmit={customHandleSubmit}
+      handleInputChange={handleInputChange}
+      isLoading={isLoading}
+      messages={messages}
+      append={appendMessage}
+      setInput={setInput}
+      stop={stop}
+      inputPlaceholder={
+        isEmpty ? chromeStrings.inputPlaceholder : chromeStrings.replyPlaceholder
+      }
+    />
+  );
+
+  // The student-privacy notice (CLAUDE.md §9.2), always right under the box.
+  const privacyNote = (
+    <p className="flex items-start gap-1.5 px-1 text-xs leading-4 text-ia-muted">
+      <ShieldCheck
+        className="mt-px h-3.5 w-3.5 shrink-0 text-ia-gold-ink"
+        aria-hidden="true"
+      />
+      <span>
+        <span className="font-bold text-ia-text">{chromeStrings.ferpaLabel}</span>{" "}
+        {chromeStrings.ferpaNotice}
+      </span>
+    </p>
+  );
+
+  const sourcesNote = (
+    <p
+      role="note"
+      className="px-2 text-center text-[11px] leading-4 text-ia-muted sm:text-xs"
+    >
+      <span className="sm:hidden">{chromeStrings.aiNoteShort}</span>
+      <span className="hidden sm:inline">{chromeStrings.aiNoteLong}</span>
+    </p>
+  );
+
   return (
-    <div className="w-full h-full flex flex-col relative overflow-hidden">
-      {/* Empty state - centered */}
-      {!hasStartedChat && !hasMessages && (
-        <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-8">
-          <div className="flex w-full max-w-[760px] flex-col gap-6">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-ia-page">
+      <Header
+        onNewChat={isEmpty ? undefined : handleNewChat}
+      />
+
+      {/* Welcome: the greeting and the starter cards, centered above the
+          question box, which stays at the bottom on every screen. */}
+      {isEmpty && (
+        <div className="flex flex-1 overflow-y-auto px-4">
+          <div className="m-auto flex w-full max-w-[760px] flex-col items-center gap-6 py-8 sm:gap-8">
             <Greeting />
             <StarterQuestions
               questions={starterQuestions}
               onAsk={(question) => appendMessage({ role: "user", content: question })}
             />
-            <DisclaimerMessage />
           </div>
         </div>
       )}
 
       {/* Chat messages - takes remaining space */}
-      {(hasStartedChat || hasMessages) && (
+      {!isEmpty && (
         <div
           ref={scrollContainerRef}
           data-sources-open={isSourcesPanelOpen ? "true" : "false"}
           // No CSS scroll-behavior here: each scrollTo() passes its own
           // behavior, "auto" under prefers-reduced-motion, which a CSS
           // "smooth" would override.
-          className="pathway-chat-scroll-shell flex-1 overflow-y-auto overflow-x-hidden pl-2 pr-4 sm:px-6 md:px-8 lg:px-16 xl:px-24 2xl:px-32 pt-8 pb-44 sm:pb-48"
+          className="pathway-chat-scroll-shell flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-6 pb-44 sm:pb-48"
         >
-          <div className="max-w-[760px] mx-auto">
+          <div className="mx-auto max-w-[760px]">
             <ChatMessages
               messages={displayMessages}
               isLoading={isLoading}
@@ -590,20 +656,22 @@ export default function ChatSection() {
         onClose={() => setSourcesPanel(null)}
       />
 
-      {(hasStartedChat || hasMessages) && (
+      {!isEmpty && (
         <button
           type="button"
           onClick={handleScrollToLatest}
-          aria-label="Scroll to latest messages"
+          aria-label={chromeStrings.scrollToLatestAria}
           className={[
             "absolute left-1/2 -translate-x-1/2 z-20",
             "bottom-36 sm:bottom-36",
-            "h-11 w-11 rounded-full border border-ia-border",
-            "bg-ia-surface text-ia-text shadow-ia-pop",
+            "h-11 w-11 rounded-full border",
+            "border-black/10 dark:border-white/10",
+            "bg-white/90 text-[#3D3D3A] shadow-[0_10px_24px_rgba(0,0,0,0.16)] backdrop-blur-md",
+            "dark:bg-[#232421]/90 dark:text-[#FCFCFC] dark:shadow-[0_14px_28px_rgba(0,0,0,0.5)]",
             "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-            "hover:-translate-y-0.5 hover:border-ia-border-strong",
+            "hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(0,0,0,0.2)]",
             "active:translate-y-0 active:scale-[0.97]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2",
             showScrollToBottom
               ? "opacity-100 scale-100 pointer-events-auto"
               : "opacity-0 translate-y-3 scale-95 pointer-events-none",
@@ -616,57 +684,45 @@ export default function ChatSection() {
       {/* Compact centered error banner */}
       {chatError && (
         <div className="flex justify-center mb-2 px-4">
-          {/* Error notice: Red 3 left bar; the message is text, not color alone. */}
           <div
             role="alert"
-            className="flex w-full max-w-[760px] items-center gap-3 rounded-xl border border-l-4 border-ia-border border-l-ia-red-3 bg-ia-surface px-4 py-3 text-ia-text animate-error-slide-in"
+            className={[
+              "relative overflow-hidden",
+              "flex items-center gap-2.5 rounded-xl px-4 py-2.5 border",
+              "bg-red-50/95 backdrop-blur-md border-red-300 text-[#3D3D3A]",
+              "shadow-[0_12px_36px_rgba(0,0,0,0.12)]",
+              "ring-1 ring-red-200/60",
+              "dark:bg-[#242628] dark:border-red-800/60 dark:text-[#FCFCFC]",
+              "dark:shadow-[0_14px_40px_rgba(0,0,0,0.45)]",
+              "dark:ring-red-900/30",
+              "animate-error-slide-in",
+            ].join(" ")}
           >
-            <AlertTriangle aria-hidden="true" className="h-5 w-5 flex-shrink-0 text-ia-red-3" />
-            <p className="flex-1 text-[15px]">{chatError}</p>
+            <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400 flex-shrink-0" />
+            <p className="text-xs sm:text-sm font-medium">
+              {chromeStrings.chatErrorFriendly}
+            </p>
             <button
-              type="button"
-              onClick={() => setChatError(null)}
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-ia-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus"
-              aria-label="Dismiss error"
+              onClick={() => setChatError(false)}
+              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors flex-shrink-0"
+              aria-label={chromeStrings.dismissErrorAria}
             >
-              <X aria-hidden="true" className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Input area - positioned based on chat state */}
+      {/* Bottom, on every screen: the question box, the privacy line, and the
+          note on where answers come from. */}
       <div
         data-sources-open={isSourcesPanelOpen ? "true" : "false"}
-        className={`w-full border-t border-ia-border bg-ia-bg px-4 pb-5 pt-2 sm:px-6 sm:pb-6 ${
-          !hasStartedChat && !hasMessages ? "static" : "sticky bottom-0"
-        } pathway-chat-input-shell`}
+        className="pathway-chat-input-shell sticky bottom-0 w-full bg-ia-page px-4 pb-2 pt-1 sm:px-6"
       >
-        <div className="mx-auto flex max-w-[760px] flex-col gap-3">
-          <ChatInput
-            input={input}
-            handleSubmit={customHandleSubmit}
-            handleInputChange={handleInputChange}
-            isLoading={isLoading}
-            messages={messages}
-            append={appendMessage}
-            setInput={setInput}
-            stop={stop}
-            inputPlaceholder={chromeStrings.inputPlaceholder}
-          />
-
-          {/* Always under the input: the student-privacy notice (CLAUDE.md
-              §9.2) and the AI note. Gray 4 text at 13px (AA). */}
-          <div className="flex flex-col gap-1.5" role="note">
-            <p className="m-0 flex items-center gap-2 text-[13px] leading-[1.45] text-ia-text">
-              <ShieldCheck aria-hidden="true" className="h-4 w-4 flex-shrink-0" />
-              <span>{chromeStrings.ferpaNotice}</span>
-            </p>
-            <p className="m-0 text-[13px] leading-[1.45] text-ia-text">
-              <span className="sm:hidden">{chromeStrings.aiNoteShort}</span>
-              <span className="hidden sm:inline">{chromeStrings.aiNoteLong}</span>
-            </p>
-          </div>
+        <div className="mx-auto max-w-[760px] space-y-2">
+          {chatInput}
+          {privacyNote}
+          {sourcesNote}
         </div>
       </div>
     </div>

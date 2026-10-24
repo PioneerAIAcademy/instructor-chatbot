@@ -12,125 +12,85 @@
 @media (min-width: 1024px) {
   .pathway-chat-scroll-shell[data-sources-open="true"],
   .pathway-chat-input-shell[data-sources-open="true"] {
-    padding-right: 400px; /* the Sources panel's width (chat-sources.tsx) */
+    padding-right: min(30rem, 38vw);
   }
 }
 
-/* Fonts: Mulish (text) and Crimson Pro (greeting, headings), per the
- * Instructor Assistant design (direction D). Loaded with next/font in
- * app/layout.tsx, which downloads them at build time and serves them from this
- * site, so no visitor request goes to Google. CJK text falls back to system
- * fonts. */
-
-/* Direction D palette (closed: only these colors). Light chrome: a white
- * header with the gray logo; blue only on things you can act on. */
-:root {
-  --ia-gold-1: #fff0cf;
-  --ia-gold-3: #ffc328;
-  --ia-gray-1: #e3e1de;
-  --ia-gray-2: #a8a5a1;
-  --ia-gray-3: #7e7a76;
-  --ia-gray-4: #454540;
-  --ia-gray-5: #000000;
-  --ia-blue-1: #e7f0fa; /* placeholder tint, AA-checked */
-  --ia-blue-2: #8ebdde; /* placeholder, AA-checked */
-  --ia-blue-3: #009bb6;
-  --ia-blue-4: #056cb6; /* primary: white on it is 5.5:1 */
-  --ia-navy-4: #0f4b8f; /* primary hover */
-  --ia-green-3: #6abe4e;
-  --ia-red-3: #dd4926;
-  --ia-white: #ffffff;
-
-  /* Light theme roles */
-  --ia-bg: var(--ia-white);
-  --ia-surface: var(--ia-white);
-  --ia-text: var(--ia-gray-4);
-  --ia-text-strong: var(--ia-gray-4);
-  --ia-border: var(--ia-gray-1);
-  --ia-border-strong: var(--ia-gray-4);
-  --ia-link: var(--ia-navy-4);
-  --ia-focus: var(--ia-navy-4);
-  --ia-header-bg: var(--ia-white);
-  --ia-header-text: var(--ia-gray-4);
-  --ia-header-border: var(--ia-gray-1);
-  --ia-bubble: var(--ia-gray-4);
-  --ia-scrim: rgba(69, 69, 64, 0.4);
-  --ia-shadow-pop: 0 8px 24px rgba(69, 69, 64, 0.18);
-  --ia-shadow-panel: -8px 0 24px rgba(69, 69, 64, 0.12);
-}
-
-.dark {
-  --ia-bg: var(--ia-gray-5);
-  --ia-surface: var(--ia-gray-4);
-  --ia-text: var(--ia-gray-1);
-  --ia-text-strong: var(--ia-white);
-  --ia-border: var(--ia-gray-3);
-  --ia-border-strong: var(--ia-gray-1);
-  /* Blue 4 on black is only 3.8:1, so links step up to Blue 2. */
-  --ia-link: var(--ia-blue-2);
-  --ia-focus: var(--ia-gold-3);
-  --ia-header-bg: var(--ia-gray-4);
-  --ia-header-text: var(--ia-gray-1);
-  --ia-header-border: var(--ia-gray-3);
-  --ia-bubble: var(--ia-gray-4);
-  --ia-scrim: rgba(0, 0, 0, 0.6);
-}
+/* Fonts: Mulish for all text, loaded by next/font/local in app/layout.tsx
+ * (from the pinned @fontsource-variable/mulish package, served from this
+ * site). The greeting uses Georgia (Tailwind `font-georgia`). Upstream's Inter
+ * and tuition fonts are not used. */
 
 @layer base {
-  /* The shared (shadcn) component colors, mapped onto the palette above. */
   :root {
-    --background: 0 0% 100%; /* white */
-    --foreground: 60 4% 26%; /* Gray 4 */
+    --background: 40 5% 98%;
+    --foreground: 60 3% 8%;
 
-    --muted: 36 8% 88%; /* Gray 1 */
-    --muted-foreground: 60 4% 26%; /* Gray 4: Gray 3 fails AA below 18px */
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 60 4% 26%;
+    --popover-foreground: 222.2 47.4% 11.2%;
 
-    --border: 36 8% 88%;
-    --input: 36 8% 88%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
 
     --card: 0 0% 100%;
-    --card-foreground: 60 4% 26%;
+    --card-foreground: 222.2 47.4% 11.2%;
 
-    --primary: 205 95% 37%; /* Blue 4 */
-    --primary-foreground: 0 0% 100%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 213 70% 94%; /* Blue 1 */
-    --secondary-foreground: 60 4% 26%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --accent: 213 70% 94%;
-    --accent-foreground: 60 4% 26%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
 
-    --destructive: 11 73% 51%; /* Red 3 */
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 210 40% 98%;
 
-    --ring: 212 81% 31%; /* Navy 4 */
+    --ring: 215 20.2% 65.1%;
 
     --radius: 0.5rem;
 
-    /* Older per-element colors, kept as names and mapped to direction D. */
-    --page-bg: 0 0% 100%; /* white */
-    --header-bg: 0 0% 100%; /* white header (direction D) */
-    --greeting-text: 60 4% 26%; /* Gray 4 */
-    --chat-bg: 0 0% 100%;
-    --user-bubble: 60 4% 26%; /* Gray 4 bubble, white text */
-    --bot-text: 60 4% 26%;
-    --input-bg: 0 0% 100%;
-    --input-text: 60 4% 26%;
-    --input-border: 36 8% 88%; /* Gray 1 */
-    --reference-badge: 205 54% 71%; /* Blue 2 citation badge */
-    --date-chip-text: 60 4% 26%; /* date highlight: Gray 4 on Blue 1 */
-    --date-chip-border: transparent;
+    /* Figma Design Colors - Light Mode */
+    --page-bg: 40 5% 98%; /* #FAF9F5 light gray background */
+    --header-bg: 0 0% 100%; /* white top bar */
+    --greeting-text: 220 3% 24%; /* #3D3D3A Tuatara - dark text for light mode */
+    --chat-bg: 40 5% 98%; /* #FAF9F5 */
+    --user-bubble: 240 3% 16%; /* #242628 Shark */
+    --bot-text: 220 3% 24%; /* #3D3D3A - dark text for light mode */
+    --input-bg: 0 0% 100%; /* #FFFFFF white background */
+    --input-text: 220 3% 8%; /* #141413 Cod Gray - dark text */
+    --input-border: 220 3% 88%; /* Light border for input */
+    --reference-badge: 20 68% 61%; /* #E18158 */
+    --highlight-bg: #fff4d6; /* <mark> and dates in answers: pale gold */
+    --highlight-text: #1f1e1d;
 
-    /* Links: Navy 4 on white (8.9:1). */
-    --link: 212 81% 31%;
-    --link-hover: 205 95% 37%; /* Blue 4 */
-    --link-visited: 212 81% 31%;
+    /* External link colors */
+    --link: 213 94% 42%; /* #0551A5 — accessible blue for light backgrounds */
+    --link-hover: 213 94% 32%; /* darker on hover */
+    --link-visited: 271 60% 40%; /* muted purple for visited */
 
-    /* Keyboard-focus ring: Navy 4 in light mode, Gold 3 in dark mode. */
-    --focus-ring: #0f4b8f;
+    /* Keyboard-focus ring: deep gold #7A5600 (6.7:1 on white; BYU gold
+       itself is only 1.6:1, too faint for a focus indicator). */
+    --focus-ring: #7a5600;
+
+    /* Instructor Assistant palette (tailwind.config.ts "ia-*"). BYU gold
+       #FFC328 is only ever a fill, with near-black text on it (10.4:1); text
+       and links that need gold use the deep gold "ia-gold-ink". */
+    --ia-page: #ffffff;
+    --ia-surface: #f6f5f1;
+    --ia-line: #e8e6e0;
+    --ia-text: #1f1e1d;
+    --ia-body: #3d3d3a;
+    --ia-muted: #6b6a65;
+    --ia-gold: #ffc328;
+    --ia-gold-hover: #f5b400;
+    --ia-gold-soft: #fff4d6;
+    --ia-gold-ink: #7a5600;
+    --ia-on-gold: #1f1e1d;
 
     /* Theme transition (used by SettingsMenu) */
     --theme-transition-duration: 1200ms;
@@ -139,56 +99,69 @@
   }
 
   .dark {
-    --background: 0 0% 0%; /* black */
-    --foreground: 36 8% 88%; /* Gray 1 */
+    --background: 224 71% 4%;
+    --foreground: 0 0% 84%;
 
-    --muted: 60 4% 26%; /* Gray 4 */
-    --muted-foreground: 36 8% 88%;
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
 
-    --accent: 60 4% 26%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
 
-    --popover: 60 4% 26%;
-    --popover-foreground: 36 8% 88%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 215 20.2% 65.1%;
 
-    --border: 30 3% 48%; /* Gray 3 */
-    --input: 30 3% 48%;
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
 
-    --card: 60 4% 26%;
-    --card-foreground: 36 8% 88%;
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
 
-    --primary: 205 95% 37%; /* Blue 4 */
-    --primary-foreground: 0 0% 100%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 1.2%;
 
-    --secondary: 60 4% 26%;
-    --secondary-foreground: 36 8% 88%;
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
 
-    --destructive: 11 73% 51%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
 
-    --ring: 45 100% 58%; /* Gold 3 */
+    --ring: 216 34% 17%;
 
     --radius: 0.5rem;
 
-    /* Older per-element colors, dark mode. */
-    --page-bg: 0 0% 0%; /* black */
-    --header-bg: 60 4% 26%; /* Gray 4 header */
-    --greeting-text: 36 8% 88%; /* Gray 1 */
-    --chat-bg: 0 0% 0%;
-    --user-bubble: 60 4% 26%;
-    --bot-text: 36 8% 88%;
-    --input-bg: 60 4% 26%;
-    --input-text: 36 8% 88%;
-    --reference-badge: 205 54% 71%; /* Blue 2 */
-    --date-chip-text: 60 4% 26%;
-    --date-chip-border: transparent;
+    /* Figma Design Colors - Dark Mode */
+    --page-bg: 220 3% 15%; /* #262624 Tuatara */
+    --header-bg: 60 2% 11%; /* #1C1C1B */
+    --greeting-text: 40 7% 76%; /* #C2C0B6 Cotton Seed */
+    --chat-bg: 220 3% 15%; /* #262624 */
+    --user-bubble: 240 3% 16%; /* #242628 Shark */
+    --bot-text: 40 5% 98%; /* #F9F8F6 Pampas */
+    --input-bg: 240 3% 16%; /* #242628 Shark */
+    --input-text: 0 0% 71%; /* #B5B5B5 Nobel */
+    --reference-badge: 20 68% 61%; /* #E18158 */
+    --highlight-bg: #3a3120;
+    --highlight-text: #fff4d6;
 
-    /* Links: Blue 2 on black (Blue 4 is only 3.8:1 there). */
-    --link: 205 54% 71%;
-    --link-hover: 213 70% 94%;
-    --link-visited: 205 54% 71%;
+    /* External link colors */
+    --link: 210 100% 70%; /* #66B3FF — accessible blue for dark backgrounds */
+    --link-hover: 210 100% 80%; /* lighter on hover */
+    --link-visited: 271 60% 72%; /* lighter purple for visited */
 
-    --focus-ring: #ffc328; /* Gold 3 */
+    /* Keyboard-focus ring: BYU gold reads at about 10:1 on the dark page. */
+    --focus-ring: #ffc328;
+
+    --ia-page: #1c1c1b;
+    --ia-surface: #262624;
+    --ia-line: #34332f;
+    --ia-text: #f2f1ec;
+    --ia-body: #d9d7d0;
+    --ia-muted: #a3a19a;
+    --ia-gold: #ffc328;
+    --ia-gold-hover: #ffd35c;
+    --ia-gold-soft: #3a3120;
+    --ia-gold-ink: #ffc328;
+    --ia-on-gold: #1f1e1d;
   }
 }
 
@@ -218,14 +191,22 @@
       "calt" 1;
   }
 
-  /* Text selection in Blue 1 (light) / translucent Blue 4 (dark). */
+  /* Gold text selection: a translucent BYU-gold wash, dark text on it. */
   ::selection {
-    background-color: var(--ia-blue-1);
-    color: var(--ia-gray-4);
+    background-color: rgba(255, 195, 40, 0.45);
+    color: #1f1e1d;
+  }
+  ::-moz-selection {
+    background-color: rgba(255, 195, 40, 0.45);
+    color: #1f1e1d;
   }
   .dark ::selection {
-    background-color: rgba(5, 108, 182, 0.45);
-    color: var(--ia-white);
+    background-color: rgba(255, 195, 40, 0.35);
+    color: #fff4d6;
+  }
+  .dark ::-moz-selection {
+    background-color: rgba(255, 195, 40, 0.35);
+    color: #fff4d6;
   }
 
   .background-gradient {
@@ -242,12 +223,12 @@
   }
 
   textarea::-webkit-scrollbar-thumb {
-    background-color: var(--ia-gray-3);
+    background-color: #646362;
     border-radius: 10px;
   }
 
   textarea::-webkit-scrollbar-thumb:hover {
-    background-color: var(--ia-gray-4);
+    background-color: #7a7977;
   }
 
   /*
@@ -325,7 +306,60 @@
   .overflow-wrap-anywhere {
     overflow-wrap: anywhere;
     word-break: break-word;
-    /* No automatic hyphenation: "pay-ments" mid-word hurts reading. */
+    /* No automatic hyphenation: "pay-ments" split mid-word reads badly. */
     hyphens: manual;
+  }
+}
+
+/* Dates in answers: the same size as the text around them. */
+.date-chip {
+  font-size: inherit;
+}
+
+/* Opening screen (loading-spinner.tsx): a BYU-gold band sweeps through the
+   gray letters to the right and back to the left, 0.5 s each way, and keeps
+   going for as long as the screen is up (it's in the page's HTML, so on a slow
+   connection it shows until the app has loaded, then for at least 1 s). The
+   band's core is a deeper gold so it reads on the white page. */
+.loader-word {
+  --loader-rest: #d6d4cd;
+  background-image: linear-gradient(
+    90deg,
+    var(--loader-rest) 0%,
+    var(--loader-rest) 41%,
+    #ffc328 45%,
+    #e0a400 50%,
+    #ffc328 55%,
+    var(--loader-rest) 59%,
+    var(--loader-rest) 100%
+  );
+  background-size: 300% 100%;
+  background-position: 75% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: loader-sweep 0.5s ease-in-out infinite alternate both;
+}
+
+.dark .loader-word {
+  --loader-rest: #4a4945;
+}
+
+/* With the 300% image, 75% puts the band's center on the name's first letter
+   and 25% on its last, so the band turns on the name instead of leaving it. */
+@keyframes loader-sweep {
+  from {
+    background-position: 75% 0;
+  }
+  to {
+    background-position: 25% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader-word {
+    animation: none;
+    background: none;
+    color: var(--ia-gold-ink);
   }
 }

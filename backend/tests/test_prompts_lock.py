@@ -74,3 +74,16 @@ def test_context_prompt_keeps_the_covenant():
 def test_condense_prompt_has_its_placeholders():
     assert "{chat_history}" in CONDENSE_PROMPT_TEMPLATE
     assert "{question}" in CONDENSE_PROMPT_TEMPLATE
+
+
+def test_language_rule_defaults_to_the_question():
+    assert "Answer in the language of the instructor's question." in SYSTEM
+
+
+def test_language_rule_names_the_settings_pick():
+    for code, name in (("es", "Spanish"), ("pt", "Portuguese")):
+        prompt = " ".join(build_system_prompt("today", code).split())
+        assert f"Answer in {name}: it's the language the instructor chose in settings" in prompt
+        assert "Answer in the language of the instructor's question." not in prompt
+    # An unknown code keeps the default rule.
+    assert "Answer in the language of the instructor's question." in build_system_prompt("today", "zz")

@@ -123,7 +123,7 @@ export function Tooltip({
         role="tooltip"
         data-mobile-open={isTouchOpen ? "true" : "false"}
         style={isTouchDevice ? { opacity: isTouchOpen ? 1 : 0 } : undefined}
-        className={`pointer-events-none select-none absolute ${pos} ${alignCls} z-50 whitespace-nowrap rounded-lg bg-ia-gray-4 px-2.5 py-1.5 text-xs font-semibold text-white shadow-ia-pop dark:border dark:border-ia-gray-3 ${tooltipVisibilityClasses}`}
+        className={`pointer-events-none select-none absolute ${pos} ${alignCls} z-50 whitespace-nowrap rounded-lg bg-[#2f2f2f] px-2.5 py-1.5 text-xs font-medium text-white shadow-lg ${tooltipVisibilityClasses}`}
       >
         {label}
       </span>

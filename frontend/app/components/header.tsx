@@ -1,47 +1,49 @@
+"use client";
+
+import { Plus } from "lucide-react";
 import Image from "next/image";
+import { useChromeStrings } from "../lib/use-chrome-strings";
 import { SettingsMenu } from "./settings-menu";
 
-/**
- * Direction D, "light chrome": a white header with the BYU-Pathway logo as-is
- * (Gray 4 on white, an approved lockup), a divider, and the product name.
- * Blue is kept for things you can act on. Dark mode puts the header on
- * Gray 4; the logo image is lightened there with a filter (the file itself is
- * the same), since Gray 4 artwork on a Gray 4 bar would disappear.
- */
-export default function Header() {
+// The top bar on BYU gold #FFC328, in light and dark mode: the BYU-Pathway
+// logo (its dark-gray artwork is about 6:1 on gold) and "Instructor
+// Assistant" on the left; New chat (in a chat) and the settings gear on the
+// right. Everything on the bar is near-black, and so is its focus ring.
+export default function Header({ onNewChat }: { onNewChat?: () => void }) {
+  const strings = useChromeStrings();
   return (
-    <header className="relative z-50 flex h-14 w-full flex-shrink-0 items-center justify-between gap-4 border-b border-ia-header-border bg-ia-header-bg px-4 text-ia-header-text sm:h-16 sm:px-6">
-      <div className="flex min-w-0 items-center gap-3">
-        <a
-          href="/"
-          aria-label="BYU-Pathway Instructor Assistant home"
-          className="inline-flex flex-shrink-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-4 focus-visible:ring-offset-ia-header-bg"
-        >
-          {/* Phones show the icon logo (the prototype drops the wordmark
-              there) so the title fits; wider screens the full logo. */}
-          <Image
-            src="/BYU-pathway-icon-logo.png"
-            alt="BYU-Pathway Worldwide"
-            width={28}
-            height={27}
-            priority
-            className="h-7 w-auto sm:hidden"
-          />
-          <Image
-            src="/pathway-horizontal-logo.png"
-            alt="BYU-Pathway Worldwide"
-            width={140}
-            height={18}
-            priority
-            className="hidden h-[20px] w-auto sm:block dark:[filter:brightness(0)_invert(0.89)]"
-          />
-        </a>
-        <span aria-hidden="true" className="h-6 w-px flex-shrink-0 bg-ia-header-border" />
-        <h1 className="truncate text-[17px] font-bold leading-tight sm:text-lg">
-          Instructor Assistant
-        </h1>
-      </div>
-      <div className="flex flex-shrink-0 items-center gap-1">
+    <header className="relative z-50 flex h-14 w-full flex-shrink-0 items-center justify-between gap-2 bg-ia-gold px-3 text-ia-on-gold sm:px-5">
+      <a
+        href="/"
+        aria-label={strings.homeAria}
+        className="flex min-w-0 items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ia-on-gold focus-visible:ring-offset-4 focus-visible:ring-offset-ia-gold min-[400px]:gap-2.5 sm:gap-3"
+      >
+        <Image
+          src="/pathway-horizontal-logo.png"
+          alt="BYU-Pathway Worldwide"
+          width={178}
+          height={23}
+          priority
+          className="h-[11px] w-auto shrink-0 min-[400px]:h-[15px] sm:h-[20px]"
+        />
+        <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[#1F1E1D]/30 sm:h-6" />
+        <span className="truncate text-[14px] font-bold min-[400px]:text-[15px] sm:text-[17px]">
+          {strings.headerTitle}
+        </span>
+      </a>
+
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        {onNewChat && (
+          <button
+            type="button"
+            onClick={onNewChat}
+            aria-label={strings.newChat}
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[#1F1E1D]/25 px-2.5 text-sm font-semibold transition-colors hover:bg-[#1F1E1D]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-on-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ia-gold sm:h-9 sm:px-3"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">{strings.newChat}</span>
+          </button>
+        )}
         <SettingsMenu />
       </div>
     </header>

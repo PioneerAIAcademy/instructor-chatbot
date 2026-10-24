@@ -169,13 +169,27 @@ if allow_all_cors:
     )
 else:
     raw_origins = os.getenv("ALLOWED_ORIGINS", "")
-    allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
-    if not allowed_origins:
+    # Browsers send the Origin header without a trailing slash, so
+    # "https://site.example/" would never match; compare without it.
+    allowed_origins = [o.strip().rstrip("/") for o in raw_origins.split(",") if o.strip().rstrip("/")]
+    # Local development: also any localhost port, because `next dev` moves to
+    # :3001 when :3000 is taken. Only when ENVIRONMENT=dev is set explicitly
+    # (not the unset default), so a deployment can't loosen this by accident.
+    local_dev_origins = (
+        r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+        if os.getenv("ENVIRONMENT") == "dev"
+        else None
+    )
+    if not allowed_origins and not local_dev_origins:
         logger.error("ALLOWED_ORIGINS is not set! CORS will block all frontend requests.")
-    logger.info(f"CORS allowed origins: {allowed_origins}")
+    logger.info(
+        f"CORS allowed origins: {allowed_origins}"
+        + (" plus any localhost port (ENVIRONMENT=dev)" if local_dev_origins else "")
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
+        allow_origin_regex=local_dev_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type", "X-API-Key", "X-Session-ID", "X-Device-ID", "X-Timezone"],

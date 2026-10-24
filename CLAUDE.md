@@ -11,10 +11,10 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-20): Phases 0–6 merged (PRs #1–#7). Phase 7 prep #8, Phase 8 frontend #9,
-> Phase 9 prep #10 (stacked in that order). Pre-deploy fixes on `pre-deploy-fixes`
-> (uncommitted). Hosting will be Render; the owner wants everything else finished before
-> deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-21): Phases 0–6 and PRs #8–#10 merged. Open, stacked: #11 pre-deploy
+> fixes, then #12 (`instructor-gold-ui`): the gold design and the language setting, with the
+> blue version as its first commit (`7b01f20`). Hosting will be Render; the owner wants
+> everything else finished before deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -654,7 +654,7 @@ Backend (`backend/.env`):
 | `API_KEYS` | yes in prod | — | `X-API-Key`. Not a secret from users (it ships in the frontend). |
 | `ALLOWED_ORIGINS`, `CORS_ALLOW_ALL` | yes | —, `false` | The instructor frontend only |
 | `APP_HOST`, `APP_PORT` | no | `0.0.0.0`, `8000` | uvicorn |
-| `CONVERSATION_STARTERS` | no | unset | Newline-separated starter questions |
+| `CONVERSATION_STARTERS`, `CONVERSATION_STARTERS_ES`, `CONVERSATION_STARTERS_PT` | no | unset (built-in cards) | Welcome cards per interface language, newline-separated, `Title \| question`. Unset: the 4 built-in cards in that language; blank: none. |
 | `CLOUDINARY_URL` (or `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET`) | no | unset | Feedback screenshots, if kept |
 | `RUN_LIVE_TESTS`, `RUN_LLM_JUDGE` | no | unset | Opt-in billable tests and eval judge |
 
@@ -734,7 +734,7 @@ Why Q4 and Q5 land where they do:
 | Q9 | Keep the draft composer (announcements, welcome messages)? | Yes. |
 | Q10 | Dictation? | No in v1. |
 | Q11 | Suggested follow-up questions? | Yes, with the instructor prompt. |
-| Q12 | Languages? | English UI. Answers in the question's language (upstream behavior). Portuguese is likely needed (Brazil-based instructors, per *Pay Dates*). |
+| Q12 | Languages? | **Changed by the owner, 2026-10-20:** the interface is in English, Spanish, and Portuguese (Settings → Language, else the browser's language). Answers follow the question's language, and the picked language when the question doesn't make one clear. |
 | Q13 | Include linked external pages in retrieval? | Yes, labeled external. The instructor guide wins on conflict. |
 | Q14 | Who supplies real instructor questions? | The instructor support team, via the owner. Until then the §10 set stays DRAFT, and thumbs-down traces get triaged weekly once live. |
 | Q15 | Is Voyage's 0.21 rerank cutoff right for this corpus? | Unchanged until Phase 2/6 data shows misses caused by it. |
@@ -747,6 +747,186 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-20 (language setting: English, Spanish, Portuguese; PR #12)** —
+  The setting looked like it worked but didn't: it listed 9 languages, the interface had
+  only English strings, and the pick never reached the model (the prompt said "answer in
+  the question's language"). Tagalog wasn't even a backend language. **Owner chose:** three
+  languages (the instructor countries: US, Mexico, Brazil; Philippines-based instructors
+  work in English), and picking one translates the app and steers answers. Q12 updated.
+  - **Interface:** every string in `chrome-strings.ts` in en/es/pt (Spanish "tú",
+    Portuguese "você", as upstream's reviewed translations; shared wording is upstream's).
+    About 45 hard-coded strings moved there (draft composer toolbar, source badges, Edit /
+    Cancel / Save, error banner, screen-reader labels). `useChromeStrings()` /
+    `useUiLanguage()` in `app/lib/use-chrome-strings.ts`. `<html lang>` follows the pick.
+    Not translated: the opening screen's name (it's in the prerendered HTML), and the
+    feedback drawer's screenshot section, which upstream switches off (`{false && …}`).
+  - **Welcome cards:** `/api/v1/chat/config?lang=es|pt` serves built-in Spanish and
+    Portuguese cards; `CONVERSATION_STARTERS_ES` / `_PT` override them. The first request
+    already uses the picked language (no English flash).
+  - **Answers:** `chat._resolve_language` also says whether the pick decided (the question's
+    language wasn't confidently detected); only then the system prompt says "Answer in
+    <language>: it's the language the instructor chose in settings…". A clearly English
+    question still gets English.
+  - **Draft composer:** its leftover blue (`sky-*`) accents are gold now.
+  - **Checked live on :3001:** Portuguese interface (greeting, title, placeholder, 4 cards,
+    privacy line, menu), "Canvas?" answered in Portuguese, an English question answered in
+    English; Spanish interface and cards. Backend tests pass.
+
+- **2026-10-20 (frontend: gold, in a layout of its own; PR #12, branch
+  `instructor-gold-ui`)** — **Owner, from the instructor team:** use BYU gold everywhere, keep
+  Mulish, and make the app look different from the Missionary Assistant. The layout follows
+  a chat-UI mockup a staff member on the instructor team shared, with the settings gear in
+  place of the mockup's user initials (there are no accounts). The blue version is saved as
+  `7b01f20` on `missionary-design-blue` (local commit, not pushed).
+  - **Layout:**
+    - a BYU-gold top bar with the BYU-Pathway logo and "Instructor Assistant", and New
+      chat and the gear (owner follow-up: gold bar and logo instead of the mockup's white
+      bar; the first question no longer shows in the bar). It fits at 360px wide in a
+      chat (349px used);
+    - the welcome screen "Good morning. What can I help with?" and 4 cards in the middle,
+      above the question box (owner follow-up);
+    - answers with gold badges, the cited guides as chips, and small gray action icons;
+    - the question box at the bottom on every screen, the welcome screen included (owner
+      follow-up; the mockup had it in the middle).
+    - Not taken from the mockup: the paperclip, the "All sources" picker, and Share (no
+      such features).
+  - **Gold rules:** `#FFC328` is only a fill, with near-black text (10.4:1). Links and the
+    focus ring use deep gold `#7A5600` (6.7:1 on white); highlights pale gold `#FFF4D6`; in
+    dark mode gold itself is the link/focus color (~10:1). Defined once as `--ia-*` and
+    Tailwind `ia-*` colors.
+  - **New chat** clears the conversation and starts a new session ID (checked live: two
+    questions around it went out with 2 distinct `X-Session-ID`s). Headers are now built
+    per request, because the old memoized headers would have kept the old session.
+  - **Starter cards:** a `CONVERSATION_STARTERS` line `Title | question` shows as a card
+    with that title (API.md, `.env.example`). The backend passes lines through unchanged.
+    **When the variable is unset, the backend now serves the 4 instructor cards**
+    (`DEFAULT_STARTERS`); blank means none. Found when the owner saw no cards: the local
+    `backend/.env` has no `CONVERSATION_STARTERS`, and Render would have had the same gap.
+  - **Found: a second frontend on :3001 got no cards and no answers.** `next dev` moves to
+    :3001 when :3000 is taken, and the backend's CORS (`ALLOWED_ORIGINS=http://localhost:3000`)
+    refused it, so the page couldn't load `/config` or ask anything ("Something went
+    wrong"). Fix: with `ENVIRONMENT=dev` set explicitly, the backend also allows any
+    localhost port (`allow_origin_regex`); prod, and an unset `ENVIRONMENT`, still allow
+    only `ALLOWED_ORIGINS` (`tests/test_cors_origins.py`). Checked live on :3001: 4 cards,
+    two answers with follow-ups. Two `next dev` servers in `frontend/` also share `.next`,
+    so one serves the other's build: run one.
+  - **Answer finding (not fixed):** asked for the pay schedule, the bot said to "refer to
+    the picture of the pay schedule provided in the instructor guide". The PDF has no
+    picture (§1 known gap), so the answer points at something that doesn't exist. A case
+    for the prompt or the eval set.
+  - **Icons:** back to upstream's gold files; the blue PNG is removed.
+  - **Checks:** `tsc`, lint, build, and the term check clean. `e2e_check.mjs`, updated for
+    the source chips, against a local backend with the 4 cards: **ALL PASSED (7/7)**.
+    Screenshots in light, dark, and phone width.
+  - **Real instructor questions arrived (Q14).** A staff member on the instructor team sent
+    questions with ideal answers. 46 are condensed in
+    `backend/tests/eval/team/2026-10-20-instructor-team-questions.md`, which is
+    **gitignored** until the owner approves publishing them (the repo is public).
+    - The paste was cut off at 50,000 characters, inside question 46; the rest is still to
+      come.
+    - Patterns the ideal answers share: ask a clarifying question when the answer depends
+      on instructor type or location, or on the block; say when the guides don't cover
+      something, and route to the right contact; keep instructor problems and student
+      problems on their different forms; never promise outcomes.
+    - Many rely on SharePoint pages that may not be in the index (IMS provisioning, the
+      System Access Request Form, contracts, payslips). Next: turn them into eval cases
+      and run the retrieval eval to see which the index can answer.
+
+- **2026-10-20 (frontend: Mulish and the prototype's answer format, same branch,
+  uncommitted)** — The owner sent a screenshot of the prototype's answer and asked for that
+  format, with **Mulish for the whole app** (the greeting keeps Georgia).
+  - **Font:** Mulish from the pinned `@fontsource-variable/mulish` 5.3.0 through
+    `next/font/local`; Inter and `public/fonts` are gone again.
+  - **Answers:**
+    - 16px gray `#454540` text;
+    - citations as round numbered badges (`#8EBDDE`, `#056CB6` with white on hover or
+      focus; more than 3 at one spot collapse to "+N"), and each drawer card is numbered
+      like its badge;
+    - `mark` and dates as a pale-blue `#E7F0FA` highlight;
+    - navy `#0F4B8F` underlined links;
+    - a lock icon on sign-in links, with the backend's note shown small and gray
+      (`sign-in-links.ts`, a rehype step after sanitizing; host list mirrors
+      `LOGIN_LINK_HOSTS`);
+    - one action row: an outlined "Sources (N)" pill, then round outlined thumbs, copy,
+      and regenerate (44px on phones);
+    - pale-blue follow-up pills.
+  - **Found and fixed:**
+    - **CORS: a trailing slash in `ALLOWED_ORIGINS` blocked every browser request.** The
+      local `.env` has `http://localhost:3000/`; browsers send the origin without the
+      slash. `main.py` now compares without it (same origins allowed, a test checks that
+      another origin is still refused). This would have bitten a pasted Render URL.
+    - Dark mode hid the badge numbers (the dark link color won); fixed in `markdown.css`.
+    - `e2e_check.mjs` wrote `/\s+/` inside a template string, which became `/s+/` and
+      printed "Source  (1)". Fixed.
+  - **Checks:** `pytest tests/` 601 passed; `build`, `tsc`, `lint`, and the term check
+    clean. `e2e_check.mjs` against a local backend with the starters set: **ALL PASSED
+    (7/7)**. Screenshots in light, dark, and phone width.
+  - **Note:** the backend in the owner's terminal has no `CONVERSATION_STARTERS` in its
+    `.env`, so its empty chat shows no starters. One run against it also returned "service
+    hiccup" for every question (its log isn't visible to me); a separate backend with the
+    same code answered normally.
+  - **Owner follow-up: the opening screen.** The loader's spinner and "Loading..." are
+    replaced by "INSTRUCTOR ASSISTANT" (Mulish, extra bold, uppercase) in gray, with a
+    `#056CB6` band sweeping through it to the right and back to the left. The loader now
+    holds **1 s** (was 800 ms), 0.5 s each way, and the sweep **loops** for as long as the
+    screen is up (owner: on slow internet it must not stop). The screen is in the
+    prerendered HTML, so it shows before the JavaScript arrives. Checked with Chrome
+    throttled to ~400 kbit/s: still sweeping at 45 s. Reduced motion shows it plain blue.
+  - **Owner follow-up: the favicon is blue too.** `favicon.ico`, `apple-touch-icon.png`, and
+    the four `android-chrome-*.png` are recolored gold → `#056CB6` with the avatar's blend.
+    The `.ico` is rebuilt from the larger blue mark, square, at 16–128 px. `role="status"` with the label "Loading Instructor Assistant". Checked by
+    stepping the animation in headless Chrome (light 1440px, dark 390px).
+
+- **2026-10-20 (frontend: the missionary design in blue, branch `missionary-design-blue`,
+  uncommitted)** — **Owner decision:** design the instructor app *exactly* like the
+  Missionary Assistant, changing only the main color from gold to blue. This replaces
+  design direction D (the all-blue prototype) from Phase 8. The pre-deploy fixes went in
+  first, as PR #11.
+  - **Owner follow-up, same day: the blue is `#056CB6`.**
+    - The header bar is `#056CB6` (first done as light blue `#8EBDDE`), and every former
+      gold spot uses it: buttons with white text, navy `#0F4B8F` on hover, and light
+      tints of it.
+    - On that bar, the gray logo would be about 2.4:1, so the logo (a CSS filter; the
+      file is unchanged), the title, and the gear show in white.
+    - Dark-mode link text and one field border keep `#8EBDDE`, because `#056CB6` text on
+      the dark page is only about 3.3:1.
+  - **Owner: the bot's avatar is the favicon's path mark in blue.**
+    `public/BYU-pathway-icon-logo-blue.png` was made from the gold PNG by blending white
+    toward `#056CB6` by each pixel's goldness, which keeps the anti-aliased edges. The
+    favicon itself is unchanged.
+  - **How:**
+    - The 19 purely visual files are restored byte-for-byte from upstream `870cc5b`, then
+      color-swapped.
+    - The 5 files with logic (`chat-section`, `chat-input`, `chat-message/index`,
+      `chat-sources`, `markdown.tsx`) got upstream's markup back around the instructor
+      logic.
+    - Inter is back (`public/fonts/inter`); the Mulish/Crimson packages and the `ia-*`
+      tokens are gone.
+  - **Color mapping:** gold `#FFC328` →
+    - the header and tints: `#8EBDDE`;
+    - solid buttons with white icons (send, stop, save): `#056CB6`, navy hover;
+    - buttons with dark text (submit, send feedback): `#8EBDDE`, hover `#A6CBE6`;
+    - the focus ring: navy `#0F4B8F` (light blue in dark mode);
+    - selection, `mark`, the blockquote, and drawer badges: blue;
+    - draft placeholders: amber → sky.
+  - **Kept on purpose (not upstream):**
+    - local icons instead of Google favicons in citation pills;
+    - cited-only Sources (the drawer is numbered 1…n in order, because the pills show
+      titles, not numbers);
+    - "Instructor guide (PDF)" / "External page · host" in place of the domain;
+    - starter questions on the empty chat, styled like the disclaimer card (upstream never
+      showed its starters);
+    - "PRIVACY:" where "IMPORTANT:" was, always shown;
+    - every Phase 8 review fix.
+  - **Strings:** back to upstream's wording with "Missionary" → "Instructor" (placeholder
+    "Ask a question", the AI note, "Love this" / "Needs improvement").
+  - **Checks:**
+    - `build`, `tsc`, and `lint` are clean, and the term check passes.
+    - `e2e_check.mjs` was updated for the pills (title text, a count chip, the drawer's
+      `<a>` cards, the "Love this" thumbs). It ran against the local stack: **ALL
+      PASSED** (7/7).
+    - Screenshots in light, dark, and phone match the missionary layout in blue.
 
 - **2026-10-20 (pre-deploy fixes, branch `pre-deploy-fixes`, uncommitted)** — Hosting will be
   Render. The owner chose to finish everything before deployment, picked three fixes, and

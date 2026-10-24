@@ -1,9 +1,26 @@
 "use client";
 
-/**
- * Starter question cards on the empty chat (direction D): a 4px Blue 4 bar,
- * two columns on wider screens, one on phones. Clicking a card asks it.
- */
+import { useChromeStrings } from "../lib/use-chrome-strings";
+
+// The welcome screen's cards, two columns on wider screens, one on phones.
+// Each starter from the backend (CONVERSATION_STARTERS) is either a plain
+// question or "Title | question": the card shows the title in bold and the
+// question under it, and clicking it asks the question.
+export function parseStarter(starter: string): {
+  title: string;
+  question: string;
+} {
+  const split = starter.indexOf("|");
+  if (split === -1) return { title: starter.trim(), question: starter.trim() };
+  const title = starter.slice(0, split).trim();
+  const question = starter.slice(split + 1).trim();
+  if (!title || !question) {
+    const only = title || question;
+    return { title: only, question: only };
+  }
+  return { title, question };
+}
+
 export default function StarterQuestions({
   questions,
   onAsk,
@@ -11,23 +28,27 @@ export default function StarterQuestions({
   questions: string[];
   onAsk: (question: string) => void;
 }) {
-  if (!questions.length) return null;
+  const strings = useChromeStrings();
+  const starters = questions.map(parseStarter).filter((s) => s.question);
+  if (!starters.length) return null;
   return (
     <ul
-      className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4"
-      aria-label="Suggested questions"
+      className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3"
+      aria-label={strings.startersAria}
     >
-      {questions.map((question) => (
+      {starters.map(({ title, question }) => (
         <li key={question} className="flex">
           <button
             type="button"
             onClick={() => onAsk(question)}
-            className="flex min-h-[76px] w-full overflow-hidden rounded-xl border border-ia-border bg-ia-surface text-left transition-colors hover:border-ia-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg"
+            className="flex w-full flex-col gap-1 rounded-xl bg-ia-surface px-4 py-3 text-left transition-colors hover:bg-ia-gold-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2"
           >
-            <span aria-hidden="true" className="w-1 flex-shrink-0 bg-ia-blue-4" />
-            <span className="flex items-center p-4 text-[15px] font-semibold leading-snug text-ia-text">
-              {question}
-            </span>
+            <span className="text-sm font-bold text-ia-text">{title}</span>
+            {question !== title && (
+              <span className="text-[13px] leading-snug text-ia-muted">
+                {question}
+              </span>
+            )}
           </button>
         </li>
       ))}

@@ -9,6 +9,8 @@ Upstream's SYSTEM_CITATION_PROMPT (missionary persona, tuition facts, block
 status, program ladder) is intentionally not carried over.
 """
 
+from app.utils.localization import LocalizationManager
+
 SYSTEM_PROMPT_TEMPLATE = """Today's date is {current_datetime}.
 
 ROLE & AUDIENCE
@@ -29,7 +31,7 @@ Use the guides' terms: ACL (Assistant Course Lead), AIM (Assistant Instructor Ma
 Line. Facts about these (dates, rules, who does what) come from the contexts, never from here.
 
 LANGUAGE
-Answer in the language of the instructor's question.
+{language_rule}
 
 GROUNDING
 Answer only from the numbered contexts. Three cases:
@@ -124,5 +126,25 @@ Follow Up Input: {question}
 Standalone question:"""
 
 
-def build_system_prompt(current_datetime: str) -> str:
-    return SYSTEM_PROMPT_TEMPLATE.format(current_datetime=current_datetime)
+DEFAULT_LANGUAGE_RULE = "Answer in the language of the instructor's question."
+
+# When the question's language can't be told (a short "ok", a bare form name)
+# and the instructor picked a language in settings, the answer uses the pick.
+CHOSEN_LANGUAGE_RULE = (
+    "Answer in {language}: it's the language the instructor chose in settings, "
+    "and their message doesn't make another language clear. Keep the names of "
+    "systems, forms, and guides as the contexts write them."
+)
+
+
+def build_system_prompt(current_datetime: str, answer_language: str | None = None) -> str:
+    """The instructor system prompt. `answer_language` is a language code, set
+    only when the settings pick decided the language (chat._resolve_language)."""
+    rule = DEFAULT_LANGUAGE_RULE
+    if answer_language:
+        info = LocalizationManager.SUPPORTED_LANGUAGES.get(answer_language)
+        if info is not None:
+            rule = CHOSEN_LANGUAGE_RULE.format(language=info.name)
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        current_datetime=current_datetime, language_rule=rule
+    )

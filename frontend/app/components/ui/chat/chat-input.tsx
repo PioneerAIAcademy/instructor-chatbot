@@ -1,3 +1,4 @@
+import { ArrowUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getChromeStrings } from "../../../lib/chrome-strings";
 import { resolveUiLanguage } from "../../../lib/i18n";
@@ -18,12 +19,9 @@ function useChromeStrings() {
   return getChromeStrings(uiLang);
 }
 
-// The send/stop button: 44px, Blue 4 with white (5.5:1), Navy 4 on hover.
-const ROUND_BUTTON =
-  "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full p-0 " +
-  "bg-ia-blue-4 text-white hover:bg-ia-navy-4 " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ia-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ia-bg";
-
+// The question box, without the controls this app doesn't use (uploads,
+// dictation, the role pill, LlamaCloud): a white box with a soft border, a
+// gold send button, and a dark stop button while an answer streams.
 export default function ChatInput(
   props: Pick<
     ChatHandler,
@@ -41,19 +39,7 @@ export default function ChatInput(
 ) {
   const strings = useChromeStrings();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  // Phones get the short placeholder: a textarea placeholder can't end in
-  // "…" (Chrome just cuts it off), and the long one doesn't fit.
-  const [isNarrow, setIsNarrow] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 639px)");
-    const update = () => setIsNarrow(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  const placeholder = isNarrow
-    ? strings.inputPlaceholderShort
-    : (props.inputPlaceholder ?? strings.inputPlaceholder);
+  const placeholder = props.inputPlaceholder ?? strings.inputPlaceholder;
 
   const resizeTextarea = useCallback(() => {
     const textarea = textareaRef.current;
@@ -70,8 +56,8 @@ export default function ChatInput(
     textarea.scrollTop = textarea.scrollHeight;
   }, [props.input]);
 
-  // The value can change without typing (a starter question, a cleared
-  // input), so keep the height in step with it, not only with onInput.
+  // The value can change without typing (a cleared input, a ?prompt= prefill),
+  // so keep the height in step with it, not only with onInput.
   useEffect(() => {
     resizeTextarea();
   }, [props.input, resizeTextarea]);
@@ -85,15 +71,14 @@ export default function ChatInput(
 
   return (
     <form onSubmit={onSubmit} className="w-full">
-      <div className="flex w-full items-end gap-3 rounded-xl border border-ia-border bg-ia-surface py-3 pl-4 pr-3 transition-[border-color,box-shadow] focus-within:border-ia-border-strong focus-within:shadow-[0_0_0_2px_var(--ia-bg),0_0_0_4px_var(--ia-focus)]">
+      <div className="flex w-full items-end gap-2 rounded-2xl border border-ia-line bg-ia-page py-2 pl-4 pr-2 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.06)] transition-[border-color,box-shadow] focus-within:border-ia-gold dark:shadow-none">
         <textarea
           ref={textareaRef}
           autoFocus
           name="message"
           aria-label={placeholder}
           placeholder={placeholder}
-          // Placeholder at body contrast: Gray 3 fails AA below 18px.
-          className="min-h-[44px] w-full resize-none overflow-y-auto border-none bg-transparent px-0 py-[10px] text-base leading-6 text-ia-text placeholder:text-ia-text placeholder:opacity-100 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 max-h-[150px] md:max-h-[220px] lg:max-h-[260px] [scrollbar-width:thin] [scrollbar-color:var(--ia-gray-3)_transparent]"
+          className="max-h-[150px] min-h-[40px] w-full resize-none overflow-y-auto border-none bg-transparent px-0 py-[9px] text-[15px] leading-[22px] text-ia-text placeholder:text-ia-muted focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 md:max-h-[220px] lg:max-h-[260px] [scrollbar-width:thin] [scrollbar-color:#646362_transparent]"
           value={props.input}
           onChange={(e) => props.handleInputChange(e as any)}
           rows={1}
@@ -115,11 +100,12 @@ export default function ChatInput(
               type="button"
               onClick={props.stop}
               aria-label={strings.stopButton}
-              className={ROUND_BUTTON}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ia-text p-0 text-ia-page hover:opacity-85"
             >
-              <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="3" y="3" width="14" height="14" fill="currentColor" rx="3.5" />
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                <rect x="1" y="1" width="12" height="12" fill="currentColor" rx="2.5" />
               </svg>
+              <span className="sr-only">{strings.stopButton}</span>
             </Button>
           </Tooltip>
         ) : (
@@ -128,22 +114,11 @@ export default function ChatInput(
               type="submit"
               disabled={!props.input.trim()}
               aria-label={strings.sendButton}
-              className={`${ROUND_BUTTON} disabled:cursor-not-allowed disabled:bg-ia-gray-1 disabled:text-ia-gray-3 disabled:opacity-100 dark:disabled:bg-ia-gray-3 dark:disabled:text-ia-gray-1`}
+              // BYU gold with a near-black arrow (10.4:1); white would be 1.6:1.
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ia-gold p-0 text-ia-on-gold hover:bg-ia-gold-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 19V5" />
-                <path d="m5 12 7-7 7 7" />
-              </svg>
+              <ArrowUp className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />
+              <span className="sr-only">{strings.sendButton}</span>
             </Button>
           </Tooltip>
         )}

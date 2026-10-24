@@ -19,7 +19,7 @@ Checks, each printed as PASS/FAIL:
 5. /draft/edit returns an edited text.
 6. /feedback/general (text only) returns 200.
 7. /openapi.json (what /api/docs shows) lists only the kept routes.
-8. /config serves the starter questions (warns if CONVERSATION_STARTERS is unset).
+8. /config serves the starter questions (built in unless CONVERSATION_STARTERS overrides them).
 
 Exits 1 if any check fails. Sends X-API-Key from API_KEYS when set; never
 prints it.
@@ -163,7 +163,7 @@ def check_routes(c: Checker) -> None:
 def check_config(c: Checker) -> None:
     starters = requests.get(f"{c.url}/api/v1/chat/config", timeout=30).json().get("starterQuestions")
     if not starters:
-        print("WARN  8. /config has no starter questions (set CONVERSATION_STARTERS; see .env.example)")
+        print("WARN  8. /config has no starter questions (CONVERSATION_STARTERS is set but blank)")
         return
     c.result("8. /config serves starter questions", [], f"{len(starters)}: {starters}")
 

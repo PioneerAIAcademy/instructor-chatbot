@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { resolveUiLanguage } from "../../../../lib/i18n";
+import { useUiLanguage } from "../../../../lib/use-chrome-strings";
 import { useClientConfig } from "./use-config";
 
 /**
- * The starter questions from `GET /api/v1/chat/config` (backend/API.md):
- * `{"starterQuestions": [...]}`, or `null` when none are configured.
+ * The starter questions from `GET /api/v1/chat/config?lang=<code>`
+ * (backend/API.md): `{"starterQuestions": [...]}` in the interface language,
+ * or `null` when none are configured. Refetched when the language changes.
  *
  * Upstream fetched these inside the message list, which only mounts after
  * the chat starts, and rendered them only when there were no messages, so
@@ -13,13 +16,21 @@ import { useClientConfig } from "./use-config";
  */
 export function useStarterQuestions(): string[] {
   const { backend } = useClientConfig();
+  // Only a trigger: the effect re-runs when the language changes.
+  const uiLang = useUiLanguage();
   const [questions, setQuestions] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const response = await fetch(`${backend}/api/v1/chat/config`);
+        // Read the language here, not from the first render's "en"
+        // placeholder, so the first request already asks for the right
+        // cards and English ones never flash before them.
+        const lang = resolveUiLanguage();
+        const response = await fetch(
+          `${backend}/api/v1/chat/config?lang=${encodeURIComponent(lang)}`,
+        );
         if (!response.ok) return;
         const data = await response.json();
         const list = Array.isArray(data?.starterQuestions)
@@ -36,7 +47,7 @@ export function useStarterQuestions(): string[] {
     return () => {
       cancelled = true;
     };
-  }, [backend]);
+  }, [backend, uiLang]);
 
   return questions;
 }

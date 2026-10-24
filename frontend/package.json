@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs": "^5.0.1",
-    "@fontsource-variable/crimson-pro": "5.3.0",
     "@fontsource-variable/mulish": "5.3.0",
     "@radix-ui/react-hover-card": "^1.0.7",
     "@radix-ui/react-slot": "^1.0.2",

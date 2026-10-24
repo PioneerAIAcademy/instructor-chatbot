@@ -1,7 +1,7 @@
 // frontend/app/lib/i18n.ts
 //
-// i18n helpers for the Instructor Assistant chrome (header subtitle,
-// AI note, input placeholder, settings menu labels).
+// i18n helpers for the Instructor Assistant interface (every string in
+// app/lib/chrome-strings.ts).
 //
 // Detection cascade (`getInitialLanguage`):
 //   1. localStorage `user_language_pref` (set by the SettingsMenu picker)
@@ -17,17 +17,10 @@
 // UI language. When the user picks "auto", the backend reverts to its
 // existing text-detection cascade (LocalizationManager.detect_language).
 
-export const SUPPORTED_LANGS = [
-  "en",
-  "es",
-  "pt",
-  "fr",
-  "it",
-  "ja",
-  "ko",
-  "zh",
-  "tl",
-] as const;
+// The interface languages (owner, 2026-10-20): the instructor countries are
+// the US, Mexico, Brazil, and the Philippines (English). A stored pick of any
+// other code (from before this list was trimmed) reads as "auto".
+export const SUPPORTED_LANGS = ["en", "es", "pt"] as const;
 
 export type LangCode = (typeof SUPPORTED_LANGS)[number];
 export type LangPref = "auto" | LangCode;
@@ -36,12 +29,6 @@ export const LANG_LABELS: Record<LangCode, { native: string; english: string }> 
   en: { native: "English", english: "English" },
   es: { native: "Español", english: "Spanish" },
   pt: { native: "Português", english: "Portuguese" },
-  fr: { native: "Français", english: "French" },
-  it: { native: "Italiano", english: "Italian" },
-  ja: { native: "日本語", english: "Japanese" },
-  ko: { native: "한국어", english: "Korean" },
-  zh: { native: "中文", english: "Chinese" },
-  tl: { native: "Tagalog", english: "Tagalog" },
 };
 
 const STORAGE_KEY = "user_language_pref";
@@ -53,7 +40,6 @@ function isLangCode(value: string): value is LangCode {
 function normalizeBrowserLocale(raw: string | undefined | null): LangCode | null {
   if (!raw) return null;
   const base = raw.toLowerCase().split("-")[0].split("_")[0];
-  if (base === "zh") return "zh";
   return isLangCode(base) ? base : null;
 }
 

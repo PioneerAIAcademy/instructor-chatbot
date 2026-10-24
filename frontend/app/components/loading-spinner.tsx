@@ -2,17 +2,22 @@
 
 import { useEffect, useState } from "react";
 
+// The opening screen: the app's name, with a BYU-gold band sweeping through
+// the letters to the right and back to the left until the app is ready
+// (globals.css, .loader-word). With reduced motion the name is simply gold.
 export default function LoadingSpinner() {
   return (
-    <div role="status" className="fixed inset-0 flex items-center justify-center bg-ia-bg z-50">
-      <div className="flex flex-col items-center gap-4">
-        <div className="relative">
-          <div aria-hidden="true" className="w-12 h-12 border-4 border-ia-gray-1 dark:border-ia-gray-4 border-t-ia-blue-4 rounded-full motion-safe:animate-spin"></div>
-        </div>
-        <p className="text-sm text-ia-text font-semibold">
-          Loading...
-        </p>
-      </div>
+    <div
+      role="status"
+      aria-label="Loading Instructor Assistant"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ia-page px-4"
+    >
+      <p
+        aria-hidden="true"
+        className="loader-word text-center text-[clamp(1.5rem,6vw,3rem)] font-extrabold uppercase leading-tight tracking-[0.12em]"
+      >
+        Instructor Assistant
+      </p>
     </div>
   );
 }
@@ -24,7 +29,7 @@ export function AppLoader({ children }: { children: React.ReactNode }) {
     // Wait for theme to be applied and components to be ready
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 800); // Minimum loading time to ensure smooth transition
+    }, 1000); // At least one sweep of the name, right and back (globals.css)
 
     return () => clearTimeout(timer);
   }, []);

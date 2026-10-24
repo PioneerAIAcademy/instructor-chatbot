@@ -107,34 +107,28 @@ export default function GlobalError({
             __html: `
               :root {
                 color-scheme: light;
-                /* Direction D (same palette as app/globals.css). This page
-                   can't rely on the app's stylesheet, so it repeats it. */
-                --error-bg: #FFFFFF;
-                --error-text: #454540;
-                --error-muted: #454540;
-                --error-button-bg: #056CB6;
+                --error-bg: #FAF9F5;
+                --error-text: #141413;
+                --error-muted: #646362;
+                --error-button-bg: #141413;
                 --error-button-text: #FFFFFF;
-                --error-button-hover: #0F4B8F;
+                --error-button-hover: #2D2D2A;
+                --error-header-shadow: rgba(0, 0, 0, 0.18);
                 --error-header-bg: #FFFFFF;
-                --error-header-text: #454540;
-                --error-header-border: #E3E1DE;
-                --error-logo-filter: none;
-                --error-focus: #0F4B8F;
+                --error-header-line: #E8E6E0;
               }
 
               :root.dark {
                 color-scheme: dark;
-                --error-bg: #000000;
-                --error-text: #E3E1DE;
-                --error-muted: #E3E1DE;
-                --error-button-bg: #056CB6;
-                --error-button-text: #FFFFFF;
-                --error-button-hover: #0F4B8F;
-                --error-header-bg: #454540;
-                --error-header-text: #E3E1DE;
-                --error-header-border: #7E7A76;
-                --error-logo-filter: brightness(0) invert(0.89);
-                --error-focus: #FFC328;
+                --error-bg: #222320;
+                --error-text: #E6E4DA;
+                --error-muted: #C2C0B6;
+                --error-button-bg: #FFC328;
+                --error-button-text: #1F1E1D;
+                --error-button-hover: #FFD35C;
+                --error-header-shadow: rgba(0, 0, 0, 0.55);
+                --error-header-bg: #1C1C1B;
+                --error-header-line: #34332F;
               }
 
               * {
@@ -150,7 +144,7 @@ export default function GlobalError({
               body {
                 background: var(--error-bg);
                 color: var(--error-text);
-                font-family: Mulish, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
               }
 
               .global-error-shell {
@@ -171,7 +165,7 @@ export default function GlobalError({
                 position: relative;
                 padding: 10px 24px;
                 background: var(--error-header-bg);
-                border-bottom: 1px solid var(--error-header-border);
+                border-bottom: 1px solid var(--error-header-line);
               }
 
               .global-error-logo-link {
@@ -182,17 +176,21 @@ export default function GlobalError({
               }
 
               .global-error-logo {
-                width: 156px;
+                width: 198px;
                 max-width: 38vw;
                 height: auto;
                 display: block;
-                filter: var(--error-logo-filter);
+              }
+
+              /* The gray logo artwork, lightened to read on the dark top bar. */
+              :root.dark .global-error-logo {
+                filter: brightness(0) invert(0.9);
               }
 
               .global-error-title {
                 margin: 0;
-                color: var(--error-header-text);
-                font-size: 18px;
+                color: #454540;
+                font-size: 20px;
                 font-weight: 700;
                 line-height: 1.2;
                 text-align: center;
@@ -241,9 +239,9 @@ export default function GlobalError({
 
               .global-error-action {
                 margin-top: 24px;
-                min-height: 44px;
+                min-height: 46px;
                 border: 0;
-                border-radius: 999px;
+                border-radius: 8px;
                 background: var(--error-button-bg);
                 color: var(--error-button-text);
                 cursor: pointer;
@@ -268,7 +266,7 @@ export default function GlobalError({
               }
 
               .global-error-action:focus-visible {
-                outline: 2px solid var(--error-focus);
+                outline: 3px solid rgba(5, 108, 182, 0.6);
                 outline-offset: 3px;
               }
 

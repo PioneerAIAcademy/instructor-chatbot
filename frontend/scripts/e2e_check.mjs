@@ -11,8 +11,8 @@
 //
 // Checks, PASS/FAIL per question:
 //   - an answer appears, with no raw "[^N]" markers left in the text;
-//   - answer questions show citation badges, and "Sources (N)" matches the
-//     number of distinct badges (the panel lists only cited sources);
+//   - answer questions show citation badges and source chips, and the
+//     number of cited passages matches the cards in the sources drawer;
 //   - every card in the Sources panel says "Instructor guide (PDF)" or
 //     "External page · <host>";
 //   - every sign-in link (SharePoint, course directory, …) is followed by
@@ -123,8 +123,10 @@ const STATE = `(() => {
   const last = answers[answers.length - 1];
   const md = last?.querySelector('.custom-markdown');
   const text = md?.innerText || "";
-  const badges = [...new Set([...(md?.querySelectorAll('a.citation-link') || [])].map((a) => a.textContent.trim()))];
-  const sourcesButton = last?.querySelector('button[aria-label^="Open "]')?.textContent?.trim() || "";
+  const badges = [...(md?.querySelectorAll('.citation-link') || [])].map((a) => a.textContent.trim());
+  const chips = last?.querySelector('ul[aria-label^="Open "]');
+  const cited = Number(chips?.dataset.citedCount || 0);
+  const chipTitles = [...(chips?.querySelectorAll('button') || [])].map((b) => b.textContent.trim());
   const loginHosts = ${JSON.stringify(LOGIN_HOSTS)};
   const unlabeled = [];
   for (const a of md?.querySelectorAll('a[href^="http"]:not(.citation-link)') || []) {
@@ -140,7 +142,7 @@ const STATE = `(() => {
     const after = range.toString().slice(0, 60);
     if (!/sign-in required/i.test(after)) unlabeled.push(a.href);
   }
-  return { text, badges, sourcesButton, unlabeled, missionary: /missionar|\\bACMs?\\b|gathering agenda/i.test(document.body.innerText) };
+  return { text, badges, cited, chipTitles, unlabeled, missionary: /missionar|\\bACMs?\\b|gathering agenda/i.test(document.body.innerText) };
 })()`;
 
 // --- the empty chat ----------------------------------------------------------
@@ -186,17 +188,17 @@ for (const [index, question] of QUESTIONS.entries()) {
   if (!finished || !s.text.trim()) problems.push("no finished answer");
   if (/\[\^\d*\w*\]/.test(s.text)) problems.push("raw citation marker left in the text");
   if (question.kind !== "guard" && s.badges.length === 0) problems.push("no citation badges");
-  const count = parseInt((s.sourcesButton.match(/\((\d+)\)/) || [])[1] || "0", 10);
-  if (s.badges.length && count !== s.badges.length) problems.push(`"${s.sourcesButton}" but ${s.badges.length} distinct badges`);
+  if (s.badges.length && !s.chipTitles.length) problems.push("citations but no source chips");
   if (s.unlabeled.length) problems.push(`sign-in link without "(sign-in required)": ${s.unlabeled.join(", ")}`);
   if (s.missionary) problems.push("missionary wording on the page");
 
-  if (s.sourcesButton) {
-    await evaluate(`[...document.querySelectorAll('[data-message-role="assistant"]')].pop().querySelector('button[aria-label^="Open "]').click()`);
+  if (s.chipTitles.length) {
+    await evaluate(`[...document.querySelectorAll('[data-message-role="assistant"]')].pop().querySelector('ul[aria-label^="Open "] button').click()`);
     await sleep(900);
-    const cards = await evaluate(`[...document.querySelectorAll('aside li.reference-list-item')].map((li) => li.innerText)`);
+    const cards = await evaluate(`[...document.querySelectorAll('aside .reference-list-item')].map((li) => li.innerText)`);
     const unlabeledCards = (cards || []).filter((c) => !/Instructor guide \(PDF\)|External page · /.test(c));
     if (!cards?.length) problems.push("the Sources panel is empty");
+    if (cards?.length !== s.cited) problems.push(`${s.cited} cited passage(s) but ${cards?.length ?? 0} cards in the drawer`);
     if (unlabeledCards.length) problems.push(`${unlabeledCards.length} source card(s) without a type label`);
     await shot(`${String(index + 1).padStart(2, "0")}-q${question.id}-sources`);
     await evaluate(`document.querySelector('aside button[aria-label="Close sources"]')?.click()`);
@@ -204,11 +206,11 @@ for (const [index, question] of QUESTIONS.entries()) {
   } else {
     await shot(`${String(index + 1).padStart(2, "0")}-q${question.id}`);
   }
-  report(`#${question.id} ${question.q}`, problems, `${s.badges.length} cited, ${s.sourcesButton || "no Sources button"}`);
+  report(`#${question.id} ${question.q}`, problems, `${s.badges.length} badge(s), ${s.chipTitles.length} source chip(s)`);
 }
 
 // --- thumbs ------------------------------------------------------------------
-await evaluate(`[...document.querySelectorAll('button[aria-label="Helpful"]')].pop()?.click()`);
+await evaluate(`[...document.querySelectorAll('button[aria-label="Love this"]')].pop()?.click()`);
 await sleep(4000); // the request and its response
 report(
   "thumbs-up reaches /api/v1/chat/thumbs_request",

@@ -17,8 +17,23 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        // Keyboard-focus ring: amber, theme-aware (see --focus-ring in globals.css).
+        // Keyboard-focus ring: deep gold / gold, theme-aware (--focus-ring in globals.css).
         "focus-ring": "var(--focus-ring)",
+        // The Instructor Assistant palette; each is theme-aware (globals.css).
+        // Solid colors only: Tailwind 3 can't apply /opacity to var() colors.
+        ia: {
+          page: "var(--ia-page)",
+          surface: "var(--ia-surface)",
+          line: "var(--ia-line)",
+          text: "var(--ia-text)",
+          body: "var(--ia-body)",
+          muted: "var(--ia-muted)",
+          gold: "var(--ia-gold)",
+          "gold-hover": "var(--ia-gold-hover)",
+          "gold-soft": "var(--ia-gold-soft)",
+          "gold-ink": "var(--ia-gold-ink)",
+          "on-gold": "var(--ia-on-gold)",
+        },
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
@@ -49,39 +64,6 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Direction D palette and roles (app/globals.css). Use these, not raw hex.
-        ia: {
-          "gold-1": "var(--ia-gold-1)",
-          "gold-3": "var(--ia-gold-3)",
-          "gray-1": "var(--ia-gray-1)",
-          "gray-2": "var(--ia-gray-2)",
-          "gray-3": "var(--ia-gray-3)",
-          "gray-4": "var(--ia-gray-4)",
-          "gray-5": "var(--ia-gray-5)",
-          "blue-1": "var(--ia-blue-1)",
-          "blue-2": "var(--ia-blue-2)",
-          "blue-3": "var(--ia-blue-3)",
-          "blue-4": "var(--ia-blue-4)",
-          "navy-4": "var(--ia-navy-4)",
-          "green-3": "var(--ia-green-3)",
-          "red-3": "var(--ia-red-3)",
-          bg: "var(--ia-bg)",
-          surface: "var(--ia-surface)",
-          text: "var(--ia-text)",
-          "text-strong": "var(--ia-text-strong)",
-          border: "var(--ia-border)",
-          "border-strong": "var(--ia-border-strong)",
-          link: "var(--ia-link)",
-          focus: "var(--ia-focus)",
-          "header-bg": "var(--ia-header-bg)",
-          "header-text": "var(--ia-header-text)",
-          "header-border": "var(--ia-header-border)",
-          bubble: "var(--ia-bubble)",
-        },
-      },
-      boxShadow: {
-        "ia-pop": "var(--ia-shadow-pop)",
-        "ia-panel": "var(--ia-shadow-panel)",
       },
       borderRadius: {
         xl: `calc(var(--radius) + 4px)`,
@@ -90,10 +72,8 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        // Provide a fallback in var() so unresolved --font-inter never collapses to serif defaults.
+        // A fallback in var() so an unresolved --font-mulish never collapses to serif defaults.
         sans: ["var(--font-mulish, Mulish)", ...fontFamily.sans],
-        // Crimson Pro: the greeting and answer headings (direction D).
-        display: ["var(--font-crimson, 'Crimson Pro')", "Georgia", "serif"],
         georgia: ["Georgia", "serif"],
       },
       keyframes: {
