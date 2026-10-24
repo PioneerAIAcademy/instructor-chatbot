@@ -206,6 +206,12 @@ async def startup_event():
     from app.memory_trim import start_malloc_trimmer
 
     start_malloc_trimmer(period_sec=300)  # return freed memory to the OS every 5 min
+
+    # Load the prompt-injection model now, in a background thread, so the first
+    # question doesn't wait for it (download + load can take ~40 s).
+    from app.security.input_validator import InputValidator
+
+    InputValidator.preload_detector_in_background()
     logger.info("Application startup complete")
 
 

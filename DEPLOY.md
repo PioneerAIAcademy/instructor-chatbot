@@ -61,6 +61,13 @@ guard refuses it anyway).
 
 `PORT`: the server listens on `$PORT` if the host sets it, and on 8000 otherwise.
 
+**The prompt-injection detector** (`PROMPT_INJECTION_ML_ENABLED`, on by default) shapes
+the instance size:
+- It downloads a 714 MB model from Hugging Face at startup (in the background; questions
+  are answered meanwhile, with the regex checks only).
+- Each server process holds its own copy, about 0.5 GB of RAM. The image runs 2 gunicorn
+  workers, so allow about 1 GB for the detector alone.
+
 ## 3. Health checks
 
 - Liveness: `GET /api/health` returns `{"status": "ok"}` and calls nothing external. Use this

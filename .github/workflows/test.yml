@@ -90,6 +90,7 @@ jobs:
           grep -q IndexConfigError guard.log || { cat guard.log; exit 1; }
           echo "refused by the index guard, as it should"
 
+      # The injection model (714 MB) isn't what this job checks; skip its download.
       - name: Start the container
         run: |
           docker run -d --name api -p 8000:8000 \
@@ -98,6 +99,7 @@ jobs:
             -e MODEL_PROVIDER=openai -e MODEL=gpt-4o-mini \
             -e EMBEDDING_MODEL=text-embedding-3-large -e EMBEDDING_DIM=3072 \
             -e API_KEYS=ci-key -e ALLOWED_ORIGINS=https://instructor.example.org \
+            -e PROMPT_INJECTION_ML_ENABLED=false \
             instructor-backend
           for i in $(seq 1 90); do
             curl -sf localhost:8000/api/health && exit 0

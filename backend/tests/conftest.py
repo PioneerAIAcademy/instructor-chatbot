@@ -10,6 +10,11 @@ from unittest.mock import Mock, MagicMock
 # fails at once instead of making a Hub request, so the result is the same
 # (no ML detector) and the tests stop depending on Hugging Face.
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
+# The ML injection detector is off in tests: whether the ~714 MB model is
+# cached would otherwise change results between machines (and CI has none).
+# tests/test_security_validation.py covers it with a stub; the real model is
+# exercised by scripts/sec_test.py.
+os.environ.setdefault("PROMPT_INJECTION_ML_ENABLED", "false")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 # Tests must never send anything to Langfuse. app/langfuse.py calls
