@@ -76,8 +76,9 @@ def test_citation_coverage_adds_marker_to_uncited_substantive_lines():
     guarded = ensure_citation_coverage(draft, [_node("source")])
 
     assert "### Heading" in guarded  # headings untouched
-    assert "Students should correct gathering assignments. [^1]" in guarded
-    assert "- Do this promptly. [^1]" in guarded
+    # The nearest real citation ([^2]), not a blanket [^1].
+    assert "Students should correct gathering assignments. [^2]" in guarded
+    assert "- Do this promptly. [^2]" in guarded
 
 
 def test_citation_coverage_leaves_wholly_uncited_answer_alone():
@@ -319,3 +320,29 @@ def test_literal_placeholder_markers_are_dropped():
     # "[^N]" copied from the prompt came back live in the Phase 6 eval (#6).
     assert normalize_citation_markers("Use Turnitin[^N]. Ask first [^n].") == "Use Turnitin. Ask first."
     assert normalize_citation_markers("Paid on the 8th [^1].") == "Paid on the 8th [^1]."
+
+
+def test_citation_coverage_uses_the_nearest_citation_not_source_1():
+    # Phase 6 eval #13: the intro and summary got [^1] (an unrelated guide).
+    draft = (
+        "To help a late student catch up, follow these steps:\n"
+        "1. Check your class list in the first two weeks [^2].\n"
+        "2. Add them to a group [^3].\n"
+        "These steps help the student settle in."
+    )
+    guarded = ensure_citation_coverage(draft, [_node("a"), _node("b"), _node("c")])
+    assert "follow these steps:\n" in guarded  # a lead-in makes no claim: no marker
+    assert "These steps help the student settle in. [^3]" in guarded
+    assert "[^1]" not in guarded
+
+
+def test_citation_coverage_line_before_any_citation_takes_the_first_one():
+    draft = "Instructors are paid twice a month.\nUS instructors: the 8th and 23rd [^4]."
+    guarded = ensure_citation_coverage(draft, [_node("a")])
+    assert guarded.startswith("Instructors are paid twice a month. [^4]")
+
+
+def test_citation_coverage_ignores_markers_inside_a_draft():
+    # Only a citation inside a draft fence: the prose has none to borrow.
+    draft = "Here is a message.\n```message\nHi [^2]\n```\nSend it soon."
+    assert ensure_citation_coverage(draft, [_node("a")]) == draft

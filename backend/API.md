@@ -221,14 +221,19 @@ the user, and `reason` is one of:
 
 ## `GET /api/v1/chat/config`
 
-No auth. Starter questions for an empty chat, from `CONVERSATION_STARTERS`: one per line, and a
-literal `\n` also separates them.
+No auth. `?lang=en|es|pt` (optional; default English, an unknown code reads as English).
+Starter questions for an empty chat, from `CONVERSATION_STARTERS` (Spanish:
+`CONVERSATION_STARTERS_ES`, Portuguese: `CONVERSATION_STARTERS_PT`): one per line, and a
+literal `\n` also separates them. When it is unset, the 4 built-in instructor cards in that language
+(`DEFAULT_STARTERS_BY_LANGUAGE` in `app/api/routers/chat_config.py`) are served. The backend passes each line through unchanged. The frontend reads
+`Title | question` as a welcome card (the title in bold, the question under it, and the
+question is what gets asked); a line without `|` is both.
 
 ```json
 {"starterQuestions": ["When do I get paid?", "Write a welcome message for my students."]}
 ```
 
-`{"starterQuestions": null}` when none are configured.
+`{"starterQuestions": null}` when `CONVERSATION_STARTERS` is set but blank.
 
 ## `GET /api/health` and `GET /api/health/ready`
 

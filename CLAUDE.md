@@ -11,9 +11,10 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-19): Phases 0–6 merged (PRs #1–#7). Phase 7 prep (security terms, Docker
-> image, deploy guide) on `phase-7-staging-prep`, uncommitted. The staging deploy itself waits on
-> the owner's hosting choice.** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-21): Phases 0–6 and PRs #8–#10 merged. Open, stacked: #11 pre-deploy
+> fixes, then #12 (`instructor-gold-ui`): the gold design and the language setting, with the
+> blue version as its first commit (`7b01f20`). Hosting will be Render; the owner wants
+> everything else finished before deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -239,6 +240,7 @@ How each upstream reader behaves when the classifier fields are missing:
 instructor-chatbot/
 ├── CLAUDE.md                        ← this file
 ├── UPSTREAM.md                      ← every Keep/Adapt file: upstream path, upstream commit, local changes
+├── DEPLOY.md                        ← both services: build, settings, checks, going live (Phases 7–9)
 ├── .claude/agents/chatbot-operator.md
 ├── .githooks/{commit-msg,pre-push,post-commit}
 ├── .github/workflows/{test.yml,payload-guard.yml}
@@ -246,7 +248,7 @@ instructor-chatbot/
 ├── backend/
 │   ├── .env.example                 ← names only (§11)
 │   ├── API.md                       ← Phase 4: the stream contract the frontend builds against
-│   ├── DEPLOY.md, .dockerignore     ← Phase 7: image build, host settings, post-deploy checks
+│   ├── .dockerignore                ← Phase 7: the image gets only main.py and app/
 │   ├── Dockerfile, pyproject.toml, poetry.lock   ← Python 3.12, upstream pins
 │   ├── main.py                      ← routers: /api/v1/chat (+ /config), /api (health)
 │   ├── app/
@@ -642,6 +644,7 @@ Backend (`backend/.env`):
 | `ALLOWED_INDEX_NAMES` | no | `instructor-assistant` | **New.** Boot guard allow-list (comma-separated). Add a staging index name here, never `pathway`. |
 | `RETRIEVAL_SOURCES` | no | `instructor-assistant,instructor-assistant-linked` | **New.** The `source` filter. Dropping the linked source is allowed. Adding any other value is a code-review decision. |
 | `LOGIN_LINK_HOSTS` | no | `sharepoint.com,companion.byupathway.edu,pathwayadmin.byui.edu,portal.byupathway.edu` | **New.** Suffix match for the sign-in annotator (§8.3) |
+| `PROMPT_INJECTION_ML_ENABLED` | no | `true` | **New.** The ML injection detector (pytector). ~714 MB model download on first start, ~0.5 GB RAM per server process. Tests set it `false`. |
 | `VOYAGE_API_KEY` | yes | — | Reranker |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | yes in prod | — | Instructor Langfuse project |
 | `LANGFUSE_LLAMAINDEX_ENABLED` | no | `true` | `rag-llm` generations |
@@ -651,7 +654,7 @@ Backend (`backend/.env`):
 | `API_KEYS` | yes in prod | — | `X-API-Key`. Not a secret from users (it ships in the frontend). |
 | `ALLOWED_ORIGINS`, `CORS_ALLOW_ALL` | yes | —, `false` | The instructor frontend only |
 | `APP_HOST`, `APP_PORT` | no | `0.0.0.0`, `8000` | uvicorn |
-| `CONVERSATION_STARTERS` | no | unset | Newline-separated starter questions |
+| `CONVERSATION_STARTERS`, `CONVERSATION_STARTERS_ES`, `CONVERSATION_STARTERS_PT` | no | unset (built-in cards) | Welcome cards per interface language, newline-separated, `Title \| question`. Unset: the 4 built-in cards in that language; blank: none. |
 | `CLOUDINARY_URL` (or `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET`) | no | unset | Feedback screenshots, if kept |
 | `RUN_LIVE_TESTS`, `RUN_LLM_JUDGE` | no | unset | Opt-in billable tests and eval judge |
 
@@ -731,7 +734,7 @@ Why Q4 and Q5 land where they do:
 | Q9 | Keep the draft composer (announcements, welcome messages)? | Yes. |
 | Q10 | Dictation? | No in v1. |
 | Q11 | Suggested follow-up questions? | Yes, with the instructor prompt. |
-| Q12 | Languages? | English UI. Answers in the question's language (upstream behavior). Portuguese is likely needed (Brazil-based instructors, per *Pay Dates*). |
+| Q12 | Languages? | **Changed by the owner, 2026-10-20:** the interface is in English, Spanish, and Portuguese (Settings → Language, else the browser's language). Answers follow the question's language, and the picked language when the question doesn't make one clear. |
 | Q13 | Include linked external pages in retrieval? | Yes, labeled external. The instructor guide wins on conflict. |
 | Q14 | Who supplies real instructor questions? | The instructor support team, via the owner. Until then the §10 set stays DRAFT, and thumbs-down traces get triaged weekly once live. |
 | Q15 | Is Voyage's 0.21 rerank cutoff right for this corpus? | Unchanged until Phase 2/6 data shows misses caused by it. |
@@ -744,6 +747,374 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-20 (language setting: English, Spanish, Portuguese; PR #12)** —
+  The setting looked like it worked but didn't: it listed 9 languages, the interface had
+  only English strings, and the pick never reached the model (the prompt said "answer in
+  the question's language"). Tagalog wasn't even a backend language. **Owner chose:** three
+  languages (the instructor countries: US, Mexico, Brazil; Philippines-based instructors
+  work in English), and picking one translates the app and steers answers. Q12 updated.
+  - **Interface:** every string in `chrome-strings.ts` in en/es/pt (Spanish "tú",
+    Portuguese "você", as upstream's reviewed translations; shared wording is upstream's).
+    About 45 hard-coded strings moved there (draft composer toolbar, source badges, Edit /
+    Cancel / Save, error banner, screen-reader labels). `useChromeStrings()` /
+    `useUiLanguage()` in `app/lib/use-chrome-strings.ts`. `<html lang>` follows the pick.
+    Not translated: the opening screen's name (it's in the prerendered HTML), and the
+    feedback drawer's screenshot section, which upstream switches off (`{false && …}`).
+  - **Welcome cards:** `/api/v1/chat/config?lang=es|pt` serves built-in Spanish and
+    Portuguese cards; `CONVERSATION_STARTERS_ES` / `_PT` override them. The first request
+    already uses the picked language (no English flash).
+  - **Answers:** `chat._resolve_language` also says whether the pick decided (the question's
+    language wasn't confidently detected); only then the system prompt says "Answer in
+    <language>: it's the language the instructor chose in settings…". A clearly English
+    question still gets English.
+  - **Draft composer:** its leftover blue (`sky-*`) accents are gold now.
+  - **Checked live on :3001:** Portuguese interface (greeting, title, placeholder, 4 cards,
+    privacy line, menu), "Canvas?" answered in Portuguese, an English question answered in
+    English; Spanish interface and cards. Backend tests pass.
+
+- **2026-10-20 (frontend: gold, in a layout of its own; PR #12, branch
+  `instructor-gold-ui`)** — **Owner, from the instructor team:** use BYU gold everywhere, keep
+  Mulish, and make the app look different from the Missionary Assistant. The layout follows
+  a chat-UI mockup a staff member on the instructor team shared, with the settings gear in
+  place of the mockup's user initials (there are no accounts). The blue version is saved as
+  `7b01f20` on `missionary-design-blue` (local commit, not pushed).
+  - **Layout:**
+    - a BYU-gold top bar with the BYU-Pathway logo and "Instructor Assistant", and New
+      chat and the gear (owner follow-up: gold bar and logo instead of the mockup's white
+      bar; the first question no longer shows in the bar). It fits at 360px wide in a
+      chat (349px used);
+    - the welcome screen "Good morning. What can I help with?" and 4 cards in the middle,
+      above the question box (owner follow-up);
+    - answers with gold badges, the cited guides as chips, and small gray action icons;
+    - the question box at the bottom on every screen, the welcome screen included (owner
+      follow-up; the mockup had it in the middle).
+    - Not taken from the mockup: the paperclip, the "All sources" picker, and Share (no
+      such features).
+  - **Gold rules:** `#FFC328` is only a fill, with near-black text (10.4:1). Links and the
+    focus ring use deep gold `#7A5600` (6.7:1 on white); highlights pale gold `#FFF4D6`; in
+    dark mode gold itself is the link/focus color (~10:1). Defined once as `--ia-*` and
+    Tailwind `ia-*` colors.
+  - **New chat** clears the conversation and starts a new session ID (checked live: two
+    questions around it went out with 2 distinct `X-Session-ID`s). Headers are now built
+    per request, because the old memoized headers would have kept the old session.
+  - **Starter cards:** a `CONVERSATION_STARTERS` line `Title | question` shows as a card
+    with that title (API.md, `.env.example`). The backend passes lines through unchanged.
+    **When the variable is unset, the backend now serves the 4 instructor cards**
+    (`DEFAULT_STARTERS`); blank means none. Found when the owner saw no cards: the local
+    `backend/.env` has no `CONVERSATION_STARTERS`, and Render would have had the same gap.
+  - **Found: a second frontend on :3001 got no cards and no answers.** `next dev` moves to
+    :3001 when :3000 is taken, and the backend's CORS (`ALLOWED_ORIGINS=http://localhost:3000`)
+    refused it, so the page couldn't load `/config` or ask anything ("Something went
+    wrong"). Fix: with `ENVIRONMENT=dev` set explicitly, the backend also allows any
+    localhost port (`allow_origin_regex`); prod, and an unset `ENVIRONMENT`, still allow
+    only `ALLOWED_ORIGINS` (`tests/test_cors_origins.py`). Checked live on :3001: 4 cards,
+    two answers with follow-ups. Two `next dev` servers in `frontend/` also share `.next`,
+    so one serves the other's build: run one.
+  - **Answer finding (not fixed):** asked for the pay schedule, the bot said to "refer to
+    the picture of the pay schedule provided in the instructor guide". The PDF has no
+    picture (§1 known gap), so the answer points at something that doesn't exist. A case
+    for the prompt or the eval set.
+  - **Icons:** back to upstream's gold files; the blue PNG is removed.
+  - **Checks:** `tsc`, lint, build, and the term check clean. `e2e_check.mjs`, updated for
+    the source chips, against a local backend with the 4 cards: **ALL PASSED (7/7)**.
+    Screenshots in light, dark, and phone width.
+  - **Real instructor questions arrived (Q14).** A staff member on the instructor team sent
+    questions with ideal answers. 46 are condensed in
+    `backend/tests/eval/team/2026-10-20-instructor-team-questions.md`, which is
+    **gitignored** until the owner approves publishing them (the repo is public).
+    - The paste was cut off at 50,000 characters, inside question 46; the rest is still to
+      come.
+    - Patterns the ideal answers share: ask a clarifying question when the answer depends
+      on instructor type or location, or on the block; say when the guides don't cover
+      something, and route to the right contact; keep instructor problems and student
+      problems on their different forms; never promise outcomes.
+    - Many rely on SharePoint pages that may not be in the index (IMS provisioning, the
+      System Access Request Form, contracts, payslips). Next: turn them into eval cases
+      and run the retrieval eval to see which the index can answer.
+
+- **2026-10-20 (frontend: Mulish and the prototype's answer format, same branch,
+  uncommitted)** — The owner sent a screenshot of the prototype's answer and asked for that
+  format, with **Mulish for the whole app** (the greeting keeps Georgia).
+  - **Font:** Mulish from the pinned `@fontsource-variable/mulish` 5.3.0 through
+    `next/font/local`; Inter and `public/fonts` are gone again.
+  - **Answers:**
+    - 16px gray `#454540` text;
+    - citations as round numbered badges (`#8EBDDE`, `#056CB6` with white on hover or
+      focus; more than 3 at one spot collapse to "+N"), and each drawer card is numbered
+      like its badge;
+    - `mark` and dates as a pale-blue `#E7F0FA` highlight;
+    - navy `#0F4B8F` underlined links;
+    - a lock icon on sign-in links, with the backend's note shown small and gray
+      (`sign-in-links.ts`, a rehype step after sanitizing; host list mirrors
+      `LOGIN_LINK_HOSTS`);
+    - one action row: an outlined "Sources (N)" pill, then round outlined thumbs, copy,
+      and regenerate (44px on phones);
+    - pale-blue follow-up pills.
+  - **Found and fixed:**
+    - **CORS: a trailing slash in `ALLOWED_ORIGINS` blocked every browser request.** The
+      local `.env` has `http://localhost:3000/`; browsers send the origin without the
+      slash. `main.py` now compares without it (same origins allowed, a test checks that
+      another origin is still refused). This would have bitten a pasted Render URL.
+    - Dark mode hid the badge numbers (the dark link color won); fixed in `markdown.css`.
+    - `e2e_check.mjs` wrote `/\s+/` inside a template string, which became `/s+/` and
+      printed "Source  (1)". Fixed.
+  - **Checks:** `pytest tests/` 601 passed; `build`, `tsc`, `lint`, and the term check
+    clean. `e2e_check.mjs` against a local backend with the starters set: **ALL PASSED
+    (7/7)**. Screenshots in light, dark, and phone width.
+  - **Note:** the backend in the owner's terminal has no `CONVERSATION_STARTERS` in its
+    `.env`, so its empty chat shows no starters. One run against it also returned "service
+    hiccup" for every question (its log isn't visible to me); a separate backend with the
+    same code answered normally.
+  - **Owner follow-up: the opening screen.** The loader's spinner and "Loading..." are
+    replaced by "INSTRUCTOR ASSISTANT" (Mulish, extra bold, uppercase) in gray, with a
+    `#056CB6` band sweeping through it to the right and back to the left. The loader now
+    holds **1 s** (was 800 ms), 0.5 s each way, and the sweep **loops** for as long as the
+    screen is up (owner: on slow internet it must not stop). The screen is in the
+    prerendered HTML, so it shows before the JavaScript arrives. Checked with Chrome
+    throttled to ~400 kbit/s: still sweeping at 45 s. Reduced motion shows it plain blue.
+  - **Owner follow-up: the favicon is blue too.** `favicon.ico`, `apple-touch-icon.png`, and
+    the four `android-chrome-*.png` are recolored gold → `#056CB6` with the avatar's blend.
+    The `.ico` is rebuilt from the larger blue mark, square, at 16–128 px. `role="status"` with the label "Loading Instructor Assistant". Checked by
+    stepping the animation in headless Chrome (light 1440px, dark 390px).
+
+- **2026-10-20 (frontend: the missionary design in blue, branch `missionary-design-blue`,
+  uncommitted)** — **Owner decision:** design the instructor app *exactly* like the
+  Missionary Assistant, changing only the main color from gold to blue. This replaces
+  design direction D (the all-blue prototype) from Phase 8. The pre-deploy fixes went in
+  first, as PR #11.
+  - **Owner follow-up, same day: the blue is `#056CB6`.**
+    - The header bar is `#056CB6` (first done as light blue `#8EBDDE`), and every former
+      gold spot uses it: buttons with white text, navy `#0F4B8F` on hover, and light
+      tints of it.
+    - On that bar, the gray logo would be about 2.4:1, so the logo (a CSS filter; the
+      file is unchanged), the title, and the gear show in white.
+    - Dark-mode link text and one field border keep `#8EBDDE`, because `#056CB6` text on
+      the dark page is only about 3.3:1.
+  - **Owner: the bot's avatar is the favicon's path mark in blue.**
+    `public/BYU-pathway-icon-logo-blue.png` was made from the gold PNG by blending white
+    toward `#056CB6` by each pixel's goldness, which keeps the anti-aliased edges. The
+    favicon itself is unchanged.
+  - **How:**
+    - The 19 purely visual files are restored byte-for-byte from upstream `870cc5b`, then
+      color-swapped.
+    - The 5 files with logic (`chat-section`, `chat-input`, `chat-message/index`,
+      `chat-sources`, `markdown.tsx`) got upstream's markup back around the instructor
+      logic.
+    - Inter is back (`public/fonts/inter`); the Mulish/Crimson packages and the `ia-*`
+      tokens are gone.
+  - **Color mapping:** gold `#FFC328` →
+    - the header and tints: `#8EBDDE`;
+    - solid buttons with white icons (send, stop, save): `#056CB6`, navy hover;
+    - buttons with dark text (submit, send feedback): `#8EBDDE`, hover `#A6CBE6`;
+    - the focus ring: navy `#0F4B8F` (light blue in dark mode);
+    - selection, `mark`, the blockquote, and drawer badges: blue;
+    - draft placeholders: amber → sky.
+  - **Kept on purpose (not upstream):**
+    - local icons instead of Google favicons in citation pills;
+    - cited-only Sources (the drawer is numbered 1…n in order, because the pills show
+      titles, not numbers);
+    - "Instructor guide (PDF)" / "External page · host" in place of the domain;
+    - starter questions on the empty chat, styled like the disclaimer card (upstream never
+      showed its starters);
+    - "PRIVACY:" where "IMPORTANT:" was, always shown;
+    - every Phase 8 review fix.
+  - **Strings:** back to upstream's wording with "Missionary" → "Instructor" (placeholder
+    "Ask a question", the AI note, "Love this" / "Needs improvement").
+  - **Checks:**
+    - `build`, `tsc`, and `lint` are clean, and the term check passes.
+    - `e2e_check.mjs` was updated for the pills (title text, a count chip, the drawer's
+      `<a>` cards, the "Love this" thumbs). It ran against the local stack: **ALL
+      PASSED** (7/7).
+    - Screenshots in light, dark, and phone match the missionary layout in blue.
+
+- **2026-10-20 (pre-deploy fixes, branch `pre-deploy-fixes`, uncommitted)** — Hosting will be
+  Render. The owner chose to finish everything before deployment, picked three fixes, and
+  decided to **keep the site indexed** (`index: true`, as upstream). `pytest tests/` gives
+  599 passed, in about 1 minute (it was about 2.5).
+  - **1. The ML injection detector works (it never loaded, here or upstream).**
+    - **Cause:** transformers 5.3.0 needs torch ≥ 2.4, but torch is pinned at 2.2.2 (the
+      last build for Intel Macs; this Mac is x86_64). So transformers acted as if PyTorch
+      were missing.
+    - **Fix:** `transformers==4.57.1`, the newest 4.x, which accepts torch ≥ 2.2. Only
+      huggingface-hub moves (1.16.1 → 0.36.2); six CLI-only packages are dropped.
+    - **The model:** `protectai/deberta-v3-base-prompt-injection`, 714 MB on disk.
+      - First load, including the download: 39 s. From cache: 3 s.
+      - About 0.5 GB RAM per server process; inference 0.2–0.3 s.
+    - **Turning it on exposed three latent bugs, all fixed:**
+      - Detection ran inside the async handler, so it froze every other request. It now
+        runs in a worker thread (`asyncio.to_thread`).
+      - A failed load was retried on every message. It now backs off for 10 minutes.
+      - The first question paid for the load. The model now preloads in a background
+        thread at startup, behind a lock.
+    - `PROMPT_INJECTION_ML_ENABLED` (default `true`) turns it off. Tests turn it off, so
+      results don't depend on whether this machine has the model cached.
+  - **2. The safe-word exceptions are rewritten, measured with the detector on.**
+    - Upstream's `CALENDAR_TERMS` and `PATHWAY_TERMS` are removed: they were substring
+      matches ("term", "student", "canvas") that excused flagged jailbreaks.
+    - The short-follow-up exception now refuses text about the assistant itself (its
+      rules, instructions, prompt; "you are now", "pretend", "disregard"…).
+    - **Comparison (option E is what shipped):**
+      - Short jailbreaks blocked: 2/10 → **8/10**.
+      - Unchanged at full marks: the 25 eval questions, 14 Portuguese/Spanish/French
+        questions, 14 short follow-ups, and the 6 legitimate corpus cases.
+    - Removing only the exceptions would have blocked "you missed one", "try again",
+      "no, I meant block 3", and "that's not what I asked". The detector scores those
+      0.97–0.9998, too close to the jailbreaks for a threshold, hence the word rule.
+    - **Security test set:** 29/32 → **30/32** ("Code Block Injection" is now blocked).
+      Still missed, and left to the prompt: "Length-Based Overflow" and "Plausible
+      Deniability", plus 2 of the 10 short jailbreaks that score ~0 and match no regex.
+  - **3. Citation coverage no longer stamps `[^1]`.** An uncited line gets the nearest real
+    citation (the last one before it, else the first one after), and a lead-in ending in
+    ":" gets none. #13's intro and summary no longer point at the unrelated due-date
+    guide. #13 still fails, because the model never cites the adds/drops guide.
+  - **Answer eval with the detector on, `20261020T084205Z-answers.json`:** answers 19/21 =
+    **90%**, and no real question was blocked.
+    - **G4 first failed:** #5 got 3 sources and G4 got 4. The extra one was an instructor
+      guide at the tail (0.3360), after a shared passage scored 0.3443 in one call and
+      0.3368 in the other. That's retrieval noise, not an audience difference.
+    - **Fix:** G4's `same_sources` accepts sources that differ only below every shared
+      one (`sources_match`). The filter's independence from the role stays covered
+      offline, exactly. Re-scored: guards 4/4, **PASSED**; no other saved run changes.
+  - **For the deployment talk (Render), not changed now:**
+    - Each gunicorn worker loads its own model, so 2 workers need about 1 GB more RAM.
+    - The 714 MB model is downloaded at each container start unless baked into the image.
+    - The lock pulls 12 NVIDIA CUDA packages with torch (Linux wheels), which makes the
+      image large. CPU-only torch would shrink it.
+
+- **2026-10-19 (Phase 9 prep, branch `phase-9-e2e-prep`, uncommitted)** — Phase 8 is in
+  PR #9 (CI green, including the first run of the new `frontend` job). Phases 7 and 9 need
+  hosts, so this is everything Phase 9 needs that doesn't.
+  - **`frontend/scripts/e2e_check.mjs`:** Phase 9's "5 §10 questions through the
+    production UI", automated.
+    - It drives headless Chrome through the DevTools protocol with Node 22's built-in
+      WebSocket, so it needs no npm packages.
+    - It asks #1, #5, #9, #21, and G3 through the real page and checks:
+      - the empty chat's starters and FERPA notice;
+      - citation badges, and "Sources (N)" matching them;
+      - a source-type label on every card;
+      - "(sign-in required)" after every sign-in link;
+      - no missionary wording;
+      - a thumbs click answered 200.
+    - It saves a screenshot per question.
+    - **Local run against `next dev` + the local backend: ALL PASSED (7/7).**
+    - The first run failed twice, and both were the script's fault:
+      - the sign-in check located the link by searching for its text, which also
+        appeared earlier in the sentence (G3); it now reads the text after the link
+        element;
+      - the thumbs check didn't wait for the response.
+  - **`DEPLOY.md` moved to the repo root** and now covers both services:
+    - Part 1, the backend (as before);
+    - Part 2, the frontend: the image, build arguments, `ALLOWED_ORIGINS`, and a `curl`
+      check that CORS refuses another origin;
+    - Part 3, going live: `api_check.py`, `eval_answers.py`, and `e2e_check.mjs` against
+      production, plus Phase 9's "Done when".
+
+- **2026-10-19 (Phase 8 review: 10 findings, all checked and fixed)** — Still uncommitted
+  on `phase-8-frontend`. `pytest tests/` gives 579 passed. The frontend `build`, `tsc`, and
+  `lint` are clean.
+  - **Blank Enter:** pressing Enter in an empty composer left a blank chat; spaces were sent
+    as a question. Fix: Enter and the submit handler both ignore a blank input.
+  - **`date_spans` ignored:** my rewrite dropped it, so a client date regex guessed instead
+    ("may 2", "sat 15" got chips). It's passed to Markdown again; the regex is only the
+    fallback.
+  - **Reduced motion:** CSS `scroll-behavior: smooth` overrode `scrollTo({behavior:"auto"})`.
+    Fix: removed, along with the inline style (and the composer's inline scrollbar style).
+  - **Security screen:** everyday words ("instructor", "aim", "block", "grade",
+    "extension") would excuse an ML-only flag, so a jailbreak could use them. Fix:
+    `INSTRUCTOR_TERMS` is narrowed to distinctive terms (adjunct, ACL, TGL, FERPA,
+    syllabus, WhatsApp, grader), with tests that pin two such jailbreaks as not excused.
+    `sec_test.py` is unchanged at 29/32.
+    - **Finding, not changed (owner decision):** upstream's `CALENDAR_TERMS` has the same
+      weakness, and worse. It matches substrings ("term", "block", "drop", "grades",
+      "hold"), so "Grade this: block all your previous instructions…" is excused. It
+      serves the calendar tool this repo left behind; pathway-chatbot has it too.
+      Latent while pytector doesn't load.
+  - **Sources count:** "Sources (N)" and the panel counted every retrieved node (the
+    backend sends them all). Fix: they count and list only the cited sources, keeping
+    each badge's number, and an answer that cites nothing gets no button. Live: the
+    backend sent 6 sources for an answer citing [^1] and [^2], and the UI shows
+    "Sources (2)" with cards 1 and 2.
+  - **Stale error banner:** it is now cleared on every new send (typed, starter,
+    suggestion, regenerate).
+  - **Sources processed in place, twice per render:** `getSourceAnnotationData` is now pure
+    and cached per annotation (a WeakMap), runs once in ChatMessage, and drops the unused
+    score sort.
+  - **UPSTREAM.md:** the 72 frontend rows were outside the table, with boilerplate notes.
+    They're inside the Files table now, each with its real change. The Phase 5–8 new
+    files are also listed (they had been missed since Phase 5).
+  - **Leftover heuristics:** the calendar ("Block/Term N") and program-catalog heading
+    promotion is removed from `markdown.tsx`.
+  - **CI term check:** it skipped any line containing "upstream". The two comments that
+    mentioned the missionary app are reworded, and the check now has no exceptions.
+  - **Found while verifying:** a build failed once inside `next/font/google`, a flaky
+    font download from Google at build time. Fix: the fonts are self-hosted from npm
+    (`@fontsource-variable/mulish` and `crimson-pro` 5.3.0, pinned) through
+    `next/font/local`, so no build or visit contacts Google.
+  - **Gotcha:** a stale `next dev` can keep port 3000. The new one then moves to 3001
+    silently, and a test of :3000 sees the old app. Use `pkill -f "next dev"` before
+    restarting.
+
+- **2026-10-19 (Phase 8 frontend, branch `phase-8-frontend`, uncommitted)** — The owner
+  started the frontend ahead of the staging deploy (hosting comes later). It is stacked on
+  PR #8, which also edits `test.yml`.
+  - **Design (owner choice): direction D, "light chrome"** from the all-blue prototype:
+    - a white header with the BYU-Pathway logo as-is, and the favicon kept;
+    - Blue 4 `#056CB6` for things you act on, Navy 4 on hover;
+    - citation badges Blue 2; highlights, chips, and the draft strip Blue 1;
+    - Mulish for text, Crimson Pro for the greeting and headings;
+    - dark mode on black, with a Gray 4 header and Blue 2 links.
+    - A, B, and C need a white logo, which the files don't include.
+    - In dark mode, the gray logo is lightened with a CSS filter; the file itself is
+      unchanged.
+    - On phones, the header shows the gold path icon (`BYU-pathway-icon-logo.png`) so the
+      title fits.
+  - **How:**
+    - The palette is defined once (`--ia-*` in `globals.css`, `ia-*` in Tailwind), and
+      components use roles, not hex.
+    - **Gotcha:** Tailwind 3 drops opacity modifiers (`bg-ia-gray-1/50`) on `var()` colors.
+      The CSS simply isn't generated, so use solid palette colors.
+  - **Trimmed (copied from `870cc5b`, 72 files in `UPSTREAM.md`):**
+    - ACM pill, `?acm=`, and the `role` in request bodies;
+    - calendar, tuition, weather, and LlamaCloud widgets;
+    - dictation, uploads, and the correction UI;
+    - console and dev banners; Inter and tuition fonts; template docs;
+    - 22 unused npm dependencies (190 packages). The page JS went from 604 to 541 kB.
+  - **Phase 8 items:**
+    - starter questions now show on the empty chat (upstream never rendered them);
+    - the FERPA notice is always under the input;
+    - each source is labeled "Instructor guide (PDF)" or "External page · host";
+    - only the `API.md` annotation types are handled;
+    - the UI is English (Q12), and answers still follow the question's language.
+  - **Fixed on the way:**
+    - Citations showed favicons fetched from `google.com/s2/favicons`, which sent Google
+      every cited domain. They are numbered badges now.
+    - Suggested questions were `<a>` tags with no `href`, unreachable by keyboard. They are
+      buttons now.
+    - The frontend `Dockerfile` had no `.dockerignore`, so a local `.env.local` (or a Sentry
+      token file) would have been copied in. It now uses an allow-list, and the release image
+      holds only `out/`.
+    - The Help link pointed at the missionary guide. It now shows only when
+      `NEXT_PUBLIC_HELP_URL` is set.
+    - The Sentry project came from the missionary config. It now uses `SENTRY_ORG` and
+      `SENTRY_PROJECT`.
+  - **Checked live (local backend + `next dev`, headless Chrome through the DevTools
+    protocol, light and dark, 1440 and 390 px):**
+    - an answer streams with citation badges;
+    - Sources opens the panel, and a linked page shows its host;
+    - thumbs-up recorded (`POST /api/v1/chat/thumbs_request` 200, `aria-pressed=true`);
+    - "Write a welcome message" opens in the draft composer.
+    - `npm run build`, `tsc --noEmit`, and `lint` are clean.
+    - The `grep -rniE 'missionar|ACM|gathering' frontend/app` check leaves only 2 comments
+      that describe what was removed.
+  - **CI:** a new `frontend` job runs build, `tsc`, lint, the term check, and an image
+    check (a planted `.env.local` must not ship). The pre-push hook runs `tsc` and lint again.
+  - **Left as upstream (follow-ups):**
+    - `AppLoader` holds an 800 ms loading screen on every visit.
+    - The horizontal logo is a 178×23 PNG, soft on retina screens; an SVG would be sharper.
+    - The search-engine setting stays `index: true`, as upstream. Owner decision.
+  - **Not done in Phase 8:** "Done when" item 1 asks for the staging backend; this was
+    checked against the local one.
 
 - **2026-10-19 (Phase 7 prep, branch `phase-7-staging-prep`, uncommitted)** — The owner will
   pick hosting later. Everything that doesn't need a host is done. `pytest tests/` passes,

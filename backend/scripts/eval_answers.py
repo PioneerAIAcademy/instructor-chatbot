@@ -25,7 +25,8 @@ Checks per question (§7 Phase 6), each recorded as ok / failed / skipped:
 6. sign_in_labels     every sign-in link outside a draft has its note
 7. refusal            questions marked `refuse` refuse and cite nothing
 Plus, by kind: draft (a ```message / ```email fence with text and no [^N]
-inside), same_sources (G4: the same sources as the question in same_as),
+inside), same_sources (G4: the same sources as the question in same_as,
+apart from retrieval noise at the tail; see sources_match),
 and stream (the request worked and the stream matched API.md).
 
 Passes when >= 85% of the answer questions (every kind but guard) pass all
@@ -148,6 +149,35 @@ def _skip(detail: str) -> dict:
     return {"status": "skipped", "detail": detail}
 
 
+def sources_match(mine: list[dict], theirs: list[dict]) -> tuple[bool, str]:
+    """G4: did the client-sent role change the sources? Two separate requests
+    for the same question don't retrieve byte-identical lists: the scores
+    shift slightly between calls (seen live: 0.3443 vs 0.3368 for the same
+    passage), so a passage right at the cutoff can come or go. The lists
+    match when every source that differs ranks below every source the two
+    lists share, in its own list: noise at the tail, not a different answer
+    basis. The audience itself is checked by instructor_sources, and the
+    filter's independence from the client role by tests/test_chat_api.py
+    (offline, exact)."""
+
+    def by_id(nodes: list[dict]) -> dict[str, float]:
+        return {str(n.get("id")): float(n.get("score") or 0.0) for n in nodes}
+
+    a, b = by_id(mine), by_id(theirs)
+    if set(a) == set(b):
+        return True, f"{len(a)} identical sources"
+    shared = set(a) & set(b)
+    if not shared:
+        return False, f"{len(a)} sources vs {len(b)}, none shared"
+    above = []
+    for scores in (a, b):
+        lowest_shared = min(scores[i] for i in shared)
+        above += [i for i in set(scores) - shared if scores[i] > lowest_shared]
+    if above:
+        return False, f"{len(a)} sources vs {len(b)}; differ above the tail: {', '.join(sorted(above))}"
+    return True, f"{len(a)} vs {len(b)} sources, differing only at the tail"
+
+
 def score_answer(
     question: Question,
     result: dict,
@@ -230,11 +260,8 @@ def score_answer(
         if reference is None or reference.get("error"):
             checks["same_sources"] = _check(False, f"question {question.same_as} didn't run")
         else:
-            mine = sorted(str(s.get("id")) for s in sources)
-            theirs = sorted(str(s.get("id")) for s in reference.get("sources") or [])
-            checks["same_sources"] = _check(
-                mine == theirs, f"{len(mine)} sources vs {len(theirs)} for question {question.same_as}"
-            )
+            ok, detail = sources_match(sources, reference.get("sources") or [])
+            checks["same_sources"] = _check(ok, f"{detail} (vs question {question.same_as})")
 
     passed = all(c["status"] != "failed" for c in checks.values())
     return {"checks": checks, "passed": passed}

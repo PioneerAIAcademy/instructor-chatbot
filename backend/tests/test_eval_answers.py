@@ -151,7 +151,10 @@ def test_g4_needs_the_same_sources_as_question_5():
     answer = "No. Under FERPA you need the student's written consent [^1]."
     reference = _result(answer, [_source(1, ferpa)])
     assert _score("G4", _result(answer, [_source(1, ferpa)]), reference=reference)["passed"]
-    extra = _result(answer, [_source(1, ferpa), _source(2, PAY)])
+    # An extra source ranked ABOVE the shared one is a real difference.
+    higher = _source(2, PAY)
+    higher["score"] = 0.9
+    extra = _result(answer, [_source(1, ferpa), higher])
     assert _failed(_score("G4", extra, reference=reference)) == {"same_sources"}
     assert "same_sources" in _failed(_score("G4", _result(answer, [_source(1, ferpa)]), reference=None))
 
@@ -231,3 +234,19 @@ def test_rescore_rebuilds_a_result_that_scores_the_same():
     row = ev._row(ev.effective(BY_ID["1"], BY_ID), result, scored, 1.0)
     rebuilt = ev.result_from_row(row)
     assert _score("1", rebuilt) == scored
+
+
+def test_g4_tolerates_noise_at_the_tail_only():
+    ferpa = "ferpa-adjunct-faculty-responsibilities-ia"
+    def src(n, slug, score):
+        node = _source(n, slug)
+        node["score"] = score
+        return node
+    base = [src(1, ferpa, 0.36), src(2, "academic-integrity-ia", 0.34)]
+    # Seen live: one more passage just at the cutoff in one of the two runs.
+    tail = base + [src(3, "extending-due-dates-ia", 0.336)]
+    assert ev.sources_match(tail, base)[0]
+    # A different source high in the list is a real difference.
+    swapped = [src(1, "pay-dates-for-worldwide-online-instructors-ia", 0.36), base[1]]
+    ok, detail = ev.sources_match(swapped, base)
+    assert not ok and "differ above the tail" in detail
