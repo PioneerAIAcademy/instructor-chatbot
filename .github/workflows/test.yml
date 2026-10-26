@@ -80,6 +80,7 @@ jobs:
       - name: CPU-only torch, and the injection model loads offline as the app user
         run: |
           docker image ls instructor-backend --format 'image size: {{.Size}}'
+          docker run --rm --entrypoint sh instructor-backend -c 'du -sh /opt/hf /usr/local/lib/python3.12/site-packages 2>/dev/null; du -s /usr/local/lib/python3.12/site-packages/* 2>/dev/null | sort -n | tail -12 | awk "{printf \"%6.0f MB  %s\\n\", \$1/1024, \$2}"'
           docker run --rm --network none --entrypoint python instructor-backend -c '
           import os, torch, pytector
           assert os.environ["HF_HUB_OFFLINE"] == "1"
