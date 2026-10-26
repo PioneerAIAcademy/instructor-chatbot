@@ -19,6 +19,16 @@ CONTEXT = " ".join(CONTEXT_PROMPT.split())
         "Never answer from general knowledge.",
         # Escalation steps are never dropped (Phase 6 eval #11)
         "always include that step, as the last step, with its link if the context gives one.",
+        # Not covered: say so and name someone to ask, but a guide that links the page asked
+        # about counts as covered (team eval, 2026-10-26; G3 regressed without it)
+        "suggest asking your ACL or AIM",
+        "A context that links the page or form asked about is relevant",
+        # A guide's missing picture (the pay-schedule PDF refers to one it doesn't contain)
+        "Never point to an image, table, or attachment that a context mentions but doesn't contain",
+        # Instructor processes vs student processes, and no promised outcomes (team eval)
+        "isn't for the instructor's own access, pay,",
+        "Never promise an outcome (a refund, an exception, a grade change, a contract).",
+        "Never tell the instructor to change a grade, or to enroll, drop, or remove a student themselves",
         # Citation format
         "Put [^N] right after the sentence it supports.",
         "Never cite a context for a claim it doesn't make.",
