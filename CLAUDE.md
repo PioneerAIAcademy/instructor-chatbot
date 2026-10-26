@@ -747,6 +747,13 @@ Why Q4 and Q5 land where they do:
 
 Newest first. Record status, decisions, and things that failed. No secrets.
 
+- **2026-10-26 (font: Inter)** — The owner didn't like Mulish. The whole app now uses
+  **Inter**, the Missionary Assistant's font, self-hosted from the pinned
+  `@fontsource-variable/inter` 5.3.0 through `next/font/local` (no Google requests);
+  `@fontsource-variable/mulish` is removed. The "latin" file covers Spanish and Portuguese
+  accents. Checked in the browser: the loaded font is Inter, on the welcome screen and in an
+  answer.
+
 - **2026-10-26 (repo moved to the organization)** — At the owner's request, the repo was
   transferred from `aghadiayeamayanvboernest/instructor-chatbot` to
   **`PioneerAIAcademy/instructor-chatbot`** (public, as Q1 says).
