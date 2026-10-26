@@ -20,17 +20,17 @@ const resolveMetadataBase = () => {
 
 const metadataBase = resolveMetadataBase();
 
-// Mulish for all text (owner's choice, matching the answer design). Served
-// from this site, from a pinned npm package, so neither a build nor a visit
-// contacts Google. The "latin" file covers English and the accented letters
-// of Portuguese, Spanish, and French; other scripts fall back to system fonts.
-// The greeting keeps its serif (Georgia), as upstream.
-const mulish = localFont({
-  src: "../node_modules/@fontsource-variable/mulish/files/mulish-latin-wght-normal.woff2",
-  weight: "200 1000",
+// Inter for all text (owner, 2026-10-26; it was Mulish), the font upstream
+// uses. Served from this site, from a pinned npm package, so
+// neither a build nor a visit contacts Google. The "latin" file covers English
+// and the accented letters of Spanish and Portuguese; other scripts fall back
+// to system fonts.
+const inter = localFont({
+  src: "../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2",
+  weight: "100 900",
   style: "normal",
   display: "swap",
-  variable: "--font-mulish",
+  variable: "--font-inter",
 });
 
 const TITLE = "Instructor Assistant";
@@ -109,7 +109,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={mulish.variable}>
+    <html lang="en" suppressHydrationWarning className={inter.variable}>
       <head>
         <script
           dangerouslySetInnerHTML={{

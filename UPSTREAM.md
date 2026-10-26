@@ -97,7 +97,7 @@ them in this shape.
 | `frontend/README.md` | `frontend/README.md` | Adapt | Rewritten for the Instructor Assistant (run, settings, API use, deploy). The false "headers set in next.config.json" claim removed. |
 | `frontend/app/components/chat-section.tsx` | `frontend/app/components/chat-section.tsx` | Adapt | Renders the top bar (New chat: clears the chat and starts a new session). Welcome: greeting and starter cards in the middle; the question box stays at the bottom on every screen. Headers are built per request (a new session ID takes effect at once). Privacy line under the box; the note on where answers come from at the bottom. Also: No ACM state, `?acm=`, `role`, dictation, correction, or upload data; starter cards on the empty chat; the "PRIVACY:" notice where "IMPORTANT:" was, always shown; blank input sends nothing; the error banner clears on a new send; no CSS smooth scroll. |
 | `frontend/app/components/general-feedback-drawer.tsx` | `frontend/app/components/general-feedback-drawer.tsx` | Keep\* | Upstream's drawer in gold: the send button BYU gold with near-black text; links and focus deep gold `#7A5600`. |
-| `frontend/app/components/greeting.tsx` | `frontend/app/components/greeting.tsx` | Adapt | Rewritten: "<time of day>. What can I help with?" in Mulish, and a subtitle. Upstream's random phrase pool, special days, and localStorage are gone. |
+| `frontend/app/components/greeting.tsx` | `frontend/app/components/greeting.tsx` | Adapt | Rewritten: "<time of day>. What can I help with?" in the app font (Inter), and a subtitle. Upstream's random phrase pool, special days, and localStorage are gone. |
 | `frontend/app/components/header.tsx` | `frontend/app/components/header.tsx` | Adapt | Rewritten: a BYU-gold bar (light and dark mode) with the BYU-Pathway logo and "Instructor Assistant" on the left, New chat (in a chat) and the gear on the right, all near-black on gold. Props from ChatSection. Title and labels translated. |
 | `frontend/app/components/loading-spinner.tsx` | `frontend/app/components/loading-spinner.tsx` | Adapt | The spinner and "Loading..." are replaced by the name "INSTRUCTOR ASSISTANT" with a blue band sweeping through it to the right and back, looping until the app is ready (`.loader-word` in `globals.css`; plain blue with reduced motion). `AppLoader` holds 1 s instead of 800 ms, the length of the sweep. |
 | `frontend/app/components/settings-menu.tsx` | `frontend/app/components/settings-menu.tsx` | Keep\* | Upstream's menu: the gear near-black on the gold bar; selected items and hovers in gold tints; the Help item only when `NEXT_PUBLIC_HELP_URL` is set. |
@@ -128,8 +128,8 @@ them in this shape.
 | `frontend/app/components/ui/toast.tsx` | `frontend/app/components/ui/toast.tsx` | Keep | — |
 | `frontend/app/components/ui/tooltip.tsx` | `frontend/app/components/ui/tooltip.tsx` | Keep | — |
 | `frontend/app/global-error.tsx` | `frontend/app/global-error.tsx` | Keep\* | Upstream's page with a white (dark: near-black) top bar, a gold button with near-black text, the logo lightened in dark mode; instructor wording. |
-| `frontend/app/globals.css` | `frontend/app/globals.css` | Keep\* | Upstream's stylesheet with the gold palette (`--ia-*`, theme-aware), deep-gold / gold focus ring, gold selection, `--highlight-*` for `mark` and dates; the unused link and date-chip colors removed; Mulish in place of Inter; the opening screen's gold sweep (`.loader-word`); no automatic hyphenation. |
-| `frontend/app/layout.tsx` | `frontend/app/layout.tsx` | Keep\* | Instructor Assistant metadata; console easter egg removed. Mulish (pinned `@fontsource-variable/mulish` through `next/font/local`) in place of Inter. |
+| `frontend/app/globals.css` | `frontend/app/globals.css` | Keep\* | Upstream's stylesheet with the gold palette (`--ia-*`, theme-aware), deep-gold / gold focus ring, gold selection, `--highlight-*` for `mark` and dates; the unused link and date-chip colors removed; Inter (from the pinned npm package); the opening screen's gold sweep (`.loader-word`); no automatic hyphenation. |
+| `frontend/app/layout.tsx` | `frontend/app/layout.tsx` | Keep\* | Instructor Assistant metadata; console easter egg removed. Inter from the pinned `@fontsource-variable/inter` through `next/font/local`, so no request goes to Google. |
 | `frontend/app/lib/chrome-strings.ts` | `frontend/app/lib/chrome-strings.ts` | Adapt | Every interface string in English, Spanish, and Portuguese (upstream's reviewed es/pt wording where it's shared, "Missionary" → "Instructor"); FERPA notice, source-type labels, New chat, welcome heading, and the strings that were hard-coded in components. |
 | `frontend/app/lib/draft-registry.ts` | `frontend/app/lib/draft-registry.ts` | Keep | — |
 | `frontend/app/lib/i18n.ts` | `frontend/app/lib/i18n.ts` | Adapt | Interface languages trimmed to en/es/pt (an older stored pick reads as auto). |
@@ -157,7 +157,7 @@ them in this shape.
 | `frontend/public/serve.json` | `frontend/public/serve.json` | Keep\* | The `fonts/**` cache rule removed (no fonts in `public/` any more). |
 | `frontend/public/site.webmanifest` | `frontend/public/site.webmanifest` | Keep\* | Instructor Assistant name and description. |
 | `frontend/sentry.client.config.ts` | `frontend/sentry.client.config.ts` | Keep | — |
-| `frontend/tailwind.config.ts` | `frontend/tailwind.config.ts` | Keep\* | `sans` is Mulish; the `ia-*` palette colors. |
+| `frontend/tailwind.config.ts` | `frontend/tailwind.config.ts` | Keep\* | `sans` is Inter (self-hosted); the `ia-*` palette colors. |
 | `frontend/tsconfig.json` | `frontend/tsconfig.json` | Keep | — |
 | `frontend/webpack.config.mjs` | `frontend/webpack.config.mjs` | Keep | — |
 

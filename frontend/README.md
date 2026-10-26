@@ -9,7 +9,8 @@ Design: **BYU gold, in a layout of its own** (owner and the instructor team,
 2026-10-20). The team wanted BYU gold, and an app that instructors can't mistake for the
 Missionary Assistant (a gold bar across the top, one centered column, a serif greeting).
 The layout follows a chat-UI mockup a staff member on the instructor team shared; the
-font is **Mulish** throughout.
+font is **Inter** throughout (owner, 2026-10-26; it was Mulish), self-hosted from the pinned
+`@fontsource-variable/inter` package.
 
 - **Top bar:** BYU gold `#FFC328` (in dark mode too), with the BYU-Pathway logo and
   "Instructor Assistant" on the left. On the right, **New chat** (in a chat: clears it

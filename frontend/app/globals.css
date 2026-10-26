@@ -16,10 +16,9 @@
   }
 }
 
-/* Fonts: Mulish for all text, loaded by next/font/local in app/layout.tsx
- * (from the pinned @fontsource-variable/mulish package, served from this
- * site). The greeting uses Georgia (Tailwind `font-georgia`). Upstream's Inter
- * and tuition fonts are not used. */
+/* Fonts: Inter for all text, loaded by next/font/local in app/layout.tsx
+ * (from the pinned @fontsource-variable/inter package, served from this site).
+ * Upstream's tuition fonts are not used. */
 
 @layer base {
   :root {
@@ -173,7 +172,7 @@
   html {
     @apply h-full;
     font-family:
-      var(--font-mulish, Mulish), ui-sans-serif, system-ui, sans-serif,
+      var(--font-inter, Inter), ui-sans-serif, system-ui, sans-serif,
       "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
       "Noto Color Emoji";
     color-scheme: light;

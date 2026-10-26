@@ -72,8 +72,8 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        // A fallback in var() so an unresolved --font-mulish never collapses to serif defaults.
-        sans: ["var(--font-mulish, Mulish)", ...fontFamily.sans],
+        // A fallback in var() so an unresolved --font-inter never collapses to serif defaults.
+        sans: ["var(--font-inter, Inter)", ...fontFamily.sans],
         georgia: ["Georgia", "serif"],
       },
       keyframes: {
