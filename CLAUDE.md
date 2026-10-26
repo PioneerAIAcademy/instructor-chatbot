@@ -11,9 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-26): everything through the team-questions eval and prompt rules is on
-> `main` (PRs #1–#14). Open: #15, the Render prep (`render-deploy`). Next: the owner applies
-> `render.yaml` on Render (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-26): all work through the Render prep is on `main` (PRs #1–#15), in
+> **`PioneerAIAcademy/instructor-chatbot`** (moved from the owner's account). Next: the owner
+> applies `render.yaml` on Render (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -746,6 +746,15 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-26 (repo moved to the organization)** — At the owner's request, the repo was
+  transferred from `aghadiayeamayanvboernest/instructor-chatbot` to
+  **`PioneerAIAcademy/instructor-chatbot`** (public, as Q1 says).
+  - History, branches, and PRs #1–#15 moved with it, and the old URL redirects.
+  - The owner's account now has write access (not admin), so the org's Actions settings
+    can't be read from it; this PR's CI run shows whether Actions run there.
+  - Local clones: `git remote set-url origin https://github.com/PioneerAIAcademy/instructor-chatbot.git`.
+  - Render deploys from this repo.
 
 - **2026-10-26 (Render prep, branch `render-deploy`)** — The owner sets up Render and
   enters the values; everything else is prepared.
