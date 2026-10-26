@@ -11,9 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-21): Phases 0–6 and PRs #8–#10 merged. Open, stacked: #11 pre-deploy
-> fixes, then #12 (`instructor-gold-ui`): the gold design and the language setting, with the
-> blue version as its first commit (`7b01f20`). Hosting will be Render; the owner wants
+> **Status (2026-10-24): everything through the gold design and the language setting is on
+> `main` (PRs #1–#13). Next: the instructor team's real questions (branch
+> `team-questions-eval`). Hosting will be Render; the owner wants
 > everything else finished before deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
@@ -747,6 +747,68 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-24 (the team's questions vs. the index; branch `team-questions-eval`)** —
+  - **Merging:** #9–#12 were stacked, so each merged into the branch below it and `main`
+    stayed at #8. PR #13 (`pre-deploy-fixes` → `main`, a clean merge, no new code) brought
+    them in. Next time, retarget a stacked PR to `main` before merging it.
+  - **Coverage check (retrieval and rerank only, no answers):** the 46 team questions, plus
+    a search of the 33 guides' and 39 linked pages' text for the facts each ideal answer
+    uses. The details are in the gitignored `backend/tests/eval/team/coverage-2026-10-24.md`.
+    - **In the index: 18.** The right guide comes back first.
+    - **Partly: 14.** One key piece is missing, e.g. the per-block pay schedule, or the
+      instructor side of IT help.
+    - **Not in the index: 14.** For 6 of them the team itself expects "not documented, ask
+      X". The other 8 need pages we don't have: the System Access Request Form, the
+      Provisioning Site (IMS), the Unavailable to Teach form, the tutoring email, Canvas
+      Dashboard steps, and employer/contract information.
+  - **Cause:** the team wrote their answers from the whole SharePoint site; the index has
+    33 of its pages (as PDFs) plus the public pages they link to.
+  - **Behavior the answers ask for, whatever the index holds:** a clarifying question first
+    (instructor type and location, block, which kind of problem); routing by location (US,
+    OSI, Brazil; Mexico and Philippines undocumented); separate forms for instructor and
+    student problems; no promised outcomes.
+  - **Rubric eval (`scripts/eval_rubric.py`, committed):** each team question has a short
+    checklist (gitignored `tests/eval/team/rubric.yaml`, 136 items), limited to what today's
+    index can support; an LLM judge (gpt-4o) marks each item, **given the passages the bot
+    received**. The first version didn't pass the passages, so the judge couldn't tell an
+    invented link from a real one. Items that need content the retrieval never returned
+    (document it, check spam, the assignment comments…) are conditional ("if a context says
+    so").
+  - **Measured run-to-run noise:** the same prompt varies by about ±3 questions; the current
+    bot scored 25/46 twice (105 and 104 items).
+  - **What didn't work:**
+    - **A larger prompt change** ("when it depends, ask"; strong "not covered" wording;
+      closing checks) scored 26–32 and regressed. G3 started answering "not covered, ask
+      your ACL" instead of giving the sign-in link, and T19 called the Canvas time-zone
+      steps "not covered".
+    - **Clarifying questions never happened**, on gpt-4o-mini or on gpt-4o, even with
+      examples.
+    - **gpt-4o** scored 26/46 against gpt-4o-mini's 32 on the same prompt (Q16: stay on
+      mini).
+  - **What shipped (smaller patch, `prompts.py`):**
+    - GROUNDING case 3 suggests the ACL or AIM, and says a guide that links the page asked
+      about counts as covered (the G3 fix);
+    - never point to a missing image (the pay-schedule "picture");
+    - THE INSTRUCTOR'S PROBLEMS AND STUDENTS' PROBLEMS;
+    - NO PROMISES.
+    - The lock test pins 6 new sentences.
+  - **Results:**
+    - **Team set:** 28, 31, 29, and 26 of 46 in 4 clean runs, against 25 and 25 for the
+      current bot. Consistently fixed: T15, T18, T32, T40, T43.
+    - **Guards:** 4/4; G3 passed 6/6.
+    - **25-question answers:** 86%, 90%, 81%. The 81% run missed #14 by citing other
+      guides.
+  - **Known regression:** T27 ("BYU-Idaho or BYU-Pathway employer?") now asserts BYU-Pathway
+    in all 3 runs, where the current bot said it depends on the contract.
+  - **Process note:** the laptop slept mid-run. When it woke, an old background chain resumed
+    next to the restarted one, sharing the backend and the log names, and one run straddled a
+    prompt switch. Results were sorted by start time against the prompt file's change time;
+    that run was discarded.
+  - **Still to do:**
+    - clarifying questions, deterministically in code;
+    - the missing SharePoint pages (the owner, with the instructor team);
+    - T27.
 
 - **2026-10-20 (language setting: English, Spanish, Portuguese; PR #12)** —
   The setting looked like it worked but didn't: it listed 9 languages, the interface had
