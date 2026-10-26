@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from langfuse import Langfuse
 
 from app.redaction import mask_for_langfuse
+from app.version import app_version
 
 load_dotenv()
 
@@ -38,7 +39,7 @@ langfuse = Langfuse(
     host=os.getenv("LANGFUSE_HOST"),
     mask=mask_for_langfuse,
     environment=_environment(),
-    release=os.getenv("APP_VERSION") or None,
+    release=app_version(),
 )
 
 

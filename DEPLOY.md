@@ -9,6 +9,71 @@ backend only accepts the frontend's origin.
 2. Frontend: build, settings, post-deploy checks.
 3. Going live (Phase 9): the end-to-end checks against production.
 
+**On Render** (the owner's choice, 2026-10-26), follow "Render" right below; Parts 1–3 are
+the details behind it, and the checks to run after.
+
+# Render
+
+`render.yaml` (repo root) is a blueprint for both services. In Render: **New → Blueprint**,
+pick the repo, and Render creates `instructor-assistant-backend` (Docker, Standard 2 GB,
+Virginia, next to the Pinecone index) and `instructor-assistant-frontend` (a static site). It
+then asks for every environment variable: none has a value in the file (owner, 2026-10-26:
+all configuration lives in Render's environment, none in the repo).
+
+The order matters, because each service needs the other's URL:
+
+1. **Apply the blueprint.** Fill in the backend's keys (table below). Leave
+   `ALLOWED_ORIGINS` and the frontend's `NEXT_PUBLIC_CHAT_API` / `NEXT_PUBLIC_SITE_URL`
+   empty for now.
+2. **Wait for the backend's first deploy.** The image build takes a while (it bakes in the
+   injection model). Then open `https://<backend>.onrender.com/api/health/ready`: expect
+   `"index":"instructor-assistant","guard":"ok"`.
+3. **Set the frontend's `NEXT_PUBLIC_CHAT_API`** to the backend's URL, and
+   `NEXT_PUBLIC_SITE_URL` to the frontend's own URL. Then **Manual Deploy → Clear build
+   cache & deploy** (`NEXT_PUBLIC_*` values are compiled in at build time).
+4. **Set the backend's `ALLOWED_ORIGINS`** to the frontend's URL (exactly, `https://…`, no
+   path). Render redeploys the backend.
+5. **Run the checks** in Part 1 §4, Part 2 §6, and Part 3, against the two `onrender.com`
+   URLs. Until they pass, treat this deployment as staging: don't share the URL.
+
+**Backend values to enter**
+
+| Variable | Value |
+| --- | --- |
+| `OPENAI_API_KEY` | OpenAI key |
+| `VOYAGE_API_KEY` | Voyage key |
+| `PINECONE_API_KEY` | A key from the **instructor** Pinecone account |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | The instructor Langfuse project (`pk-lf-…`, `sk-lf-…`) |
+| `API_KEYS` | A new random string (for example `openssl rand -hex 24`). The frontend sends it. |
+| `ALLOWED_ORIGINS` | The frontend's URL, after step 3 |
+| `SENTRY_DSN` | The instructor Sentry project's DSN (optional; leave empty for none) |
+| `ENVIRONMENT` | `prod` |
+| `PINECONE_INDEX_NAME` | `instructor-assistant` |
+| `PINECONE_ENVIRONMENT` | `us-east-1` |
+| `MODEL_PROVIDER` | `openai` |
+| `MODEL` | `gpt-4o-mini` |
+| `EMBEDDING_MODEL` | `text-embedding-3-large` |
+| `EMBEDDING_DIM` | `3072` |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` |
+| `SENTRY_ENVIRONMENT` | `production` |
+| `WEB_CONCURRENCY` | `2` |
+
+The traces' version comes from Render's `RENDER_GIT_COMMIT` automatically.
+
+**Frontend values to enter**
+
+| Variable | Value |
+| --- | --- |
+| `NEXT_PUBLIC_CHAT_API` | The backend's URL, `https://<backend>.onrender.com` |
+| `NEXT_PUBLIC_API_KEY` | The same string as the backend's `API_KEYS` |
+| `NEXT_PUBLIC_SITE_URL` | The frontend's own URL |
+| `NEXT_PUBLIC_HELP_URL` | The instructor help page (optional; the Help item stays hidden without it) |
+| `NEXT_PUBLIC_SENTRY_DSN` | The instructor Sentry project's DSN (optional) |
+| `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | `production` |
+| `NODE_VERSION` | `20` |
+
+Never set on Render: `CORS_ALLOW_ALL`, `ENVIRONMENT=dev`, or a missionary key or index.
+
 # Part 1: backend
 
 ## 1. Build the image
@@ -53,7 +118,7 @@ from the owner. Never commit them, and never bake them into the image.
 | Variable | Value |
 | --- | --- |
 | `ENVIRONMENT` | `staging` or `prod` (the image defaults to `prod`). Never `dev` on a host: `dev` shows error details, and with `API_KEYS` empty it lets every request in. |
-| `CONVERSATION_STARTERS` | The 4 starter questions, separated by `\n` (see `.env.example`) |
+| `CONVERSATION_STARTERS` (+ `_ES`, `_PT`) | Optional: the 4 instructor welcome cards are built in, in English, Spanish, and Portuguese. Set these only to replace them (`Title \| question`, separated by `\n`; see `.env.example`). |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | The instructor Sentry project. Keep `SENTRY_SEND_PII` unset (false). |
 
 **Never set on a host:** `CORS_ALLOW_ALL=true`, and `PINECONE_INDEX_NAME=pathway` (the boot
@@ -63,10 +128,13 @@ guard refuses it anyway).
 
 **The prompt-injection detector** (`PROMPT_INJECTION_ML_ENABLED`, on by default) shapes
 the instance size:
-- It downloads a 714 MB model from Hugging Face at startup (in the background; questions
-  are answered meanwhile, with the regex checks only).
-- Each server process holds its own copy, about 0.5 GB of RAM. The image runs 2 gunicorn
-  workers, so allow about 1 GB for the detector alone.
+- Its 714 MB model is built into the image (`BAKE_INJECTION_MODEL=1`, the default), and the
+  container runs Hugging Face offline. With `--build-arg BAKE_INJECTION_MODEL=0` it is
+  downloaded at startup instead.
+- Each server process holds its own copy, about 0.5 GB of RAM. The image runs
+  `WEB_CONCURRENCY` gunicorn workers (default 2), so allow about 1 GB for the detector.
+- The image uses the CPU-only build of torch (the lock's Linux wheel pulls CUDA packages the
+  service never uses).
 
 ## 3. Health checks
 
@@ -165,8 +233,9 @@ node scripts/e2e_check.mjs --url https://<frontend-host> --out e2e-shots
 
 `scripts/e2e_check.mjs` asks 5 §10 questions (#1, #5, #9, #21, G3) through the real
 page and checks:
-- the empty chat shows starters and the FERPA notice;
-- each answer has citation badges, and "Sources (N)" matches them;
+- the empty chat shows the welcome cards and the FERPA notice;
+- each answer has citation badges and source chips, and the sources panel lists one card per
+  cited passage;
 - every source card says "Instructor guide (PDF)" or "External page · host";
 - every sign-in link says "(sign-in required)";
 - no missionary wording appears;

@@ -6,6 +6,7 @@ load_dotenv()
 import os
 
 import sentry_sdk
+from app.version import app_version
 
 # Initialize Sentry as early as possible so subsequent imports and the FastAPI
 # app creation below are both covered by error tracking. FastAPI integration
@@ -55,7 +56,7 @@ if _sentry_dsn:
         include_local_variables=False,
         before_send=_sentry_before_send,
         before_breadcrumb=lambda crumb, hint: _redact_breadcrumb(crumb),
-        release=os.environ.get("APP_VERSION") or None,
+        release=app_version(),
         traces_sample_rate=1.0 if os.environ.get("ENVIRONMENT") == "dev" else 0.1,
     )
 

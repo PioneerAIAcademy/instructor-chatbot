@@ -11,10 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-24): everything through the gold design and the language setting is on
-> `main` (PRs #1–#13). Next: the instructor team's real questions (branch
-> `team-questions-eval`). Hosting will be Render; the owner wants
-> everything else finished before deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-26): everything through the team-questions eval and prompt rules is on
+> `main` (PRs #1–#14). Open: #15, the Render prep (`render-deploy`). Next: the owner applies
+> `render.yaml` on Render (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -725,7 +724,7 @@ Why Q4 and Q5 land where they do:
 | --- | --- | --- |
 | Q1 | Approve (a): a separate repo and deployment? | Yes. `PioneerAIAcademy/instructor-chatbot`, same visibility as pathway-chatbot (public), so §0 rule 4 matters. |
 | Q2 | Does ICS need a mirror, as with the missionary bot? | No. Pioneer only until someone asks. |
-| Q3 | Hosting? | Same kind of hosting as the missionary bot (Docker backend service, static frontend), as **separate** services with their own URLs. UNVERIFIED which provider hosts the missionary frontend. |
+| Q3 | Hosting? | **Render (owner, 2026-10-20; set up 2026-10-26):** the backend as a Docker web service (Standard, 2 GB, Virginia) and the frontend as a static site, from `render.yaml`. One deployment, treated as staging until the Phase 7 and 9 checks pass. Deployed from `PioneerAIAcademy/instructor-chatbot` (the owner creates or transfers that repo and enters the values). |
 | Q4 | Should the instructor index share a Pinecone project with the missionary index? | **No: separate Pinecone account (owner, 2026-10-16).** The index already exists. Keep the guards as a second layer. Use a read-only key if the plan supports key roles (UNVERIFIED). |
 | Q5 | Separate Langfuse and Sentry projects? | Yes, both. Tags as in §9 anyway. |
 | Q6 | Who may use it? (Open URL + public API key, like the missionary bot, or SSO?) | Same open model. The content comes from a public site. Revisit if access to the index or the sign-in links changes. |
@@ -747,6 +746,33 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-26 (Render prep, branch `render-deploy`)** — The owner sets up Render and
+  enters the values; everything else is prepared.
+  - **Decisions:** backend on Standard (2 GB) with the injection detector on; one deployment,
+    staging until the checks pass; deploy from `PioneerAIAcademy/instructor-chatbot`. That
+    repo doesn't exist yet (the owner is an org member); the owner creates it or transfers
+    this one.
+  - **`render.yaml`:** both services. **Every environment variable is `sync: false`** (owner:
+    all configuration in Render's environment, none in the repo, even non-secret values). The frontend static site carries the `serve.json` headers.
+    `DEPLOY.md` has a new "Render" section: the order of steps and the values to enter.
+  - **Backend image:**
+    - CPU-only torch: the lock's Linux wheel is the CUDA build, which pulls a dozen NVIDIA
+      packages. It's replaced in the install layer, so the CUDA files never reach the image.
+    - The injection model is built in, outside `/app` (so the `chown` doesn't duplicate
+      it), and the container runs Hugging Face offline.
+    - `WEB_CONCURRENCY` sets the worker count.
+    - Docker isn't installed locally, so the CI docker job is the check: it asserts `+cpu`
+      torch and loads the model with `--network none` as the app user.
+    - **Image size: 4.91 GB → 2.14 GB.** Swapping torch alone left it at 4.91 GB. A CI
+      breakdown found **Poetry's download cache, 2.6 GB in `/root/.cache/pypoetry`, kept
+      despite `--no-cache`**. It's now deleted in the install layer. The rest: Python
+      packages 1.3 GB (torch 706 MB) and the model 715 MB. CI fails the image job above
+      3.5 GB.
+  - **Version on Render:** `app_version()` falls back to `RENDER_GIT_COMMIT`, which Render
+    sets, because Render doesn't pass `APP_VERSION`.
+  - **Not done here (owner):** create the org repo, apply the blueprint, enter the values,
+    then run the checks in DEPLOY.md.
 
 - **2026-10-24 (the team's questions vs. the index; branch `team-questions-eval`)** —
   - **Merging:** #9–#12 were stacked, so each merged into the branch below it and `main`
