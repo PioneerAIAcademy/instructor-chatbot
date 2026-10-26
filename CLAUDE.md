@@ -753,8 +753,8 @@ Newest first. Record status, decisions, and things that failed. No secrets.
     staging until the checks pass; deploy from `PioneerAIAcademy/instructor-chatbot`. That
     repo doesn't exist yet (the owner is an org member); the owner creates it or transfers
     this one.
-  - **`render.yaml`:** both services. Secrets and URLs are `sync: false`, so they're entered
-    in Render, not committed. The frontend static site carries the `serve.json` headers.
+  - **`render.yaml`:** both services. **Every environment variable is `sync: false`** (owner:
+    all configuration in Render's environment, none in the repo, even non-secret values). The frontend static site carries the `serve.json` headers.
     `DEPLOY.md` has a new "Render" section: the order of steps and the values to enter.
   - **Backend image:**
     - CPU-only torch: the lock's Linux wheel is the CUDA build, which pulls a dozen NVIDIA

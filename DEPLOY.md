@@ -17,7 +17,8 @@ the details behind it, and the checks to run after.
 `render.yaml` (repo root) is a blueprint for both services. In Render: **New → Blueprint**,
 pick the repo, and Render creates `instructor-assistant-backend` (Docker, Standard 2 GB,
 Virginia, next to the Pinecone index) and `instructor-assistant-frontend` (a static site). It
-then asks for every value marked `sync: false`; the fixed ones are already in the file.
+then asks for every environment variable: none has a value in the file (owner, 2026-10-26:
+all configuration lives in Render's environment, none in the repo).
 
 The order matters, because each service needs the other's URL:
 
@@ -46,13 +47,18 @@ The order matters, because each service needs the other's URL:
 | `API_KEYS` | A new random string (for example `openssl rand -hex 24`). The frontend sends it. |
 | `ALLOWED_ORIGINS` | The frontend's URL, after step 3 |
 | `SENTRY_DSN` | The instructor Sentry project's DSN (optional; leave empty for none) |
+| `ENVIRONMENT` | `prod` |
+| `PINECONE_INDEX_NAME` | `instructor-assistant` |
+| `PINECONE_ENVIRONMENT` | `us-east-1` |
+| `MODEL_PROVIDER` | `openai` |
+| `MODEL` | `gpt-4o-mini` |
+| `EMBEDDING_MODEL` | `text-embedding-3-large` |
+| `EMBEDDING_DIM` | `3072` |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` |
+| `SENTRY_ENVIRONMENT` | `production` |
+| `WEB_CONCURRENCY` | `2` |
 
-Already set by the blueprint: `ENVIRONMENT=prod`, `PINECONE_INDEX_NAME=instructor-assistant`,
-`PINECONE_ENVIRONMENT=us-east-1`, `MODEL_PROVIDER=openai`, `MODEL=gpt-4o-mini`,
-`EMBEDDING_MODEL=text-embedding-3-large`, `EMBEDDING_DIM=3072`,
-`LANGFUSE_HOST=https://cloud.langfuse.com`, `SENTRY_ENVIRONMENT=production`,
-`WEB_CONCURRENCY=2`. The traces' version comes from Render's `RENDER_GIT_COMMIT`
-automatically.
+The traces' version comes from Render's `RENDER_GIT_COMMIT` automatically.
 
 **Frontend values to enter**
 
@@ -63,8 +69,8 @@ automatically.
 | `NEXT_PUBLIC_SITE_URL` | The frontend's own URL |
 | `NEXT_PUBLIC_HELP_URL` | The instructor help page (optional; the Help item stays hidden without it) |
 | `NEXT_PUBLIC_SENTRY_DSN` | The instructor Sentry project's DSN (optional) |
-
-Already set: `NODE_VERSION=20`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT=production`.
+| `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | `production` |
+| `NODE_VERSION` | `20` |
 
 Never set on Render: `CORS_ALLOW_ALL`, `ENVIRONMENT=dev`, or a missionary key or index.
 

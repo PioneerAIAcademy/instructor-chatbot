@@ -1,8 +1,9 @@
 # Render blueprint for the Instructor Assistant: the backend (a Docker web service) and the
 # frontend (a static site). DEPLOY.md, "Render", walks through it.
 #
-# Every `sync: false` value is a secret or a URL entered in Render's dashboard when the
-# blueprint is applied: it never goes in this file. Values written here are not secrets.
+# Every environment variable is `sync: false`: Render asks for its value when the blueprint
+# is applied, and it's kept in Render's environment, never in this file (owner, 2026-10-26).
+# DEPLOY.md, "Render", lists the values.
 
 services:
   # ---------------------------------------------------------------------------------------
@@ -39,27 +40,27 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
-      # Fixed settings
+      # Settings (not secret, but kept out of the repo too)
       - key: ENVIRONMENT
-        value: prod
+        sync: false
       - key: PINECONE_INDEX_NAME
-        value: instructor-assistant
+        sync: false
       - key: PINECONE_ENVIRONMENT
-        value: us-east-1
+        sync: false
       - key: MODEL_PROVIDER
-        value: openai
+        sync: false
       - key: MODEL
-        value: gpt-4o-mini
+        sync: false
       - key: EMBEDDING_MODEL
-        value: text-embedding-3-large
+        sync: false
       - key: EMBEDDING_DIM
-        value: "3072"
+        sync: false
       - key: LANGFUSE_HOST
-        value: https://cloud.langfuse.com
+        sync: false
       - key: SENTRY_ENVIRONMENT
-        value: production
+        sync: false
       - key: WEB_CONCURRENCY
-        value: "2"
+        sync: false
 
   # ---------------------------------------------------------------------------------------
   - type: web
@@ -90,7 +91,7 @@ services:
       # NEXT_PUBLIC_* values are compiled into the site at build time: changing one needs a
       # new deploy ("Clear build cache & deploy"), not a restart.
       - key: NODE_VERSION
-        value: "20"
+        sync: false
       - key: NEXT_PUBLIC_CHAT_API
         sync: false
       - key: NEXT_PUBLIC_API_KEY
@@ -102,4 +103,4 @@ services:
       - key: NEXT_PUBLIC_SENTRY_DSN
         sync: false
       - key: NEXT_PUBLIC_SENTRY_ENVIRONMENT
-        value: production
+        sync: false
