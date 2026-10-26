@@ -18,14 +18,16 @@ RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry POETRY
 
 # Install dependencies. On Linux the lock's torch is the CUDA build, which pulls a dozen
 # NVIDIA packages (several GB) this CPU-only service never uses. In the same layer, so the
-# CUDA files never reach the image, swap in the CPU build of the same torch version.
+# CUDA files never reach the image, swap in the CPU build of the same torch version, and
+# clear Poetry's and pip's download caches (Poetry keeps ~2.6 GB there despite --no-cache).
 COPY ./pyproject.toml ./poetry.lock* /app/
 RUN poetry install --no-root --no-cache --only main && \
     cuda=$(pip list --format=freeze | grep -iE '^(nvidia-|triton=)' | cut -d= -f1) && \
     { [ -z "$cuda" ] || pip uninstall -y $cuda; } && \
     pip install --no-cache-dir --force-reinstall --no-deps \
         --index-url https://download.pytorch.org/whl/cpu torch==2.2.2 && \
-    python -c "import torch; assert not torch.cuda.is_available(); print('torch', torch.__version__)"
+    python -c "import torch; assert not torch.cuda.is_available(); print('torch', torch.__version__)" && \
+    rm -rf /root/.cache
 
 # The prompt-injection detector's model (protectai/deberta-v3-base-prompt-injection, about
 # 714 MB), downloaded once here so a deploy doesn't fetch it from Hugging Face at every

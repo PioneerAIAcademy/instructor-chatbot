@@ -80,8 +80,8 @@ jobs:
       - name: CPU-only torch, and the injection model loads offline as the app user
         run: |
           docker image ls instructor-backend --format 'image size: {{.Size}}'
-          docker run --rm --user root --entrypoint sh instructor-backend -c 'du -xsh /root /opt /usr /tmp /app /home /var 2>/dev/null; du -xsh /root/.cache/* /usr/local/lib/python3.12/site-packages/torch* 2>/dev/null'
-          docker history --no-trunc --format '{{.Size}}\t{{.CreatedBy}}' instructor-backend | awk -F'\t' '{print $1"\t"substr($2,1,110)}' | head -15
+          size=$(docker image inspect -f '{{.Size}}' instructor-backend)
+          test "$size" -lt 3500000000 || { echo "image is $size bytes, over 3.5 GB: a download cache or CUDA crept back in"; exit 1; }
           docker run --rm --network none --entrypoint python instructor-backend -c '
           import os, torch, pytector
           assert os.environ["HF_HUB_OFFLINE"] == "1"
