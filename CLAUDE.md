@@ -11,10 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-21): Phases 0–6 and PRs #8–#10 merged. Open, stacked: #11 pre-deploy
-> fixes, then #12 (`instructor-gold-ui`): the gold design and the language setting, with the
-> blue version as its first commit (`7b01f20`). Hosting will be Render; the owner wants
-> everything else finished before deployment (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-26): everything through the gold design and the language setting is on
+> `main` (PRs #1–#13). Open: #14 (the team-questions eval and prompt rules) and the Render
+> prep (`render-deploy`). Next: the owner applies `render.yaml` on Render (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -725,7 +724,7 @@ Why Q4 and Q5 land where they do:
 | --- | --- | --- |
 | Q1 | Approve (a): a separate repo and deployment? | Yes. `PioneerAIAcademy/instructor-chatbot`, same visibility as pathway-chatbot (public), so §0 rule 4 matters. |
 | Q2 | Does ICS need a mirror, as with the missionary bot? | No. Pioneer only until someone asks. |
-| Q3 | Hosting? | Same kind of hosting as the missionary bot (Docker backend service, static frontend), as **separate** services with their own URLs. UNVERIFIED which provider hosts the missionary frontend. |
+| Q3 | Hosting? | **Render (owner, 2026-10-20; set up 2026-10-26):** the backend as a Docker web service (Standard, 2 GB, Virginia) and the frontend as a static site, from `render.yaml`. One deployment, treated as staging until the Phase 7 and 9 checks pass. Deployed from `PioneerAIAcademy/instructor-chatbot` (the owner creates or transfers that repo and enters the values). |
 | Q4 | Should the instructor index share a Pinecone project with the missionary index? | **No: separate Pinecone account (owner, 2026-10-16).** The index already exists. Keep the guards as a second layer. Use a read-only key if the plan supports key roles (UNVERIFIED). |
 | Q5 | Separate Langfuse and Sentry projects? | Yes, both. Tags as in §9 anyway. |
 | Q6 | Who may use it? (Open URL + public API key, like the missionary bot, or SSO?) | Same open model. The content comes from a public site. Revisit if access to the index or the sign-in links changes. |
@@ -747,6 +746,28 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-26 (Render prep, branch `render-deploy`)** — The owner sets up Render and
+  enters the values; everything else is prepared.
+  - **Decisions:** backend on Standard (2 GB) with the injection detector on; one deployment,
+    staging until the checks pass; deploy from `PioneerAIAcademy/instructor-chatbot`. That
+    repo doesn't exist yet (the owner is an org member); the owner creates it or transfers
+    this one.
+  - **`render.yaml`:** both services. Secrets and URLs are `sync: false`, so they're entered
+    in Render, not committed. The frontend static site carries the `serve.json` headers.
+    `DEPLOY.md` has a new "Render" section: the order of steps and the values to enter.
+  - **Backend image:**
+    - CPU-only torch: the lock's Linux wheel is the CUDA build, which pulls a dozen NVIDIA
+      packages. It's replaced in the install layer, so the CUDA files never reach the image.
+    - The injection model is built in, outside `/app` (so the `chown` doesn't duplicate
+      it), and the container runs Hugging Face offline.
+    - `WEB_CONCURRENCY` sets the worker count.
+    - Docker isn't installed locally, so the CI docker job is the check: it prints the image
+      size, asserts `+cpu` torch, and loads the model with `--network none` as the app user.
+  - **Version on Render:** `app_version()` falls back to `RENDER_GIT_COMMIT`, which Render
+    sets, because Render doesn't pass `APP_VERSION`.
+  - **Not done here (owner):** create the org repo, apply the blueprint, enter the values,
+    then run the checks in DEPLOY.md.
 
 - **2026-10-20 (language setting: English, Spanish, Portuguese; PR #12)** —
   The setting looked like it worked but didn't: it listed 9 languages, the interface had

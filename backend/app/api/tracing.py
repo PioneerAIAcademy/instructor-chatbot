@@ -17,6 +17,7 @@ from langfuse import LangfuseOtelSpanAttributes, propagate_attributes
 
 from app.engine.audience_guard import INSTRUCTOR_ROLE
 from app.langfuse import langfuse, real_id
+from app.version import app_version
 
 logger = logging.getLogger("uvicorn")
 
@@ -68,7 +69,7 @@ def base_metadata() -> dict[str, Any]:
     return {
         "role": INSTRUCTOR_ROLE,
         "index_name": index_name(),
-        "app_version": os.getenv("APP_VERSION") or None,
+        "app_version": app_version(),
     }
 
 

@@ -1,0 +1,105 @@
+# Render blueprint for the Instructor Assistant: the backend (a Docker web service) and the
+# frontend (a static site). DEPLOY.md, "Render", walks through it.
+#
+# Every `sync: false` value is a secret or a URL entered in Render's dashboard when the
+# blueprint is applied: it never goes in this file. Values written here are not secrets.
+
+services:
+  # ---------------------------------------------------------------------------------------
+  - type: web
+    name: instructor-assistant-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # 2 GB: two gunicorn workers, each with its own copy of the injection model (~0.5 GB).
+    plan: standard
+    # Next to the Pinecone index (aws us-east-1).
+    region: virginia
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Secrets (the instructor accounts; never the missionary bot's keys)
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      # The key the frontend sends as X-API-Key. It ships in the page, so it's a speed bump,
+      # not a secret; use the same value for the frontend's NEXT_PUBLIC_API_KEY.
+      - key: API_KEYS
+        sync: false
+      # The frontend's URL (https://<name>.onrender.com), set once the static site exists.
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      # Fixed settings
+      - key: ENVIRONMENT
+        value: prod
+      - key: PINECONE_INDEX_NAME
+        value: instructor-assistant
+      - key: PINECONE_ENVIRONMENT
+        value: us-east-1
+      - key: MODEL_PROVIDER
+        value: openai
+      - key: MODEL
+        value: gpt-4o-mini
+      - key: EMBEDDING_MODEL
+        value: text-embedding-3-large
+      - key: EMBEDDING_DIM
+        value: "3072"
+      - key: LANGFUSE_HOST
+        value: https://cloud.langfuse.com
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      - key: WEB_CONCURRENCY
+        value: "2"
+
+  # ---------------------------------------------------------------------------------------
+  - type: web
+    name: instructor-assistant-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./out
+    autoDeploy: true
+    # The same headers the frontend image serves (frontend/public/serve.json).
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' https:; frame-ancestors 'none';"
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /_next/static/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      # NEXT_PUBLIC_* values are compiled into the site at build time: changing one needs a
+      # new deploy ("Clear build cache & deploy"), not a restart.
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_PUBLIC_CHAT_API
+        sync: false
+      - key: NEXT_PUBLIC_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: NEXT_PUBLIC_HELP_URL
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_ENVIRONMENT
+        value: production
