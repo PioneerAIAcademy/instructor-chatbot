@@ -1,5 +1,6 @@
-# Render blueprint for the Instructor Assistant: the backend (a Docker web service) and the
-# frontend (a static site). DEPLOY.md, "Render", walks through it.
+# Render blueprint for the Instructor Assistant: the backend and the frontend, both Docker
+# web services, matching what's deployed (2026-10-26; set up by hand, see DEPLOY.md
+# "Render"). Applying it as a Blueprint creates the same two services.
 #
 # Every environment variable is `sync: false`: Render asks for its value when the blueprint
 # is applied, and it's kept in Render's environment, never in this file (owner, 2026-10-26).
@@ -64,34 +65,21 @@ services:
 
   # ---------------------------------------------------------------------------------------
   - type: web
-    name: instructor-assistant-frontend
-    runtime: static
+    name: instructor-chatbot
+    # A Docker web service, as pathway-chatbot's frontend is: frontend/Dockerfile builds the
+    # static site and serves it with `serve`, whose public/serve.json sets the security
+    # headers. The NEXT_PUBLIC_* values below reach the build as Docker build arguments.
+    runtime: docker
     rootDir: frontend
-    buildCommand: npm ci && npm run build
-    staticPublishPath: ./out
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: virginia
+    healthCheckPath: /
     autoDeploy: true
-    # The same headers the frontend image serves (frontend/public/serve.json).
-    headers:
-      - path: /*
-        name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' https:; frame-ancestors 'none';"
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /*
-        name: Referrer-Policy
-        value: strict-origin-when-cross-origin
-      - path: /_next/static/*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
     envVars:
       # NEXT_PUBLIC_* values are compiled into the site at build time: changing one needs a
       # new deploy ("Clear build cache & deploy"), not a restart.
-      - key: NODE_VERSION
-        sync: false
       - key: NEXT_PUBLIC_CHAT_API
         sync: false
       - key: NEXT_PUBLIC_API_KEY
