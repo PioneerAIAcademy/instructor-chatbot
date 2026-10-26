@@ -20,8 +20,8 @@ const resolveMetadataBase = () => {
 
 const metadataBase = resolveMetadataBase();
 
-// Inter for all text (owner, 2026-10-26; it was Mulish), the Missionary
-// Assistant's font. Served from this site, from a pinned npm package, so
+// Inter for all text (owner, 2026-10-26; it was Mulish), the font upstream
+// uses. Served from this site, from a pinned npm package, so
 // neither a build nor a visit contacts Google. The "latin" file covers English
 // and the accented letters of Spanish and Portuguese; other scripts fall back
 // to system fonts.
