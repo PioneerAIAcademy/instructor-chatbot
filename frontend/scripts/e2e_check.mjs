@@ -148,7 +148,10 @@ const STATE = `(() => {
 // --- the empty chat ----------------------------------------------------------
 await send("Page.navigate", { url: `${URL_}/` });
 const ready = await waitFor(`!!document.querySelector('textarea[name="message"]')`, 60);
-await sleep(1500);
+// The cards come from the backend's /config, which can take a few seconds while a
+// just-deployed (or idle) backend wakes up: wait for them rather than a fixed pause.
+await waitFor(`!!document.querySelector('ul[aria-label="Suggested questions"] button')`, 20);
+await sleep(500);
 await shot("00-empty");
 const empty = await evaluate(`({
   starters: document.querySelectorAll('ul[aria-label="Suggested questions"] button').length,

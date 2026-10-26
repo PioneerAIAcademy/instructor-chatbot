@@ -14,65 +14,56 @@ the details behind it, and the checks to run after.
 
 # Render
 
-`render.yaml` (repo root) is a blueprint for both services. In Render: **New → Blueprint**,
-pick the repo, and Render creates `instructor-assistant-backend` (Docker, Standard 2 GB,
-Virginia, next to the Pinecone index) and `instructor-assistant-frontend` (a static site). It
-then asks for every environment variable: none has a value in the file (owner, 2026-10-26:
-all configuration lives in Render's environment, none in the repo).
+**What's deployed (2026-10-26),** set up by hand in the Render dashboard, both as Docker web
+services from `PioneerAIAcademy/instructor-chatbot`, branch `main`:
 
-The order matters, because each service needs the other's URL:
+| Service | URL | Root directory | Instance | Health check |
+| --- | --- | --- | --- | --- |
+| Backend `instructor-assistant-backend` | https://instructor-assistant-backend.onrender.com | `backend` | Standard (2 GB) | `/api/health` |
+| Frontend `instructor-chatbot` | https://instructor-chatbot.onrender.com | `frontend` | Starter | `/` |
 
-1. **Apply the blueprint.** Fill in the backend's keys (table below). Leave
-   `ALLOWED_ORIGINS` and the frontend's `NEXT_PUBLIC_CHAT_API` / `NEXT_PUBLIC_SITE_URL`
-   empty for now.
-2. **Wait for the backend's first deploy.** The image build takes a while (it bakes in the
-   injection model). Then open `https://<backend>.onrender.com/api/health/ready`: expect
-   `"index":"instructor-assistant","guard":"ok"`.
-3. **Set the frontend's `NEXT_PUBLIC_CHAT_API`** to the backend's URL, and
-   `NEXT_PUBLIC_SITE_URL` to the frontend's own URL. Then **Manual Deploy → Clear build
-   cache & deploy** (`NEXT_PUBLIC_*` values are compiled in at build time).
-4. **Set the backend's `ALLOWED_ORIGINS`** to the frontend's URL (exactly, `https://…`, no
-   path). Render redeploys the backend.
-5. **Run the checks** in Part 1 §4, Part 2 §6, and Part 3, against the two `onrender.com`
-   URLs. Until they pass, treat this deployment as staging: don't share the URL.
+Both use Dockerfile path `./Dockerfile` and no custom Docker command. `render.yaml` describes
+the same two services, if they ever need recreating as a Blueprint.
 
-**Backend values to enter**
+**Order:** the backend first. Then the frontend, with `NEXT_PUBLIC_CHAT_API` set to the
+backend's URL. Then the backend's `ALLOWED_ORIGINS` set to the frontend's URL exactly.
+
+**Backend environment** (all in Render, none in the repo):
 
 | Variable | Value |
 | --- | --- |
-| `OPENAI_API_KEY` | OpenAI key |
-| `VOYAGE_API_KEY` | Voyage key |
-| `PINECONE_API_KEY` | A key from the **instructor** Pinecone account |
-| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | The instructor Langfuse project (`pk-lf-…`, `sk-lf-…`) |
-| `API_KEYS` | A new random string (for example `openssl rand -hex 24`). The frontend sends it. |
-| `ALLOWED_ORIGINS` | The frontend's URL, after step 3 |
-| `SENTRY_DSN` | The instructor Sentry project's DSN (optional; leave empty for none) |
+| `OPENAI_API_KEY`, `VOYAGE_API_KEY`, `PINECONE_API_KEY` | the instructor accounts' keys |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | the instructor Langfuse project |
+| `API_KEYS` | a random string (`openssl rand -hex 24`), shared with the frontend |
+| `ALLOWED_ORIGINS` | `https://instructor-chatbot.onrender.com` |
+| `SENTRY_DSN` | optional |
 | `ENVIRONMENT` | `prod` |
 | `PINECONE_INDEX_NAME` | `instructor-assistant` |
 | `PINECONE_ENVIRONMENT` | `us-east-1` |
-| `MODEL_PROVIDER` | `openai` |
-| `MODEL` | `gpt-4o-mini` |
-| `EMBEDDING_MODEL` | `text-embedding-3-large` |
-| `EMBEDDING_DIM` | `3072` |
+| `MODEL_PROVIDER` / `MODEL` | `openai` / `gpt-4o-mini` |
+| `EMBEDDING_MODEL` / `EMBEDDING_DIM` | `text-embedding-3-large` / `3072` |
 | `LANGFUSE_HOST` | `https://cloud.langfuse.com` |
 | `SENTRY_ENVIRONMENT` | `production` |
 | `WEB_CONCURRENCY` | `2` |
 
 The traces' version comes from Render's `RENDER_GIT_COMMIT` automatically.
 
-**Frontend values to enter**
+**Frontend environment** (passed to the Docker build as build arguments):
 
 | Variable | Value |
 | --- | --- |
-| `NEXT_PUBLIC_CHAT_API` | The backend's URL, `https://<backend>.onrender.com` |
-| `NEXT_PUBLIC_API_KEY` | The same string as the backend's `API_KEYS` |
-| `NEXT_PUBLIC_SITE_URL` | The frontend's own URL |
-| `NEXT_PUBLIC_HELP_URL` | The instructor help page (optional; the Help item stays hidden without it) |
-| `NEXT_PUBLIC_SENTRY_DSN` | The instructor Sentry project's DSN (optional) |
+| `NEXT_PUBLIC_CHAT_API` | `https://instructor-assistant-backend.onrender.com` |
+| `NEXT_PUBLIC_API_KEY` | the same string as the backend's `API_KEYS` |
+| `NEXT_PUBLIC_SITE_URL` | `https://instructor-chatbot.onrender.com` |
 | `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | `production` |
-| `NODE_VERSION` | `20` |
+| `NEXT_PUBLIC_HELP_URL`, `NEXT_PUBLIC_SENTRY_DSN` | optional |
 
-Never set on Render: `CORS_ALLOW_ALL`, `ENVIRONMENT=dev`, or a missionary key or index.
+**Changing a frontend value** needs **Manual Deploy → Clear build cache & deploy**: they're
+compiled into the site at build time, so a restart doesn't pick them up.
+
+**Never set on Render:** `CORS_ALLOW_ALL`, `ENVIRONMENT=dev`, or a missionary key or index.
+
+**After a deploy,** run Part 1 §4, Part 2 §6, and Part 3 against the two URLs above.
 
 # Part 1: backend
 

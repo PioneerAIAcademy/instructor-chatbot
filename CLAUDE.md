@@ -11,9 +11,9 @@ This repo is a **copied-and-trimmed** successor to
 (the Missionary Assistant), the same way `instructor-indexer` was cut down from
 `pathway-indexer`. Copy only what §4 lists under **Keep** or **Adapt**. Leave out everything else.
 
-> **Status (2026-10-26): all work through the Render prep is on `main` (PRs #1–#15), in
-> **`PioneerAIAcademy/instructor-chatbot`** (moved from the owner's account). Next: the owner
-> applies `render.yaml` on Render (Phases 7 and 9).** This document is the plan, the repo rules, and the journal (§14).
+> **Status (2026-10-26): deployed on Render and passing every Phase 7 and 9 check:
+> backend https://instructor-assistant-backend.onrender.com, frontend
+> https://instructor-chatbot.onrender.com. Going live to instructors is the owner's call.** This document is the plan, the repo rules, and the journal (§14).
 > Facts marked *(read 2026-10-16)* were read from the code. Re-check them if upstream moves.
 > `UPSTREAM.md` lists every file copied from upstream and what changed locally.
 >
@@ -746,6 +746,34 @@ Why Q4 and Q5 land where they do:
 ## 14. Journal
 
 Newest first. Record status, decisions, and things that failed. No secrets.
+
+- **2026-10-26 (deployed on Render; Phases 7 and 9 checks pass)** — The owner created both
+  services by hand in the Render dashboard, as Docker web services:
+  - **Backend:** `instructor-assistant-backend`, https://instructor-assistant-backend.onrender.com,
+    Standard.
+  - **Frontend:** `instructor-chatbot`, https://instructor-chatbot.onrender.com. Docker, as
+    pathway-chatbot's frontend is (the owner's choice over a static site).
+  - `render.yaml` and `DEPLOY.md` "Render" now describe what was built.
+
+  **Live checks:**
+  - **Readiness:** `/api/health/ready` gives `index=instructor-assistant, guard=ok`.
+  - **API key:** no key → 401, wrong key → 401.
+  - **CORS:** the frontend's origin is allowed (200 with its `access-control-allow-origin`);
+    `example.com` gets 400.
+  - **`api_check.py`: 8/8.** G4 now uses `eval_answers.sources_match`. The first live run
+    "failed" G4 on a fourth instructor guide at the tail (retrieval noise, not a role
+    difference).
+  - **`eval_answers.py` against the live backend: PASSED**, answers 18/21 = 86%, guards
+    4/4 (`20261026T100138Z-answers.json`). The misses are the known #6, #13, #21.
+  - **`e2e_check.mjs` against the live site: ALL PASSED, 7/7.** The first run failed the
+    welcome cards: the backend was waking up and `/config` took about 3 s, against the
+    script's fixed 1.5 s pause. The script now waits for the cards.
+  - **Langfuse:** the live trace is in the instructor project, environment `prod`, release
+    `08912f7` (`main` at the time, through the `RENDER_GIT_COMMIT` fallback). It has its 5
+    observations (`chat`, `retrieval-orchestrator`, two `rag-llm`,
+    `suggestion-generation`) and the thumbs score.
+  - **Not checked from here:** that the missionary deployment is unchanged. Nothing here
+    touches it (a separate account, repo, and services).
 
 - **2026-10-26 (repo moved to the organization)** — At the owner's request, the repo was
   transferred from `aghadiayeamayanvboernest/instructor-chatbot` to

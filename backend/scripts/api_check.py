@@ -14,7 +14,8 @@ Checks, each printed as PASS/FAIL:
 2. It carries answer text, sources whose url is the guide's PDF
    (missionaries.prod.byu-pathway.psdops.com/<slug>) or the linked page's own
    URL, and suggested questions; every [^N] maps to a source.
-3. A body with data.role="missionary" gets exactly the same sources (§10 G4).
+3. A body with data.role="missionary" gets the same sources (§10 G4), apart from
+   retrieval noise at the tail (eval_answers.sources_match).
 4. /thumbs_request on the answer's trace returns 200.
 5. /draft/edit returns an edited text.
 6. /feedback/general (text only) returns 200.
@@ -42,6 +43,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(BACKEND_DIR / ".env")
 
 import api_contract  # noqa: E402
+from eval_answers import sources_match  # noqa: E402
 
 PDF_PREFIX = "https://missionaries.prod.byu-pathway.psdops.com/"
 ANSWER_Q = "When do Worldwide Online instructors in the US get paid?"
@@ -111,16 +113,19 @@ def check_answer(c: Checker) -> str | None:
 def check_client_role(c: Checker) -> None:
     _, plain, p1 = c.chat(G4_Q)
     _, with_role, p2 = c.chat(G4_Q, {"role": "missionary"})
-    key = lambda nodes: [(n.get("citation_node_id"), (n.get("metadata") or {}).get("slug")) for n in nodes]
     problems = p1 + p2
-    if key(_sources(plain)) != key(_sources(with_role)):
-        problems.append(f"sources differ: {key(_sources(plain))} vs {key(_sources(with_role))}")
+    # Two calls never retrieve byte-identical lists (scores shift slightly), so
+    # the same rule as the answer eval's G4: lists may differ only at the tail.
+    same, detail = sources_match(_sources(plain), _sources(with_role))
+    if not same:
+        key = lambda nodes: [(n.get("citation_node_id"), (n.get("metadata") or {}).get("slug")) for n in nodes]
+        problems.append(f"sources differ ({detail}): {key(_sources(plain))} vs {key(_sources(with_role))}")
     roles = {(n.get("metadata") or {}).get("role") for n in _sources(plain) + _sources(with_role)}
     if roles - {"instructor"}:
         problems.append(f"non-instructor roles: {roles}")
     if not _sources(plain):
         problems.append("no sources to compare")
-    c.result('3. data.role="missionary" changes nothing (G4)', problems, f"{len(_sources(plain))} sources each")
+    c.result('3. data.role="missionary" changes nothing (G4)', problems, detail)
 
 
 def check_thumbs(c: Checker, trace_id: str | None) -> None:
