@@ -762,8 +762,13 @@ Newest first. Record status, decisions, and things that failed. No secrets.
     - The injection model is built in, outside `/app` (so the `chown` doesn't duplicate
       it), and the container runs Hugging Face offline.
     - `WEB_CONCURRENCY` sets the worker count.
-    - Docker isn't installed locally, so the CI docker job is the check: it prints the image
-      size, asserts `+cpu` torch, and loads the model with `--network none` as the app user.
+    - Docker isn't installed locally, so the CI docker job is the check: it asserts `+cpu`
+      torch and loads the model with `--network none` as the app user.
+    - **Image size: 4.91 GB → 2.14 GB.** Swapping torch alone left it at 4.91 GB. A CI
+      breakdown found **Poetry's download cache, 2.6 GB in `/root/.cache/pypoetry`, kept
+      despite `--no-cache`**. It's now deleted in the install layer. The rest: Python
+      packages 1.3 GB (torch 706 MB) and the model 715 MB. CI fails the image job above
+      3.5 GB.
   - **Version on Render:** `app_version()` falls back to `RENDER_GIT_COMMIT`, which Render
     sets, because Render doesn't pass `APP_VERSION`.
   - **Not done here (owner):** create the org repo, apply the blueprint, enter the values,
